@@ -35,6 +35,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import com.aurora.store.R
 import com.aurora.store.compose.composable.app.AnimatedAppIcon
+import com.aurora.store.data.model.DownloadStatus
 import com.aurora.store.data.room.download.Download
 import com.aurora.store.util.PackageUtil
 import com.aurora.store.util.PathUtil

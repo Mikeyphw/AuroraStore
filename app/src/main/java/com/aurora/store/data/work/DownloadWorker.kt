@@ -460,13 +460,15 @@ class DownloadWorker @AssistedInject constructor(
                             status = DownloadStatus.FAILED,
                             message = userMessage
                         )
-                        if (recorded) AuroraApp.events.send(
-                            InstallerEvent.Failed(
-                                packageName = download.packageName,
-                                error = userMessage,
-                                extra = exception.stackTraceToString()
+                        if (recorded) {
+                            AuroraApp.events.send(
+                                InstallerEvent.Failed(
+                                    packageName = download.packageName,
+                                    error = userMessage,
+                                    extra = exception.stackTraceToString()
+                                )
                             )
-                        )
+                        }
                     }
                 }
             }
@@ -987,7 +989,12 @@ class DownloadWorker @AssistedInject constructor(
     ): Boolean {
         // A user cancellation or a newer version always wins over old callbacks.
         if (isStopped && status != DownloadStatus.CANCELLED) return false
-        if (downloadDao.updateWorkerStatus(download.packageName, download.versionCode, status) == 0) {
+        val updated = downloadDao.updateWorkerStatus(
+            download.packageName,
+            download.versionCode,
+            status
+        )
+        if (updated == 0) {
             Log.i(TAG, "Ignoring obsolete status $status for ${download.packageName}")
             return false
         }
@@ -1008,7 +1015,13 @@ class DownloadWorker @AssistedInject constructor(
             DownloadStatus.COMPLETED -> {
                 // Mark progress as 100 manually to avoid race conditions
                 download.progress = 100
-                downloadDao.updateWorkerProgress(download.packageName, download.versionCode, 100, 0, 0)
+                downloadDao.updateWorkerProgress(
+                    download.packageName,
+                    download.versionCode,
+                    100,
+                    0,
+                    0
+                )
 
                 // Silently-installable apps install automatically and get a single
                 // "installed" notification afterwards, so a separate "download complete"

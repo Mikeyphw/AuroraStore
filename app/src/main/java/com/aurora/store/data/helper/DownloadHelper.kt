@@ -354,7 +354,7 @@ class DownloadHelper @Inject constructor(
 
         Log.i(TAG, "Cancelling download for $packageName at ${current.versionCode}")
         WorkManager.getInstance(context).cancelUniqueWork(
-            "$DOWNLOAD_WORKER/${packageName}/${current.versionCode}"
+            "$DOWNLOAD_WORKER/$packageName/${current.versionCode}"
         )
         NotificationUtil.clearAppNotification(context, packageName)
     }

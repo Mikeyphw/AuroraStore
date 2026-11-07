@@ -72,7 +72,11 @@ interface DownloadDao {
           AND downloadStatus IN ('QUEUED', 'PURCHASING', 'DOWNLOADING', 'VERIFYING')
         """
     )
-    suspend fun updateWorkerFiles(packageName: String, versionCode: Long, fileList: List<AppFile>): Int
+    suspend fun updateWorkerFiles(
+        packageName: String,
+        versionCode: Long,
+        fileList: List<AppFile>
+    ): Int
 
     @Query("UPDATE download SET sharedLibs=:sharedLibs WHERE packageName=:packageName")
     suspend fun updateSharedLibs(packageName: String, sharedLibs: List<SharedLib>)
