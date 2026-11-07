@@ -9,6 +9,9 @@ on:
       - 'app/src/androidTest/java/com/aurora/store/data/work/**'
       - 'scripts/ci/check_r1d.py'
       - 'scripts/ci/r1d_emulator_ci.sh'
+      - 'scripts/ci/check_r1d2.py'
+      - 'scripts/ci/r1d2_emulator_ci.sh'
+      - 'app/src/debug/**'
       - 'docs/R1D_EMULATOR_ACCEPTANCE.md'
       - 'app/src/main/java/com/aurora/store/data/room/download/**'
       - 'app/src/main/java/com/aurora/store/data/work/**'
@@ -20,6 +23,9 @@ on:
       - 'app/src/androidTest/java/com/aurora/store/data/work/**'
       - 'scripts/ci/check_r1d.py'
       - 'scripts/ci/r1d_emulator_ci.sh'
+      - 'scripts/ci/check_r1d2.py'
+      - 'scripts/ci/r1d2_emulator_ci.sh'
+      - 'app/src/debug/**'
       - 'app/src/main/java/com/aurora/store/data/room/download/**'
       - 'app/src/main/java/com/aurora/store/data/work/**'
   workflow_dispatch:
@@ -51,6 +57,7 @@ jobs:
           python3 -B scripts/ci/check_r1b.py
           python3 -B scripts/ci/check_r1c.py
           python3 -B scripts/ci/check_r1d.py
+          python3 -B scripts/ci/check_r1d2.py
 
   emulator:
     name: R1D production Room DAO + watchdog + process restart on API 36
@@ -70,6 +77,9 @@ jobs:
           test "$RUNNER_OS" = Linux
           test "$(uname -m)" = x86_64
           mkdir -p "$RUNNER_TEMP/aurora-r1d-emulator"
+          mkdir -p "$RUNNER_TEMP/aurora-r1d2-emulator"
+          printf '%s\n' '{"overall":"NOT_RUN","release_qualified":false}' \
+            > "$RUNNER_TEMP/aurora-r1d2-emulator/R1D2_EMULATOR_RECEIPT.json"
           printf '%s\n' '{"overall":"NOT_RUN","hosted_emulator_only":true,"physical_device_qualified":false,"release_qualified":false}' \
             > "$RUNNER_TEMP/aurora-r1d-emulator/R1D_EMULATOR_RECEIPT.json"
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
@@ -102,7 +112,7 @@ jobs:
           test -c /dev/kvm || { echo R1D_KVM_UNAVAILABLE >&2; exit 1; }
           if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then sudo chmod a+rw /dev/kvm; fi
           test -r /dev/kvm && test -w /dev/kvm
-      - name: Execute 14 offline Android device tests (KVM/API 36)
+      - name: Execute 24 R1D/R1D2 offline Android device tests (KVM/API 36)
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: 36
@@ -114,12 +124,14 @@ jobs:
           disk-size: 3072M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: bash scripts/ci/r1d_emulator_ci.sh
+          script: bash scripts/ci/r1d2_emulator_ci.sh
       - name: Upload source-bound emulator receipt and offline test logs
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
         with:
           name: aurora-r1d-api36-emulator-evidence
-          path: ${{ runner.temp }}/aurora-r1d-emulator/
+          path: |
+            ${{ runner.temp }}/aurora-r1d-emulator/
+            ${{ runner.temp }}/aurora-r1d2-emulator/
           if-no-files-found: warn
           retention-days: 14

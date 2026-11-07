@@ -943,7 +943,7 @@ class DownloadWorker @AssistedInject constructor(
                     // Play download URLs are short-lived; a 403/410 means ours expired while
                     // the download sat queued. Drop the stale file lists so the retry
                     // re-purchases fresh URLs instead of hammering the dead one.
-                    if (code == 416 && existingBytes > 0) {
+                    if (ResumeRangePolicy.requiresRestart(code, existingBytes)) {
                         tmpFile.delete()
                         throw InvalidResumeRangeException()
                     }
@@ -966,6 +966,16 @@ class DownloadWorker @AssistedInject constructor(
                     throw DownloadFailedException()
                 }
 
+                // A 206 response with no prior bytes must still start at zero.
+                if (response.code == HTTP_PARTIAL &&
+                    existingBytes == 0L &&
+                    !ResumeRangePolicy.matches(response.header("Content-Range"), 0L)
+                ) {
+                    response.close()
+                    tmpFile.delete()
+                    throw InvalidResumeRangeException()
+                }
+
                 // Only resume when the server actually honored the Range request (206). If
                 // it replied 200 with the full body we must overwrite from the start,
                 // otherwise the full payload would be appended onto the existing partial and
@@ -976,6 +986,11 @@ class DownloadWorker @AssistedInject constructor(
                     val returnedStart = range?.substringAfter("bytes ")
                         ?.substringBefore("-")?.toLongOrNull()
                     if (returnedStart != existingBytes) {
+                        response.close()
+                        tmpFile.delete()
+                        throw InvalidResumeRangeException()
+                    }
+                    if (!ResumeRangePolicy.matches(range, existingBytes)) {
                         response.close()
                         tmpFile.delete()
                         throw InvalidResumeRangeException()
