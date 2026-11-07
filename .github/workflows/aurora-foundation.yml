@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: Aurora — Foundation CI
+
+on:
+  push:
+    branches:
+      - master
+      - main
+      - 'feature/**'
+      - 'fix/**'
+      - 'release/**'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurora-foundation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-contract:
+    name: Source and bundle contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify source baseline
+        run: python3 scripts/ci/check_foundation.py
+
+  android:
+    name: Android vanilla debug, lint and JVM tests
+    needs: source-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Configure Android SDK
+        uses: android-actions/setup-android@v4
+      - name: Install Android API 37.0
+        run: |
+          sdkmanager --install 'platforms;android-37.0'
+          test -f "${ANDROID_SDK_ROOT}/platforms/android-37.0/android.jar"
+      - name: Configure Gradle cache and validate wrapper
+        uses: gradle/actions/setup-gradle@v4
+      - name: Build, lint and test vanilla debug
+        run: ./gradlew --no-daemon --stacktrace assembleVanillaDebug ktlintCheck testVanillaDebugUnitTest
+      - name: Upload debug APK and JVM test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-vanilla-debug-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            app/build/outputs/apk/vanilla/debug/*.apk
+            app/build/reports/tests/**
+            app/build/test-results/**
+            app/build/reports/lint-results-*.html
+          if-no-files-found: warn
+          retention-days: 14
