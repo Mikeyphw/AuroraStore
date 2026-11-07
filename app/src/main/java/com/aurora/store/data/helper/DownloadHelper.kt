@@ -37,6 +37,8 @@ import com.aurora.store.util.PathUtil
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.launchIn
@@ -62,6 +64,7 @@ class DownloadHelper @Inject constructor(
         private const val DOWNLOAD_UPDATE = "DOWNLOAD_UPDATE"
         const val VERSION_CODE = "VERSION_CODE"
         const val ATTEMPT_KEY = "ATTEMPT_KEY"
+        private const val ORPHAN_CHECK_INTERVAL_MS = 120_000L
     }
 
     // Single stable StateFlow shared across consumers. Previously a `get()` accessor that
@@ -116,6 +119,7 @@ class DownloadHelper @Inject constructor(
         }.invokeOnCompletion {
             observeDownloads()
             observeInstalls()
+            monitorOrphanedDownloads()
         }
     }
 
@@ -464,6 +468,22 @@ class DownloadHelper @Inject constructor(
                     item.versionCode,
                     item.downloadedAt
                 )
+            }
+        }
+    }
+
+    /** Reconcile processing records while the app remains open, not only at startup. */
+    private fun monitorOrphanedDownloads() {
+        AuroraApp.scope.launch {
+            while (true) {
+                delay(ORPHAN_CHECK_INTERVAL_MS)
+                try {
+                    cancelFailedDownloads(downloadDao.downloads().firstOrNull().orEmpty())
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    Log.w(TAG, "Unable to reconcile orphaned download workers", exception)
+                }
             }
         }
     }
