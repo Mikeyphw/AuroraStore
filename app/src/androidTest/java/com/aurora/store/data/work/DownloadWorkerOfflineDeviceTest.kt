@@ -130,10 +130,13 @@ class DownloadWorkerOfflineDeviceTest {
     fun shaMismatchRejectsPayloadWithoutInstallHandoff() = runBlocking {
         val pkg = seed("bad_digest")
         LocalHttpServer(listOf { socket, _ -> socket.reply(200, "ABCDxxxxIJ") }).use { server ->
+            // The worker persists FAILED, then returns terminal Success to avoid retrying
+            // a non-recoverable checksum mismatch. This is production onFailure semantics.
             assertThat(runWorker(input(pkg, server.url)))
-                .isEqualTo(ListenableWorker.Result.failure())
+                .isEqualTo(ListenableWorker.Result.success())
             assertThat(dao.getDownload(pkg).status).isEqualTo(DownloadStatus.FAILED)
             assertThat(R1EOfflineGate.file(context, pkg, ATTEMPT).exists()).isFalse()
+            assertThat(server.hits.get()).isEqualTo(1)
         }
     }
 
@@ -194,8 +197,7 @@ class DownloadWorkerOfflineDeviceTest {
         return pkg
     }
 
-    private fun input(pkg: String, url: String, attempt: Long = ATTEMPT): Data =
-        Data.Builder()
+    private fun input(pkg: String, url: String, attempt: Long = ATTEMPT): Data = Data.Builder()
             .putString("PACKAGE_NAME", pkg)
             .putLong("VERSION_CODE", VERSION)
             .putLong("ATTEMPT_KEY", attempt)

@@ -48,6 +48,12 @@ checks = {
     'offline tests actually drive HTTP sockets and database':
         'ServerSocket(0' in tests and 'dao.getDownload(pkg)' in tests and
         'invalidContentRangeDeletesPartialAndRequestsRetry' in tests,
+    'checksum mismatch is terminal and verifies FAILED with no remaining APK':
+        'shaMismatchRejectsPayloadWithoutInstallHandoff' in tests and
+        'ListenableWorker.Result.success()' in tests.split('fun shaMismatchRejectsPayloadWithoutInstallHandoff()', 1)[1].split('    @Test', 1)[0] and
+        'DownloadStatus.FAILED' in tests.split('fun shaMismatchRejectsPayloadWithoutInstallHandoff()', 1)[1].split('    @Test', 1)[0] and
+        'assertThat(server.hits.get()).isEqualTo(1)' in tests.split('fun shaMismatchRejectsPayloadWithoutInstallHandoff()', 1)[1].split('    @Test', 1)[0] and
+        'R1EOfflineGate.file(context, pkg, ATTEMPT).exists()).isFalse()' in tests.split('fun shaMismatchRejectsPayloadWithoutInstallHandoff()', 1)[1].split('    @Test', 1)[0],
     'work testing dependency only added to instrumentation':
         'androidx-work-testing = ' in versions and
         'androidTestImplementation(libs.androidx.work.testing)' in app,

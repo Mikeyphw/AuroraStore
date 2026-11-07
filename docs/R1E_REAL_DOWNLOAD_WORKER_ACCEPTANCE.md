@@ -20,7 +20,8 @@ The existing pinned API 36/x86_64 Google APIs emulator runs its 24 R1D/R1D2 test
 2. Interrupted 200 response leaves partial bytes; the next worker invocation sends Range and resumes exactly.
 3. Mismatched 206 `Content-Range` destroys the partial file and retries.
 4. HTTP 416 destroys a stale partial file and retries.
-5. SHA-256 mismatch fails and discards the downloaded payload.
+5. SHA-256 mismatch deletes the corrupted payload, persists `FAILED` in Room, and returns
+   terminal WorkManager `Success` to avoid retrying a non-recoverable integrity failure.
 6. Obsolete attempt has no network activity or database mutation.
 7. Cancelled generation is not resurrected or downloaded.
 8. Non-loopback test endpoint is rejected before network activity.
@@ -28,3 +29,9 @@ The existing pinned API 36/x86_64 Google APIs emulator runs its 24 R1D/R1D2 test
 The test uses `TestListenableWorkerBuilder` + injected `HiltWorkerFactory`: this executes real `DownloadWorker.doWork()` but is not an assertion that the production Worker is itself scheduled by WorkManager in these eight tests. Existing WorkManager scheduling/force-stop tests remain in R1D2.
 
 The R1E evidence receipt stays `NOT_RUN` unless all 32 tests pass. Physical-device testing, Play-delivery acceptance, a real package installation and release signing remain future gates. Do not call this release qualification.
+
+## HF01 — hosted CI qualification fix
+
+- Android-test ktlint requires the `Data.Builder()` expression on the same line as the short `input()` function signature.
+- A corrupted download's durable state is `FAILED`, while WorkManager receives terminal `Success`; this was already the production contract. The test now asserts both independently, plus that the corrupt file was removed and the local server was contacted once.
+- HF01 does not alter production transfer or retry logic; all 32 API36 emulator tests must pass on the updated PR commit before merge.
