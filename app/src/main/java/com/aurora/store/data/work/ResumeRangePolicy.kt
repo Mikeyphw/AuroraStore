@@ -12,7 +12,8 @@ internal object ResumeRangePolicy {
         val end = groups.groupValues[2].toLongOrNull() ?: return false
         val totalText = groups.groupValues[3]
         val total = if (totalText == "*") null else totalText.toLongOrNull() ?: return false
-        return start == expectedStart && end >= start &&
+        return start == expectedStart &&
+            end >= start &&
             (total == null || (total > 0L && end < total))
     }
 

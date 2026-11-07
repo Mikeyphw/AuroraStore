@@ -20,7 +20,7 @@ checks = {
  'range validated before append': 'ResumeRangePolicy.matches(range, existingBytes)' in worker and 'if (returnedStart != existingBytes)' in worker,
  'zero-offset 206 validated': 'ResumeRangePolicy.matches(response.header("Content-Range"), 0L)' in worker,
  '416 handled through strict policy': 'ResumeRangePolicy.requiresRestart(code, existingBytes)' in worker,
- 'bounds and total checked': 'start == expectedStart && end >= start' in policy and 'end < total' in policy,
+ 'bounds and total checked': 'start == expectedStart && end >= start' in ' '.join(policy.split()) and 'end < total' in policy,
  'five executable JVM tests': len(re.findall(r'@Test\s+fun ',unit)) == 5,
  'six offline HTTP socket device tests': len(re.findall(r'@Test\s+fun ',http)) == 6 and 'ServerSocket(' in http and 'call.cancel()' in http,
  'four real WorkManager device tests': len(re.findall(r'@Test\s+fun ',work)) == 4 and 'WorkManager.getInstance(context)' in work,

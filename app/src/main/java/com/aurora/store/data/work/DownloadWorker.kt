@@ -967,7 +967,8 @@ class DownloadWorker @AssistedInject constructor(
                 }
 
                 // A 206 response with no prior bytes must still start at zero.
-                if (response.code == HTTP_PARTIAL && existingBytes == 0L &&
+                if (response.code == HTTP_PARTIAL &&
+                    existingBytes == 0L &&
                     !ResumeRangePolicy.matches(response.header("Content-Range"), 0L)
                 ) {
                     response.close()
