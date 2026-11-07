@@ -25,9 +25,9 @@ import com.aurora.store.R
 import com.aurora.store.compose.composable.app.AnimatedAppIcon
 import com.aurora.store.compose.preview.AppPreviewProvider
 import com.aurora.store.compose.preview.ThemePreviewProvider
-import com.aurora.store.compose.ui.downloads.DownloadUiPolicy
 import com.aurora.store.compose.theme.colorGreen
 import com.aurora.store.compose.theme.colorRed
+import com.aurora.store.compose.ui.downloads.DownloadUiPolicy
 import com.aurora.store.data.model.DownloadStatus
 import com.aurora.store.data.room.download.Download
 import com.aurora.store.util.CommonUtil.getETAString

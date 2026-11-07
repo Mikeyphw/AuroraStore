@@ -87,6 +87,15 @@ checks = {
         "'overall': 'PASS'" in script and
         '"overall":"NOT_RUN"' in flow and
         "'release_qualified': False" in script,
+    'R1F HF03 imports respect hosted ktlint order':
+        item.index('import com.aurora.store.compose.theme.colorGreen') <
+        item.index('import com.aurora.store.compose.ui.downloads.DownloadUiPolicy'),
+    'R1F HF03 compact policy expression respects hosted ktlint':
+        'fun showTransferStats(status: DownloadStatus): Boolean = status == DownloadStatus.DOWNLOADING' in policy,
+    'R1F HF03 Compose assertions are valid member methods, not unresolved imports':
+        'import androidx.compose.ui.test.assertExists' not in device and
+        'import androidx.compose.ui.test.assertDoesNotExist' not in device and
+        '.assertExists()' in device and '.assertDoesNotExist()' in device,
     'additive UI strings (no locale overwrite)':
         'r1f_download_retry' in strings and
         'r1f_download_clear_all_warning' in strings,

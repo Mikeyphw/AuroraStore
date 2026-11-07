@@ -5,8 +5,7 @@ import com.aurora.store.data.model.DownloadStatus
 
 /** Single source of truth for download affordances across the list and action sheet. */
 internal object DownloadUiPolicy {
-    fun showTransferStats(status: DownloadStatus): Boolean =
-        status == DownloadStatus.DOWNLOADING
+    fun showTransferStats(status: DownloadStatus): Boolean = status == DownloadStatus.DOWNLOADING
 
     fun canRetry(status: DownloadStatus, installableFilesPresent: Boolean): Boolean =
         when (status) {
