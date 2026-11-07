@@ -11,6 +11,7 @@ import android.content.Context
 import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.SystemClock
 import android.os.storage.StorageManager
 import android.util.Log
 import androidx.core.content.getSystemService
@@ -70,6 +71,7 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.security.DigestInputStream
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.properties.Delegates
@@ -78,6 +80,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
@@ -114,12 +117,15 @@ class DownloadWorker @AssistedInject constructor(
         // Upper bound on automatic WorkManager retries for transient (network) failures
         // before the download is marked as failed and left for the user to retry.
         private const val MAX_DOWNLOAD_RETRIES = 5
+        private const val STALL_POLL_INTERVAL_MS = 15_000L
         private val transferLocks = mutableMapOf<String, Mutex>()
     }
 
     private lateinit var download: Download
     private lateinit var deliveryClient: PlayClient
     private val activeHttpCall = AtomicReference<Call?>()
+    private val stalledTransfer = AtomicBoolean(false)
+    private val stallWatchdog = TransferStallWatchdog(SystemClock::elapsedRealtime)
 
     private val notificationManager = context.getSystemService<NotificationManager>()!!
 
@@ -155,6 +161,7 @@ class DownloadWorker @AssistedInject constructor(
     inner class InvalidResumeRangeException : IOException(
         "Server returned an invalid resume range; restarting the file"
     )
+    inner class DownloadStalledException : IOException("Transfer stalled without receiving bytes")
 
     inner class PatchTooLargeException : Exception("Patch exceeds its declared maximum size")
 
@@ -172,9 +179,24 @@ class DownloadWorker @AssistedInject constructor(
                 activeHttpCall.getAndSet(null)?.cancel()
             }
         }
+        // A socket may stay open without transferring data; detect byte-level stalls
+        // without penalizing slow connections that continue to make progress.
+        val monitorStalls = launch(Dispatchers.Default) {
+            while (true) {
+                delay(STALL_POLL_INTERVAL_MS)
+                if (stallWatchdog.isStalled()) {
+                    if (stalledTransfer.compareAndSet(false, true)) {
+                        Log.w(TAG, "Download transfer stopped making progress")
+                        activeHttpCall.getAndSet(null)?.cancel()
+                    }
+                    break
+                }
+            }
+        }
         try {
             performDownload()
         } finally {
+            monitorStalls.cancel()
             cancelNetwork.cancel()
             activeHttpCall.getAndSet(null)?.cancel()
         }
@@ -459,7 +481,8 @@ class DownloadWorker @AssistedInject constructor(
         is UnknownHostException,
         // Expired URLs were re-purchased by clearing the file list; retrying re-fetches them.
         is ExpiredUrlException,
-        is InvalidResumeRangeException -> true
+        is InvalidResumeRangeException,
+        is DownloadStalledException -> true
 
         else -> isRetryable(throwable.cause)
     }
@@ -901,6 +924,7 @@ class DownloadWorker @AssistedInject constructor(
         onLength: (Long) -> Unit = {}
     ) {
         withContext(Dispatchers.IO) {
+            stallWatchdog.begin()
             try {
                 // Download as a temporary file to avoid installing corrupted files
                 val tmpFile = File(file.absolutePath + ".tmp")
@@ -974,6 +998,8 @@ class DownloadWorker @AssistedInject constructor(
                             // Abort promptly mid-file when stopped, instead of only checking
                             // between files (a single split can be hundreds of MB).
                             if (isStopped) throw CancellationException("Download stopped")
+                            if (stalledTransfer.get()) throw DownloadStalledException()
+                            stallWatchdog.onBytes(info.bytesCopied)
                             written += info.bytesCopied
                             if (maxSize > 0 && written > maxSize) {
                                 throw PatchTooLargeException()
@@ -983,10 +1009,12 @@ class DownloadWorker @AssistedInject constructor(
                     }
                 }
 
+                if (stalledTransfer.get()) throw DownloadStalledException()
                 if (!tmpFile.renameTo(file)) {
                     throw Exception("Failed to remove .tmp extension from $tmpFile")
                 }
             } catch (exception: Exception) {
+                if (stalledTransfer.get() && !isStopped) throw DownloadStalledException()
                 when (exception) {
                     is SocketException,
                     is SocketTimeoutException,
@@ -1000,6 +1028,8 @@ class DownloadWorker @AssistedInject constructor(
 
                     else -> throw exception
                 }
+            } finally {
+                stallWatchdog.finish()
             }
         }
     }

@@ -124,7 +124,9 @@ def run():
           'response.header("Content-Range")' in WORKER and
           'if (returnedStart != existingBytes)' in WORKER and
           'tmpFile.delete()' in WORKER and
-          'is InvalidResumeRangeException -> true' in WORKER)
+          ('is InvalidResumeRangeException -> true' in WORKER or
+           ('is InvalidResumeRangeException,' in WORKER and
+            'is DownloadStalledException -> true' in WORKER)))
     check('app install state cannot be overwritten by new enqueue',
           'if (existing?.status == DownloadStatus.INSTALLING) return' in HELPER)
     check('notification cancellation carries the exact attempt',
