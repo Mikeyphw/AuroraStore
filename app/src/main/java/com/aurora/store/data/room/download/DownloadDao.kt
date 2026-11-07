@@ -34,12 +34,7 @@ interface DownloadDao {
           AND downloadStatus IN ('QUEUED', 'PURCHASING', 'DOWNLOADING', 'VERIFYING', 'COMPLETED')
         """
     )
-    suspend fun cancelActiveDownload(
-        packageName: String,
-        versionCode: Long,
-        attemptKey: Long
-    ): Int
-
+    suspend fun cancelActiveDownload(packageName: String, versionCode: Long, attemptKey: Long): Int
 
     /** A new retry gets a new persisted generation even when the version is unchanged. */
     @Query(
@@ -85,21 +80,13 @@ interface DownloadDao {
           AND downloadStatus IN ('PURCHASING', 'DOWNLOADING', 'VERIFYING')
         """
     )
-    suspend fun failOrphanedDownload(
-        packageName: String,
-        versionCode: Long,
-        attemptKey: Long
-    ): Int
+    suspend fun failOrphanedDownload(packageName: String, versionCode: Long, attemptKey: Long): Int
 
     @Query(
         "DELETE FROM download WHERE packageName = :packageName " +
             "AND versionCode = :versionCode AND downloadedAt = :attemptKey"
     )
-    suspend fun deleteVersion(
-        packageName: String,
-        versionCode: Long,
-        attemptKey: Long
-    ): Int
+    suspend fun deleteVersion(packageName: String, versionCode: Long, attemptKey: Long): Int
 
     @Query("UPDATE download SET fileList=:fileList WHERE packageName=:packageName")
     suspend fun updateFiles(packageName: String, fileList: List<AppFile>)
