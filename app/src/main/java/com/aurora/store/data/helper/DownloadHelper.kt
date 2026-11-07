@@ -61,6 +61,7 @@ class DownloadHelper @Inject constructor(
         private const val DOWNLOAD_APP = "DOWNLOAD_APP"
         private const val DOWNLOAD_UPDATE = "DOWNLOAD_UPDATE"
         const val VERSION_CODE = "VERSION_CODE"
+        const val ATTEMPT_KEY = "ATTEMPT_KEY"
     }
 
     // Single stable StateFlow shared across consumers. Previously a `get()` accessor that
@@ -274,6 +275,8 @@ class DownloadHelper @Inject constructor(
      */
     private suspend fun enqueue(download: Download) {
         val existing = getDownload(download.packageName)
+        // Never replace a record once its package installation has been committed.
+        if (existing?.status == DownloadStatus.INSTALLING) return
         if (existing != null && existing.versionCode == download.versionCode) {
             if (existing.canInstall(context)) {
                 Log.i(TAG, "${download.packageName} already downloaded, installing directly")
@@ -290,13 +293,16 @@ class DownloadHelper @Inject constructor(
                 return
             }
         }
-        downloadDao.insert(download)
-        if (existing != null && existing.versionCode != download.versionCode) {
-            // The replaced version's worker may still be running. It must never
-            // occupy the slot or keep downloading behind the newer request.
-            WorkManager.getInstance(context).cancelUniqueWork(
-                "$DOWNLOAD_WORKER/${existing.packageName}/${existing.versionCode}"
-            )
+        // downloadedAt is already durable in Room. Use a monotonically increasing value
+        // as the attempt identity, so a new request for the SAME version cannot be confused
+        // with a cancelled WorkManager generation. This also handles ExternalApk (timestamp 0).
+        val nextAttempt = maxOf(
+            System.currentTimeMillis(),
+            (existing?.downloadedAt ?: 0L) + 1L
+        )
+        downloadDao.insert(download.copy(downloadedAt = nextAttempt))
+        if (existing != null) {
+            cancelWorkFor(existing)
         }
     }
 
@@ -335,27 +341,38 @@ class DownloadHelper @Inject constructor(
      */
     suspend fun retryDownload(packageName: String) {
         val existing = getDownload(packageName) ?: return
-        if (existing.isActive) {
+        if (existing.isActive || existing.status == DownloadStatus.INSTALLING) {
             Log.i(TAG, "Skipping retry for $packageName; already ${existing.status}")
             return
         }
-        Log.i(TAG, "Retrying download for $packageName")
-        downloadDao.updateStatus(packageName, DownloadStatus.QUEUED)
+        val restarted = downloadDao.retryWithNewAttempt(
+            packageName,
+            existing.versionCode,
+            existing.downloadedAt,
+            System.currentTimeMillis()
+        )
+        if (restarted != 0) {
+            Log.i(TAG, "Retrying download for $packageName with a fresh attempt")
+            cancelWorkFor(existing)
+        }
     }
 
     /**
      * Cancels the download for the given package
      * @param packageName Name of the package to cancel download
      */
-    suspend fun cancelDownload(packageName: String) {
+    suspend fun cancelDownload(packageName: String, expectedAttempt: Long? = null) {
         val current = getDownload(packageName) ?: return
-        val changed = downloadDao.cancelActiveDownload(packageName, current.versionCode)
-        if (changed == 0) return // Installation already committed or version changed.
+        if (expectedAttempt != null && current.downloadedAt != expectedAttempt) return
+        val changed = downloadDao.cancelActiveDownload(
+            packageName,
+            current.versionCode,
+            current.downloadedAt
+        )
+        if (changed == 0) return // Installation already committed or attempt changed.
 
         Log.i(TAG, "Cancelling download for $packageName at ${current.versionCode}")
-        WorkManager.getInstance(context).cancelUniqueWork(
-            "$DOWNLOAD_WORKER/$packageName/${current.versionCode}"
-        )
+        cancelWorkFor(current)
         NotificationUtil.clearAppNotification(context, packageName)
     }
 
@@ -377,9 +394,11 @@ class DownloadHelper @Inject constructor(
         if (current.versionCode != versionCode || current.status == DownloadStatus.INSTALLING) {
             return // Never delete a replacement download or APKs handed to the installer.
         }
-        if (current.isActive) cancelDownload(packageName)
+        if (current.isActive) cancelDownload(packageName, current.downloadedAt)
         Log.i(TAG, "Clearing downloads for $packageName ($versionCode)")
-        if (downloadDao.deleteVersion(packageName, versionCode) == 0) return
+        if (downloadDao.deleteVersion(packageName, versionCode, current.downloadedAt) == 0) {
+            return
+        }
         PathUtil.getAppDownloadDir(context, packageName, versionCode)
             .deleteRecursively()
     }
@@ -421,7 +440,7 @@ class DownloadHelper @Inject constructor(
             ?.asSequence()
             ?.filter { it.status in cancellable }
             ?.filter { !updatesOnly || it.isInstalled }
-            ?.forEach { cancelDownload(it.packageName) }
+            ?.forEach { cancelDownload(it.packageName, it.downloadedAt) }
     }
 
     private suspend fun cancelFailedDownloads(downloadList: List<Download>) {
@@ -431,21 +450,41 @@ class DownloadHelper @Inject constructor(
             val matchingWork = workManager
                 .getWorkInfosByTagFlow("$PACKAGE_NAME:${item.packageName}")
                 .firstOrNull().orEmpty()
-                .filter { "$VERSION_CODE:${item.versionCode}" in it.tags }
+                .filter {
+                    "$VERSION_CODE:${item.versionCode}" in it.tags &&
+                        "$ATTEMPT_KEY:${item.downloadedAt}" in it.tags
+                }
 
             // all() returning false is STILL non-null: the old ?.run incorrectly failed
             // genuinely running downloads. Only release an orphaned processing slot.
             if (matchingWork.none { !it.state.isFinished }) {
                 Log.w(TAG, "Recovering orphaned download for ${item.packageName}")
-                downloadDao.failOrphanedDownload(item.packageName, item.versionCode)
+                downloadDao.failOrphanedDownload(
+                    item.packageName,
+                    item.versionCode,
+                    item.downloadedAt
+                )
             }
         }
+    }
+
+    /** Stop both R1A (version-only) and R1B (attempt-scoped) workers on replacement. */
+    private fun cancelWorkFor(download: Download) {
+        val workManager = WorkManager.getInstance(context)
+        workManager.cancelUniqueWork(
+            "$DOWNLOAD_WORKER/${download.packageName}/${download.versionCode}"
+        )
+        workManager.cancelUniqueWork(
+            "$DOWNLOAD_WORKER/${download.packageName}/${download.versionCode}/" +
+                download.downloadedAt
+        )
     }
 
     private fun trigger(download: Download) {
         val inputData = Data.Builder()
             .putString(PACKAGE_NAME, download.packageName)
             .putLong(VERSION_CODE, download.versionCode)
+            .putLong(ATTEMPT_KEY, download.downloadedAt)
             .build()
 
         // Require connectivity so the worker doesn't spin up (or keep running) without a
@@ -459,6 +498,7 @@ class DownloadHelper @Inject constructor(
             .addTag(DOWNLOAD_WORKER)
             .addTag("$PACKAGE_NAME:${download.packageName}")
             .addTag("$VERSION_CODE:${download.versionCode}")
+            .addTag("$ATTEMPT_KEY:${download.downloadedAt}")
             .addTag(if (download.isInstalled) DOWNLOAD_UPDATE else DOWNLOAD_APP)
             .setConstraints(constraints)
             .setBackoffCriteria(
@@ -473,7 +513,8 @@ class DownloadHelper @Inject constructor(
         // Ensure all app downloads are unique to preserve individual records
         WorkManager.getInstance(context)
             .enqueueUniqueWork(
-                "$DOWNLOAD_WORKER/${download.packageName}/${download.versionCode}",
+                "$DOWNLOAD_WORKER/${download.packageName}/${download.versionCode}/" +
+                    download.downloadedAt,
                 ExistingWorkPolicy.KEEP,
                 work
             )

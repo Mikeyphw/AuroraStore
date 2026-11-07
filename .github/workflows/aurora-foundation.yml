@@ -33,6 +33,8 @@ jobs:
         run: python3 scripts/ci/check_foundation.py
       - name: Validate R1A download cancellation invariants
         run: python3 scripts/ci/check_r1a.py
+      - name: Validate R1B download attempt and transfer invariants
+        run: python3 scripts/ci/check_r1b.py
 
   android:
     name: Android vanilla debug, lint and JVM tests
