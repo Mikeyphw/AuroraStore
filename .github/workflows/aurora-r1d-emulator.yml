@@ -1,0 +1,125 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: Aurora R1D — API 36 Emulator Download Recovery
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/aurora-r1d-emulator.yml'
+      - 'app/src/androidTest/java/com/aurora/store/data/room/download/**'
+      - 'app/src/androidTest/java/com/aurora/store/data/work/**'
+      - 'scripts/ci/check_r1d.py'
+      - 'scripts/ci/r1d_emulator_ci.sh'
+      - 'docs/R1D_EMULATOR_ACCEPTANCE.md'
+      - 'app/src/main/java/com/aurora/store/data/room/download/**'
+      - 'app/src/main/java/com/aurora/store/data/work/**'
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/aurora-r1d-emulator.yml'
+      - 'app/src/androidTest/java/com/aurora/store/data/room/download/**'
+      - 'app/src/androidTest/java/com/aurora/store/data/work/**'
+      - 'scripts/ci/check_r1d.py'
+      - 'scripts/ci/r1d_emulator_ci.sh'
+      - 'app/src/main/java/com/aurora/store/data/room/download/**'
+      - 'app/src/main/java/com/aurora/store/data/work/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurora-r1d-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    name: R1D source and fixture contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify source and device fixture contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -B scripts/ci/check_foundation.py
+          python3 -B scripts/ci/check_r1a.py
+          python3 -B scripts/ci/check_r1b.py
+          python3 -B scripts/ci/check_r1c.py
+          python3 -B scripts/ci/check_r1d.py
+
+  emulator:
+    name: R1D production Room DAO + watchdog + process restart on API 36
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Require exact source and fail-closed receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$RUNNER_OS" = Linux
+          test "$(uname -m)" = x86_64
+          mkdir -p "$RUNNER_TEMP/aurora-r1d-emulator"
+          printf '%s\n' '{"overall":"NOT_RUN","hosted_emulator_only":true,"physical_device_qualified":false,"release_qualified":false}' \
+            > "$RUNNER_TEMP/aurora-r1d-emulator/R1D_EMULATOR_RECEIPT.json"
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+      - name: Install Aurora platform and Cinderbox-proven API 36 emulator image
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install 'platforms;android-37.0'
+          test -f "$ANDROID_SDK_ROOT/platforms/android-37.0/android.jar"
+          for attempt in 1 2 3; do
+            if sdkmanager --install 'system-images;android-36;google_apis;x86_64'; then break; fi
+            if [ "$attempt" -eq 3 ]; then echo R1D_SDK_IMAGE_FAILED >&2; exit 1; fi
+            sleep 10
+          done
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
+      - name: Build vanillaDebug application and instrumentation APKs on GitHub
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon --max-workers=2 :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest
+      - name: Require KVM-enabled ephemeral Linux runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm || { echo R1D_KVM_UNAVAILABLE >&2; exit 1; }
+          if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then sudo chmod a+rw /dev/kvm; fi
+          test -r /dev/kvm && test -w /dev/kvm
+      - name: Execute 14 offline Android device tests (KVM/API 36)
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 2048M
+          disk-size: 3072M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: bash scripts/ci/r1d_emulator_ci.sh
+      - name: Upload source-bound emulator receipt and offline test logs
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: aurora-r1d-api36-emulator-evidence
+          path: ${{ runner.temp }}/aurora-r1d-emulator/
+          if-no-files-found: warn
+          retention-days: 14
