@@ -55,4 +55,31 @@ receipt = {
 Path(sys.argv[1]).write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
 PY
 
-echo 'R1D2_EMULATOR_ACCEPTANCE_PASS: 24 device tests, source-bound offline evidence'
+# Run the real Hilt-assisted DownloadWorker with an offline, loopback-only transport.
+R1E_OUT="${RUNNER_TEMP:?}/aurora-r1e-emulator"
+mkdir -p "$R1E_OUT"
+R1E_SUITE='com.aurora.store.data.work.DownloadWorkerOfflineDeviceTest'
+run_suite worker-r1e "$R1E_SUITE" 8
+python3 - "$R1E_OUT/R1E_EMULATOR_RECEIPT.json" <<'PYR1E'
+import json, os, sys
+from pathlib import Path
+receipt = {
+    'overall': 'PASS',
+    'source_sha': os.getenv('GITHUB_SHA', ''),
+    'run_id': os.getenv('GITHUB_RUN_ID', ''),
+    'hosted_api36': True,
+    'previous_device_tests': 24,
+    'real_download_worker_offline_tests': 8,
+    'total_device_tests': 32,
+    'hilt_assisted_real_download_worker_executed': True,
+    'direct_test_worker_builder_not_workmanager_scheduled': True,
+    'loopback_only_transport': True,
+    'google_play_delivery_performed': False,
+    'real_apk_installation_performed': False,
+    'physical_device_qualified': False,
+    'release_qualified': False,
+}
+Path(sys.argv[1]).write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
+PYR1E
+
+echo 'R1E_EMULATOR_ACCEPTANCE_PASS: 32 offline Android device tests'

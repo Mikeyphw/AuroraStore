@@ -37,6 +37,7 @@ import com.aurora.gplayapi.model.PatchFormat
 import com.aurora.gplayapi.net.HttpEngine
 import com.aurora.gplayapi.session.PlaySessions
 import com.aurora.store.AuroraApp
+import com.aurora.store.BuildConfig
 import com.aurora.store.R
 import com.aurora.store.data.AccountRepository
 import com.aurora.store.data.event.InstallerEvent
@@ -126,6 +127,7 @@ class DownloadWorker @AssistedInject constructor(
     private val activeHttpCall = AtomicReference<Call?>()
     private val stalledTransfer = AtomicBoolean(false)
     private val stallWatchdog = TransferStallWatchdog(SystemClock::elapsedRealtime)
+    private var r1eFixtureActive = false
 
     private val notificationManager = context.getSystemService<NotificationManager>()!!
 
@@ -219,8 +221,8 @@ class DownloadWorker @AssistedInject constructor(
     }
 
     private suspend fun downloadUnderLock(): Result {
-        super.doWork()
-
+        // Resolve the persisted generation BEFORE refreshing auth or contacting Play.
+        // An obsolete worker must be a truly offline no-op.
         // A cancelled or replaced request may still have a scheduled worker. Never let
         // that worker operate on a newer download row or a missing row.
         val packageName = inputData.getString(DownloadHelper.PACKAGE_NAME)
@@ -237,6 +239,10 @@ class DownloadWorker @AssistedInject constructor(
             return Result.success()
         }
         download = current
+        if (BuildConfig.DEBUG && R1EOfflineGate.enabled(inputData)) {
+            return downloadOfflineFixture()
+        }
+        super.doWork()
         try {
             deliveryClient = playClientFor(packageName)
         } catch (exception: Exception) {
@@ -432,6 +438,50 @@ class DownloadWorker @AssistedInject constructor(
         return onSuccess()
     }
 
+    /**
+     * Debug builds only: execute this worker's REAL transfer/retry/Room path against a
+     * strictly validated local test server. No Play calls and no package installation.
+     */
+    private suspend fun downloadOfflineFixture(): Result {
+        if (!R1EOfflineGate.allowed(download.packageName, inputData)) {
+            return Result.failure()
+        }
+        r1eFixtureActive = true
+        val url = requireNotNull(inputData.getString(R1EOfflineGate.URL))
+        val expectedSize = inputData.getLong(R1EOfflineGate.SIZE, -1L)
+        val expectedDigest = requireNotNull(inputData.getString(R1EOfflineGate.SHA256))
+        val file = R1EOfflineGate.file(context, download.packageName, download.downloadedAt)
+        totalBytes = expectedSize
+        download.totalFiles = 1
+        try {
+            if (!notifyStatus(DownloadStatus.DOWNLOADING)) return Result.success()
+            transfer(url, file, expectedSize)
+            if (!notifyStatus(DownloadStatus.VERIFYING)) return Result.success()
+            val digest = withContext(Dispatchers.IO) {
+                val md = MessageDigest.getInstance("SHA-256")
+                file.inputStream().use { input ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        md.update(buffer, 0, count)
+                    }
+                }
+                md.digest().joinToString("") { byte ->
+                    "%02x".format(byte.toInt() and 0xff)
+                }
+            }
+            if (file.length() != expectedSize || digest != expectedDigest) {
+                file.delete()
+                return onFailure(VerificationFailedException())
+            }
+            if (!notifyStatus(DownloadStatus.COMPLETED)) return Result.success()
+            return Result.success()
+        } catch (exception: Exception) {
+            return onFailure(exception)
+        }
+    }
+
     private suspend fun onSuccess(): Result {
         return withContext(NonCancellable) {
             return@withContext try {
@@ -483,6 +533,8 @@ class DownloadWorker @AssistedInject constructor(
         is ExpiredUrlException,
         is InvalidResumeRangeException,
         is DownloadStalledException -> true
+        // A truncated HTTP response may surface as ProtocolException rather than SocketException.
+        is IOException -> true
 
         else -> isRetryable(throwable.cause)
     }
@@ -1130,6 +1182,8 @@ class DownloadWorker @AssistedInject constructor(
             return false
         }
         download.status = status
+        // Do not post user-visible notifications from the isolated debug fixture.
+        if (r1eFixtureActive) return true
 
         when (status) {
             // Internal phases the user doesn't need a separate notification for: the ongoing

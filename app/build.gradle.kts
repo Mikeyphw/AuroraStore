@@ -252,6 +252,7 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.google.truth)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.androidx.work.testing)
 
     // Hilt
     ksp(libs.hilt.android.compiler)
