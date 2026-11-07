@@ -60,7 +60,7 @@ class DownloadHelper @Inject constructor(
 
         private const val DOWNLOAD_APP = "DOWNLOAD_APP"
         private const val DOWNLOAD_UPDATE = "DOWNLOAD_UPDATE"
-        private const val VERSION_CODE = "VERSION_CODE"
+        const val VERSION_CODE = "VERSION_CODE"
     }
 
     // Single stable StateFlow shared across consumers. Previously a `get()` accessor that
@@ -291,6 +291,13 @@ class DownloadHelper @Inject constructor(
             }
         }
         downloadDao.insert(download)
+        if (existing != null && existing.versionCode != download.versionCode) {
+            // The replaced version's worker may still be running. It must never
+            // occupy the slot or keep downloading behind the newer request.
+            WorkManager.getInstance(context).cancelUniqueWork(
+                "$DOWNLOAD_WORKER/${existing.packageName}/${existing.versionCode}"
+            )
+        }
     }
 
     suspend fun installPending(packageName: String): Boolean {
@@ -341,11 +348,15 @@ class DownloadHelper @Inject constructor(
      * @param packageName Name of the package to cancel download
      */
     suspend fun cancelDownload(packageName: String) {
-        Log.i(TAG, "Cancelling download for $packageName")
-        WorkManager.getInstance(context).cancelAllWorkByTag("$PACKAGE_NAME:$packageName")
-        // Abandon any session already staged for install so we don't leak it.
-        runCatching { appInstaller.getPreferredInstaller().cancelInstall(packageName) }
-        downloadDao.updateStatus(packageName, DownloadStatus.CANCELLED)
+        val current = getDownload(packageName) ?: return
+        val changed = downloadDao.cancelActiveDownload(packageName, current.versionCode)
+        if (changed == 0) return // Installation already committed or version changed.
+
+        Log.i(TAG, "Cancelling download for $packageName at ${current.versionCode}")
+        WorkManager.getInstance(context).cancelUniqueWork(
+            "$DOWNLOAD_WORKER/${packageName}/${current.versionCode}"
+        )
+        NotificationUtil.clearAppNotification(context, packageName)
     }
 
     /**
@@ -362,8 +373,13 @@ class DownloadHelper @Inject constructor(
      * @param versionCode Version of the package
      */
     suspend fun clearDownload(packageName: String, versionCode: Long) {
+        val current = getDownload(packageName) ?: return
+        if (current.versionCode != versionCode || current.status == DownloadStatus.INSTALLING) {
+            return // Never delete a replacement download or APKs handed to the installer.
+        }
+        if (current.isActive) cancelDownload(packageName)
         Log.i(TAG, "Clearing downloads for $packageName ($versionCode)")
-        downloadDao.delete(packageName)
+        if (downloadDao.deleteVersion(packageName, versionCode) == 0) return
         PathUtil.getAppDownloadDir(context, packageName, versionCode)
             .deleteRecursively()
     }
@@ -373,6 +389,10 @@ class DownloadHelper @Inject constructor(
      */
     suspend fun clearAllDownloads() {
         Log.i(TAG, "Clearing all downloads!")
+        // Invalidate active states before deleting records and files; workers must not
+        // resurrect their database rows after force-clear.
+        cancelAll()
+        WorkManager.getInstance(context).cancelAllWorkByTag(DOWNLOAD_WORKER)
         downloadDao.deleteAll()
         PathUtil.getDownloadDirectory(context).deleteRecursively()
         PathUtil.getOldDownloadDirectories(context).forEach { it.deleteRecursively() }
@@ -392,36 +412,40 @@ class DownloadHelper @Inject constructor(
      * @param updatesOnly Whether to cancel only updates, defaults to false
      */
     suspend fun cancelAll(updatesOnly: Boolean = false) {
-        // Cancel queued/completed downloads first to avoid triggering re-download and to give
-        // the user immediate feedback for items that already finished downloading. The actual
-        // OS-level install for COMPLETED entries is wrapped in NonCancellable inside the
-        // worker and cannot be aborted — if it succeeds, the update row is removed via
-        // InstallerEvent.Installed; if it fails, the user can re-trigger an update.
-        val cancellableStatuses = setOf(DownloadStatus.QUEUED, DownloadStatus.COMPLETED)
+        // Cancel exactly the matching downloads, including purchases, transfers and verifying.
+        // Unlike tag-wide cancellation this covers BOTH apps and updates and cannot cancel
+        // a newer generation for a package that was just re-queued.
+        val cancellable = DownloadStatus.processing +
+            setOf(DownloadStatus.QUEUED, DownloadStatus.COMPLETED)
         downloadDao.downloads().firstOrNull()
-            ?.filter { it.status in cancellableStatuses }
-            ?.filter { if (updatesOnly) it.isInstalled else true }
-            ?.forEach {
-                downloadDao.updateStatus(it.packageName, DownloadStatus.CANCELLED)
-            }
-
-        WorkManager.getInstance(context)
-            .cancelAllWorkByTag(if (updatesOnly) DOWNLOAD_UPDATE else DOWNLOAD_APP)
+            ?.asSequence()
+            ?.filter { it.status in cancellable }
+            ?.filter { !updatesOnly || it.isInstalled }
+            ?.forEach { cancelDownload(it.packageName) }
     }
 
     private suspend fun cancelFailedDownloads(downloadList: List<Download>) {
         val workManager = WorkManager.getInstance(context)
 
-        downloadList.filter { it.isRunning }.forEach {
-            workManager.getWorkInfosByTagFlow("$PACKAGE_NAME:${it.packageName}").firstOrNull()
-                ?.all { workInfo -> workInfo.state.isFinished }
-                ?.run { downloadDao.updateStatus(it.packageName, DownloadStatus.FAILED) }
+        downloadList.filter { it.status in DownloadStatus.processing }.forEach { item ->
+            val matchingWork = workManager
+                .getWorkInfosByTagFlow("$PACKAGE_NAME:${item.packageName}")
+                .firstOrNull().orEmpty()
+                .filter { "$VERSION_CODE:${item.versionCode}" in it.tags }
+
+            // all() returning false is STILL non-null: the old ?.run incorrectly failed
+            // genuinely running downloads. Only release an orphaned processing slot.
+            if (matchingWork.none { !it.state.isFinished }) {
+                Log.w(TAG, "Recovering orphaned download for ${item.packageName}")
+                downloadDao.failOrphanedDownload(item.packageName, item.versionCode)
+            }
         }
     }
 
     private fun trigger(download: Download) {
         val inputData = Data.Builder()
             .putString(PACKAGE_NAME, download.packageName)
+            .putLong(VERSION_CODE, download.versionCode)
             .build()
 
         // Require connectivity so the worker doesn't spin up (or keep running) without a

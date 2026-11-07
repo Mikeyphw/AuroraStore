@@ -25,11 +25,70 @@ interface DownloadDao {
     @Query("UPDATE download SET downloadStatus=:downloadStatus WHERE packageName=:packageName")
     suspend fun updateStatus(packageName: String, downloadStatus: DownloadStatus)
 
+    /** Cancel only the selected version before asking WorkManager to stop its worker. */
+    @Query(
+        """
+        UPDATE download SET downloadStatus = 'CANCELLED'
+        WHERE packageName = :packageName AND versionCode = :versionCode
+          AND downloadStatus IN ('QUEUED', 'PURCHASING', 'DOWNLOADING', 'VERIFYING', 'COMPLETED')
+        """
+    )
+    suspend fun cancelActiveDownload(packageName: String, versionCode: Long): Int
+
+    /** A stale worker may not resurrect a cancelled, replaced or installing download. */
+    @Query(
+        """
+        UPDATE download SET downloadStatus = :downloadStatus
+        WHERE packageName = :packageName AND versionCode = :versionCode
+          AND downloadStatus IN ('QUEUED', 'PURCHASING', 'DOWNLOADING', 'VERIFYING', 'COMPLETED')
+        """
+    )
+    suspend fun updateWorkerStatus(
+        packageName: String,
+        versionCode: Long,
+        downloadStatus: DownloadStatus
+    ): Int
+
+    /** Free a serialized download slot only when no live worker owns it. */
+    @Query(
+        """
+        UPDATE download SET downloadStatus = 'FAILED'
+        WHERE packageName = :packageName AND versionCode = :versionCode
+          AND downloadStatus IN ('PURCHASING', 'DOWNLOADING', 'VERIFYING')
+        """
+    )
+    suspend fun failOrphanedDownload(packageName: String, versionCode: Long): Int
+
+    @Query("DELETE FROM download WHERE packageName = :packageName AND versionCode = :versionCode")
+    suspend fun deleteVersion(packageName: String, versionCode: Long): Int
+
     @Query("UPDATE download SET fileList=:fileList WHERE packageName=:packageName")
     suspend fun updateFiles(packageName: String, fileList: List<AppFile>)
 
+    @Query(
+        """
+        UPDATE download SET fileList = :fileList
+        WHERE packageName = :packageName AND versionCode = :versionCode
+          AND downloadStatus IN ('QUEUED', 'PURCHASING', 'DOWNLOADING', 'VERIFYING')
+        """
+    )
+    suspend fun updateWorkerFiles(packageName: String, versionCode: Long, fileList: List<AppFile>): Int
+
     @Query("UPDATE download SET sharedLibs=:sharedLibs WHERE packageName=:packageName")
     suspend fun updateSharedLibs(packageName: String, sharedLibs: List<SharedLib>)
+
+    @Query(
+        """
+        UPDATE download SET sharedLibs = :sharedLibs
+        WHERE packageName = :packageName AND versionCode = :versionCode
+          AND downloadStatus IN ('QUEUED', 'PURCHASING', 'DOWNLOADING', 'VERIFYING')
+        """
+    )
+    suspend fun updateWorkerSharedLibs(
+        packageName: String,
+        versionCode: Long,
+        sharedLibs: List<SharedLib>
+    ): Int
 
     @Query(
         """
@@ -39,6 +98,21 @@ interface DownloadDao {
         """
     )
     suspend fun updateProgress(packageName: String, progress: Int, speed: Long, timeRemaining: Long)
+
+    @Query(
+        """
+        UPDATE download SET progress = :progress, speed = :speed, timeRemaining = :timeRemaining
+        WHERE packageName = :packageName AND versionCode = :versionCode
+          AND downloadStatus IN ('QUEUED', 'PURCHASING', 'DOWNLOADING', 'VERIFYING', 'COMPLETED')
+        """
+    )
+    suspend fun updateWorkerProgress(
+        packageName: String,
+        versionCode: Long,
+        progress: Int,
+        speed: Long,
+        timeRemaining: Long
+    ): Int
 
     @Query("SELECT * FROM download")
     fun downloads(): Flow<List<Download>>

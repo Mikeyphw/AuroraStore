@@ -31,6 +31,8 @@ jobs:
           fetch-depth: 0
       - name: Verify source baseline
         run: python3 scripts/ci/check_foundation.py
+      - name: Validate R1A download cancellation invariants
+        run: python3 scripts/ci/check_r1a.py
 
   android:
     name: Android vanilla debug, lint and JVM tests

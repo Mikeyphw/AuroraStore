@@ -75,19 +75,19 @@ fun DownloadActionsSheet(
                 modifier = Modifier.padding(vertical = dimensionResource(R.dimen.spacing_xsmall))
             )
 
-            if (download.isRunning) {
+            if (download.isActive) {
                 Item(
                     label = stringResource(R.string.action_cancel),
-                    enabled = download.isRunning,
+                    enabled = download.isActive,
                     onClick = {
                         onCancel()
                         onDismiss()
                     }
                 )
-            } else {
+            } else if (download.status != DownloadStatus.INSTALLING) {
                 Item(
                     label = stringResource(R.string.action_clear),
-                    enabled = !download.isRunning,
+                    enabled = !download.isActive,
                     onClick = {
                         onClear()
                         onDismiss()

@@ -70,6 +70,7 @@ fun DownloadsScreen(
     val context = LocalContext.current
     val downloads = viewModel.downloads.collectAsLazyPagingItems()
     val sort by viewModel.sort.collectAsStateWithLifecycle()
+    val liveDownloads by viewModel.liveDownloads.collectAsStateWithLifecycle()
 
     val exportMimeType = "application/zip"
     var requestedExport by rememberSaveable { mutableStateOf<Download?>(null) }
@@ -87,6 +88,7 @@ fun DownloadsScreen(
 
     ScreenContent(
         downloads = downloads,
+        liveDownloads = liveDownloads,
         sort = sort,
         onSortChange = { viewModel.updateSort(it) },
         onNavigateTo = onNavigateTo,
@@ -108,6 +110,7 @@ fun DownloadsScreen(
 @Composable
 private fun ScreenContent(
     downloads: LazyPagingItems<Download> = emptyPagingItems(),
+    liveDownloads: List<Download> = emptyList(),
     sort: DownloadSort = DownloadSort(),
     onSortChange: (DownloadSort) -> Unit = {},
     onNavigateTo: (Destination) -> Unit = {},
@@ -141,7 +144,9 @@ private fun ScreenContent(
         )
     }
 
-    actionsTarget?.let { target ->
+    actionsTarget?.let { selected ->
+        val target = liveDownloads.firstOrNull { it.packageName == selected.packageName }
+            ?: selected
         DownloadActionsSheet(
             download = target,
             onDismiss = { actionsTarget = null },
