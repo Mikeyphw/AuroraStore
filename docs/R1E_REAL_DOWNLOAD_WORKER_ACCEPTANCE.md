@@ -35,3 +35,13 @@ The R1E evidence receipt stays `NOT_RUN` unless all 32 tests pass. Physical-devi
 - Android-test ktlint requires the `Data.Builder()` expression on the same line as the short `input()` function signature.
 - A corrupted download's durable state is `FAILED`, while WorkManager receives terminal `Success`; this was already the production contract. The test now asserts both independently, plus that the corrupt file was removed and the local server was contacted once.
 - HF01 does not alter production transfer or retry logic; all 32 API36 emulator tests must pass on the updated PR commit before merge.
+
+## HF02 — final hosted ktlint continuation repair
+
+- The eight chained `Data.Builder()` lines in the Android instrumentation test are
+  indented with eight spaces, not twelve, now that the first builder call is on
+  the function-signature line. The source contract rejects the broken shape.
+- The same 32 real API 36 instrumentation tests passed on commit
+  `02ab174be5af144f92aa8447f9f57e422a58ff75`; only Foundation ktlint failed.
+- No production worker, network, authentication, installation, or user UI logic changes.
+- The new commit needs its own full Foundation CI and emulator green results before merge.

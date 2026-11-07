@@ -198,14 +198,14 @@ class DownloadWorkerOfflineDeviceTest {
     }
 
     private fun input(pkg: String, url: String, attempt: Long = ATTEMPT): Data = Data.Builder()
-            .putString("PACKAGE_NAME", pkg)
-            .putLong("VERSION_CODE", VERSION)
-            .putLong("ATTEMPT_KEY", attempt)
-            .putBoolean(R1EOfflineGate.ENABLED, true)
-            .putString(R1EOfflineGate.URL, url)
-            .putLong(R1EOfflineGate.SIZE, PAYLOAD.length.toLong())
-            .putString(R1EOfflineGate.SHA256, digest(PAYLOAD))
-            .build()
+        .putString("PACKAGE_NAME", pkg)
+        .putLong("VERSION_CODE", VERSION)
+        .putLong("ATTEMPT_KEY", attempt)
+        .putBoolean(R1EOfflineGate.ENABLED, true)
+        .putString(R1EOfflineGate.URL, url)
+        .putLong(R1EOfflineGate.SIZE, PAYLOAD.length.toLong())
+        .putString(R1EOfflineGate.SHA256, digest(PAYLOAD))
+        .build()
 
     private suspend fun runWorker(data: Data): ListenableWorker.Result {
         val worker = TestListenableWorkerBuilder<DownloadWorker>(context)

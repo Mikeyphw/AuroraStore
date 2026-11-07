@@ -54,6 +54,11 @@ checks = {
         'DownloadStatus.FAILED' in tests.split('fun shaMismatchRejectsPayloadWithoutInstallHandoff()', 1)[1].split('    @Test', 1)[0] and
         'assertThat(server.hits.get()).isEqualTo(1)' in tests.split('fun shaMismatchRejectsPayloadWithoutInstallHandoff()', 1)[1].split('    @Test', 1)[0] and
         'R1EOfflineGate.file(context, pkg, ATTEMPT).exists()).isFalse()' in tests.split('fun shaMismatchRejectsPayloadWithoutInstallHandoff()', 1)[1].split('    @Test', 1)[0],
+    'R1E data builder continuation follows hosted ktlint rule':
+        len(re.findall(r'(?m)^ {8}\.(?:putString|putLong|putBoolean|build)\(',
+            tests.split('    private fun input(', 1)[1].split('    private suspend fun runWorker(', 1)[0])) == 8 and
+        not re.search(r'(?m)^ {12}\.(?:putString|putLong|putBoolean|build)\(',
+            tests.split('    private fun input(', 1)[1].split('    private suspend fun runWorker(', 1)[0]),
     'work testing dependency only added to instrumentation':
         'androidx-work-testing = ' in versions and
         'androidTestImplementation(libs.androidx.work.testing)' in app,
