@@ -70,11 +70,18 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.security.DigestInputStream
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.properties.Delegates
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
+import okhttp3.Call
 import okhttp3.Headers.Companion.toHeaders
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -107,10 +114,12 @@ class DownloadWorker @AssistedInject constructor(
         // Upper bound on automatic WorkManager retries for transient (network) failures
         // before the download is marked as failed and left for the user to retry.
         private const val MAX_DOWNLOAD_RETRIES = 5
+        private val transferLocks = mutableMapOf<String, Mutex>()
     }
 
     private lateinit var download: Download
     private lateinit var deliveryClient: PlayClient
+    private val activeHttpCall = AtomicReference<Call?>()
 
     private val notificationManager = context.getSystemService<NotificationManager>()!!
 
@@ -143,6 +152,9 @@ class DownloadWorker @AssistedInject constructor(
         Exception(context.getString(R.string.verification_failed))
 
     inner class ExpiredUrlException : Exception(context.getString(R.string.download_failed))
+    inner class InvalidResumeRangeException : IOException(
+        "Server returned an invalid resume range; restarting the file"
+    )
 
     inner class PatchTooLargeException : Exception("Patch exceeds its declared maximum size")
 
@@ -151,7 +163,40 @@ class DownloadWorker @AssistedInject constructor(
     inner class InsufficientStorageException :
         Exception(context.getString(R.string.download_failed_storage))
 
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result = coroutineScope {
+        // CoroutineWorker.onStopped() is final; a child watcher cancels the HTTP call.
+        val cancelNetwork = launch(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                awaitCancellation()
+            } finally {
+                activeHttpCall.getAndSet(null)?.cancel()
+            }
+        }
+        try {
+            performDownload()
+        } finally {
+            cancelNetwork.cancel()
+            activeHttpCall.getAndSet(null)?.cancel()
+        }
+    }
+
+    private suspend fun performDownload(): Result {
+        // A new attempt must not touch the same APK temp file until an older worker
+        // has actually finished, even when WorkManager reports the old job cancelled.
+        val packageName = inputData.getString(DownloadHelper.PACKAGE_NAME)
+            ?: return Result.failure()
+        val lock = synchronized(transferLocks) {
+            transferLocks.getOrPut(packageName) { Mutex() }
+        }
+        lock.lock()
+        return try {
+            downloadUnderLock()
+        } finally {
+            lock.unlock()
+        }
+    }
+
+    private suspend fun downloadUnderLock(): Result {
         super.doWork()
 
         // A cancelled or replaced request may still have a scheduled worker. Never let
@@ -159,9 +204,11 @@ class DownloadWorker @AssistedInject constructor(
         val packageName = inputData.getString(DownloadHelper.PACKAGE_NAME)
             ?: return Result.failure()
         val expectedVersion = inputData.getLong(DownloadHelper.VERSION_CODE, -1L)
+        val expectedAttempt = inputData.getLong(DownloadHelper.ATTEMPT_KEY, -1L)
         val current = runCatching { downloadDao.getDownload(packageName) }.getOrNull()
             ?: return Result.success()
         if (current.versionCode != expectedVersion ||
+            current.downloadedAt != expectedAttempt ||
             current.status !in DownloadStatus.processing + DownloadStatus.QUEUED
         ) {
             Log.i(TAG, "Skipping stale or terminal worker for $packageName")
@@ -267,10 +314,16 @@ class DownloadWorker @AssistedInject constructor(
         totalBytes = files.sumOf { if (it in patchSources) patchEstimate(it) else it.size }
 
         // Update database with all latest purchases
-        downloadDao.updateWorkerFiles(download.packageName, download.versionCode, download.fileList)
+        downloadDao.updateWorkerFiles(
+            download.packageName,
+            download.versionCode,
+            download.downloadedAt,
+            download.fileList
+        )
         downloadDao.updateWorkerSharedLibs(
             download.packageName,
             download.versionCode,
+            download.downloadedAt,
             download.sharedLibs
         )
 
@@ -387,7 +440,9 @@ class DownloadWorker @AssistedInject constructor(
         if (isSAndAbove && stopReason in cancelReasons) return true
         return runCatching {
             downloadDao.getDownload(download.packageName).let {
-                it.versionCode == download.versionCode && it.status == DownloadStatus.CANCELLED
+                it.versionCode == download.versionCode &&
+                    it.downloadedAt == download.downloadedAt &&
+                    it.status == DownloadStatus.CANCELLED
             }
         }.getOrDefault(false)
     }
@@ -403,7 +458,8 @@ class DownloadWorker @AssistedInject constructor(
         is SocketTimeoutException,
         is UnknownHostException,
         // Expired URLs were re-purchased by clearing the file list; retrying re-fetches them.
-        is ExpiredUrlException -> true
+        is ExpiredUrlException,
+        is InvalidResumeRangeException -> true
 
         else -> isRetryable(throwable.cause)
     }
@@ -704,8 +760,22 @@ class DownloadWorker @AssistedInject constructor(
      * resolution and file transfer are separate concerns using separate tools on purpose.
      */
     private fun get(url: String, headers: Map<String, String> = emptyMap()): Response {
+        if (isStopped) throw DownloadCancelledException()
         val request = Request(url = url.toHttpUrl(), headers = headers.toHeaders())
-        return okHttpClient.newCall(request).execute()
+        val call = okHttpClient.newCall(request)
+        activeHttpCall.set(call)
+        // Close the race where cancellation lands between the first guard and set().
+        if (isStopped) {
+            activeHttpCall.compareAndSet(call, null)
+            call.cancel()
+            throw DownloadCancelledException()
+        }
+        return try {
+            call.execute()
+        } catch (exception: IOException) {
+            activeHttpCall.compareAndSet(call, null)
+            throw exception
+        }
     }
 
     /**
@@ -849,16 +919,22 @@ class DownloadWorker @AssistedInject constructor(
                     // Play download URLs are short-lived; a 403/410 means ours expired while
                     // the download sat queued. Drop the stale file lists so the retry
                     // re-purchases fresh URLs instead of hammering the dead one.
+                    if (code == 416 && existingBytes > 0) {
+                        tmpFile.delete()
+                        throw InvalidResumeRangeException()
+                    }
                     if (code == HTTP_FORBIDDEN || code == HTTP_GONE) {
                         Log.w(TAG, "Download URL for ${download.packageName} expired (code=$code)")
                         downloadDao.updateWorkerFiles(
                             download.packageName,
                             download.versionCode,
+                            download.downloadedAt,
                             emptyList()
                         )
                         downloadDao.updateWorkerSharedLibs(
                             download.packageName,
                             download.versionCode,
+                            download.downloadedAt,
                             download.sharedLibs.map { it.copy(fileList = emptyList()) }
                         )
                         throw ExpiredUrlException()
@@ -872,6 +948,14 @@ class DownloadWorker @AssistedInject constructor(
                 // silently corrupt the file.
                 val resuming = existingBytes > 0 && response.code == HTTP_PARTIAL
                 if (resuming) {
+                    val range = response.header("Content-Range")
+                    val returnedStart = range?.substringAfter("bytes ")
+                        ?.substringBefore("-")?.toLongOrNull()
+                    if (returnedStart != existingBytes) {
+                        response.close()
+                        tmpFile.delete()
+                        throw InvalidResumeRangeException()
+                    }
                     downloadedBytes += existingBytes
                 } else if (existingBytes > 0) {
                     Log.w(
@@ -953,6 +1037,7 @@ class DownloadWorker @AssistedInject constructor(
                 downloadDao.updateWorkerProgress(
                     download.packageName,
                     download.versionCode,
+                    download.downloadedAt,
                     download.progress,
                     download.speed,
                     download.timeRemaining
@@ -992,6 +1077,7 @@ class DownloadWorker @AssistedInject constructor(
         val updated = downloadDao.updateWorkerStatus(
             download.packageName,
             download.versionCode,
+            download.downloadedAt,
             status
         )
         if (updated == 0) {
@@ -1018,6 +1104,7 @@ class DownloadWorker @AssistedInject constructor(
                 downloadDao.updateWorkerProgress(
                     download.packageName,
                     download.versionCode,
+                    download.downloadedAt,
                     100,
                     0,
                     0

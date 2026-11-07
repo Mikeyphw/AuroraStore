@@ -30,22 +30,44 @@ interface DownloadDao {
         """
         UPDATE download SET downloadStatus = 'CANCELLED'
         WHERE packageName = :packageName AND versionCode = :versionCode
+          AND downloadedAt = :attemptKey
           AND downloadStatus IN ('QUEUED', 'PURCHASING', 'DOWNLOADING', 'VERIFYING', 'COMPLETED')
         """
     )
-    suspend fun cancelActiveDownload(packageName: String, versionCode: Long): Int
+    suspend fun cancelActiveDownload(packageName: String, versionCode: Long, attemptKey: Long): Int
+
+    /** A new retry gets a new persisted generation even when the version is unchanged. */
+    @Query(
+        """
+        UPDATE download SET downloadStatus = 'QUEUED',
+            downloadedAt = CASE WHEN downloadedAt >= :now THEN downloadedAt + 1 ELSE :now END,
+            progress = 0, speed = 0, timeRemaining = 0
+        WHERE packageName = :packageName AND versionCode = :versionCode
+          AND downloadedAt = :previousAttempt
+          AND downloadStatus IN ('FAILED', 'CANCELLED', 'UNAVAILABLE',
+                                 'COMPLETED', 'INSTALLED', 'AWAITING_INSTALL')
+        """
+    )
+    suspend fun retryWithNewAttempt(
+        packageName: String,
+        versionCode: Long,
+        previousAttempt: Long,
+        now: Long
+    ): Int
 
     /** A stale worker may not resurrect a cancelled, replaced or installing download. */
     @Query(
         """
         UPDATE download SET downloadStatus = :downloadStatus
         WHERE packageName = :packageName AND versionCode = :versionCode
+          AND downloadedAt = :attemptKey
           AND downloadStatus IN ('QUEUED', 'PURCHASING', 'DOWNLOADING', 'VERIFYING', 'COMPLETED')
         """
     )
     suspend fun updateWorkerStatus(
         packageName: String,
         versionCode: Long,
+        attemptKey: Long,
         downloadStatus: DownloadStatus
     ): Int
 
@@ -54,13 +76,17 @@ interface DownloadDao {
         """
         UPDATE download SET downloadStatus = 'FAILED'
         WHERE packageName = :packageName AND versionCode = :versionCode
+          AND downloadedAt = :attemptKey
           AND downloadStatus IN ('PURCHASING', 'DOWNLOADING', 'VERIFYING')
         """
     )
-    suspend fun failOrphanedDownload(packageName: String, versionCode: Long): Int
+    suspend fun failOrphanedDownload(packageName: String, versionCode: Long, attemptKey: Long): Int
 
-    @Query("DELETE FROM download WHERE packageName = :packageName AND versionCode = :versionCode")
-    suspend fun deleteVersion(packageName: String, versionCode: Long): Int
+    @Query(
+        "DELETE FROM download WHERE packageName = :packageName " +
+            "AND versionCode = :versionCode AND downloadedAt = :attemptKey"
+    )
+    suspend fun deleteVersion(packageName: String, versionCode: Long, attemptKey: Long): Int
 
     @Query("UPDATE download SET fileList=:fileList WHERE packageName=:packageName")
     suspend fun updateFiles(packageName: String, fileList: List<AppFile>)
@@ -69,12 +95,14 @@ interface DownloadDao {
         """
         UPDATE download SET fileList = :fileList
         WHERE packageName = :packageName AND versionCode = :versionCode
+          AND downloadedAt = :attemptKey
           AND downloadStatus IN ('QUEUED', 'PURCHASING', 'DOWNLOADING', 'VERIFYING')
         """
     )
     suspend fun updateWorkerFiles(
         packageName: String,
         versionCode: Long,
+        attemptKey: Long,
         fileList: List<AppFile>
     ): Int
 
@@ -85,12 +113,14 @@ interface DownloadDao {
         """
         UPDATE download SET sharedLibs = :sharedLibs
         WHERE packageName = :packageName AND versionCode = :versionCode
+          AND downloadedAt = :attemptKey
           AND downloadStatus IN ('QUEUED', 'PURCHASING', 'DOWNLOADING', 'VERIFYING')
         """
     )
     suspend fun updateWorkerSharedLibs(
         packageName: String,
         versionCode: Long,
+        attemptKey: Long,
         sharedLibs: List<SharedLib>
     ): Int
 
@@ -107,12 +137,14 @@ interface DownloadDao {
         """
         UPDATE download SET progress = :progress, speed = :speed, timeRemaining = :timeRemaining
         WHERE packageName = :packageName AND versionCode = :versionCode
+          AND downloadedAt = :attemptKey
           AND downloadStatus IN ('QUEUED', 'PURCHASING', 'DOWNLOADING', 'VERIFYING', 'COMPLETED')
         """
     )
     suspend fun updateWorkerProgress(
         packageName: String,
         versionCode: Long,
+        attemptKey: Long,
         progress: Int,
         speed: Long,
         timeRemaining: Long
