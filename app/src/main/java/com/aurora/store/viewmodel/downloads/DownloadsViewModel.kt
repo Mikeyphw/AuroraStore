@@ -43,6 +43,7 @@ class DownloadsViewModel @Inject constructor(
 
     private val _downloads = MutableStateFlow<PagingData<Download>>(PagingData.empty())
     val downloads = _downloads.asStateFlow()
+    val liveDownloads = downloadHelper.downloadsList
 
     private val _sort = MutableStateFlow(loadDownloadSort(context))
     val sort = _sort.asStateFlow()

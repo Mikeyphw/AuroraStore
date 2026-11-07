@@ -23,7 +23,7 @@ enum class DownloadStatus(@StringRes val localized: Int) {
 
     companion object {
         val finished = setOf(FAILED, CANCELLED, COMPLETED, INSTALLED)
-        val running = setOf(QUEUED, PURCHASING, DOWNLOADING)
+        val running = setOf(QUEUED, PURCHASING, DOWNLOADING, VERIFYING)
 
         /**
          * States in which a download worker is actively occupying the (single) download

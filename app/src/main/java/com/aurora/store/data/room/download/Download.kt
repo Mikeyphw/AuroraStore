@@ -51,12 +51,8 @@ data class Download(
     val isRunning get() = status in DownloadStatus.running
     private val isSuccessful get() = status in DownloadStatus.installable
 
-    /**
-     * `true` while the download is queued, purchasing, downloading or verifying, i.e.
-     * the pipeline is actively working on it. Unlike [isRunning] this also covers
-     * [DownloadStatus.VERIFYING], which sits between downloading and completion.
-     */
-    val isActive get() = isRunning || status == DownloadStatus.VERIFYING
+    /** True while a download can still be cancelled (including verification). */
+    val isActive get() = isRunning
 
     val isAwaitingInstall get() = status == DownloadStatus.AWAITING_INSTALL
 

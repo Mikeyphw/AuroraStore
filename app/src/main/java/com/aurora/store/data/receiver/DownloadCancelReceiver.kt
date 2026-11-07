@@ -28,8 +28,13 @@ class DownloadCancelReceiver : BroadcastReceiver() {
 
         if (packageName.isNotBlank()) {
             Log.d(TAG, "Received cancel download request for $packageName")
+            val result = goAsync()
             AuroraApp.scope.launch(Dispatchers.IO) {
-                downloadHelper.cancelDownload(packageName)
+                try {
+                    downloadHelper.cancelDownload(packageName)
+                } finally {
+                    result.finish()
+                }
             }
         }
     }

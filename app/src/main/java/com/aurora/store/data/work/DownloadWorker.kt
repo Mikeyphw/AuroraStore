@@ -44,7 +44,6 @@ import com.aurora.store.data.installer.AppInstaller
 import com.aurora.store.data.model.Algorithm
 import com.aurora.store.data.model.DownloadInfo
 import com.aurora.store.data.model.DownloadStatus
-import com.aurora.store.data.model.DownloadStatus.Companion.installerStates
 import com.aurora.store.data.providers.AuthProvider
 import com.aurora.store.data.providers.GoogleAccountTokenProvider
 import com.aurora.store.data.room.download.Download
@@ -155,31 +154,36 @@ class DownloadWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         super.doWork()
 
-        // Fetch required data for download
+        // A cancelled or replaced request may still have a scheduled worker. Never let
+        // that worker operate on a newer download row or a missing row.
+        val packageName = inputData.getString(DownloadHelper.PACKAGE_NAME)
+            ?: return Result.failure()
+        val expectedVersion = inputData.getLong(DownloadHelper.VERSION_CODE, -1L)
+        val current = runCatching { downloadDao.getDownload(packageName) }.getOrNull()
+            ?: return Result.success()
+        if (current.versionCode != expectedVersion ||
+            current.status !in DownloadStatus.processing + DownloadStatus.QUEUED
+        ) {
+            Log.i(TAG, "Skipping stale or terminal worker for $packageName")
+            return Result.success()
+        }
+        download = current
         try {
-            download = downloadDao.getDownload(inputData.getString(DownloadHelper.PACKAGE_NAME)!!)
-            deliveryClient = playClientFor(download.packageName)
+            deliveryClient = playClientFor(packageName)
         } catch (exception: Exception) {
             return onFailure(exception)
-        }
-
-        // Workers only ever start from a QUEUED row, so anything past it was committed by an
-        // earlier run that never got to report success — as happens on a self-update, where
-        // install() kills this process. Re-installing here would just kill the app again.
-        if (download.status in installerStates) {
-            Log.i(TAG, "${download.packageName} is already ${download.status}, nothing to do")
-            return Result.success()
         }
 
         // The icon only decorates the progress notification. Fetching it is best-effort: a
         // failure (unreachable/pinned host, non-HTTP url, undecodable image) must never abort
         // the download itself.
         try {
-            val response = get(download.iconURL).body
-            val bitmap = BitmapFactory.decodeStream(
-                withContext(Dispatchers.IO) { response.byteStream() }
-            )
-            icon = bitmap?.scale(96, 96)
+            get(download.iconURL).use { response ->
+                val bitmap = BitmapFactory.decodeStream(
+                    withContext(Dispatchers.IO) { response.body.byteStream() }
+                )
+                icon = bitmap?.scale(96, 96)
+            }
         } catch (exception: Exception) {
             Log.w(TAG, "Failed to fetch icon for ${download.packageName}", exception)
         }
@@ -190,7 +194,7 @@ class DownloadWorker @AssistedInject constructor(
         // Resolve download URLs if the file list is empty. Surface any gplayapi error
         // (e.g. AppNotPurchased, AppNotSupported, AppRemoved) as the failure cause so
         // the user sees the real reason instead of a generic "files not available".
-        notifyStatus(DownloadStatus.PURCHASING)
+        if (!notifyStatus(DownloadStatus.PURCHASING)) return Result.success()
         try {
             download.fileList = download.fileList.ifEmpty {
                 resolveFiles(download.packageName, download.versionCode, download.offerType)
@@ -263,8 +267,12 @@ class DownloadWorker @AssistedInject constructor(
         totalBytes = files.sumOf { if (it in patchSources) patchEstimate(it) else it.size }
 
         // Update database with all latest purchases
-        downloadDao.updateFiles(download.packageName, download.fileList)
-        downloadDao.updateSharedLibs(download.packageName, download.sharedLibs)
+        downloadDao.updateWorkerFiles(download.packageName, download.versionCode, download.fileList)
+        downloadDao.updateWorkerSharedLibs(
+            download.packageName,
+            download.versionCode,
+            download.sharedLibs
+        )
 
         // Fail fast (and let the system free its cache) if there isn't room for the download,
         // instead of dying mid-write with a partial file. Only the not-yet-downloaded bytes
@@ -323,7 +331,7 @@ class DownloadWorker @AssistedInject constructor(
 
         // Verify downloaded files (skipping any already verified during the download pass)
         try {
-            notifyStatus(DownloadStatus.VERIFYING)
+            if (!notifyStatus(DownloadStatus.VERIFYING)) return Result.success()
             files.forEach { file ->
                 val path = PathUtil.getLocalFile(context, file, download).absolutePath
                 if (path !in verifiedFiles) require(verifyFile(file))
@@ -344,7 +352,7 @@ class DownloadWorker @AssistedInject constructor(
         }
 
         Log.i(TAG, "Finished downloading & verifying ${download.packageName}")
-        notifyStatus(DownloadStatus.COMPLETED)
+        if (!notifyStatus(DownloadStatus.COMPLETED)) return Result.success()
 
         return onSuccess()
     }
@@ -355,7 +363,9 @@ class DownloadWorker @AssistedInject constructor(
                 // Update the ongoing foreground notification to reflect the install phase,
                 // so the user sees a clean "Downloading -> Installing" progression instead of
                 // a stale download bar lingering at 100%.
-                notifyStatus(DownloadStatus.INSTALLING, isProgress = true)
+                if (!notifyStatus(DownloadStatus.INSTALLING, isProgress = true)) {
+                    return@withContext Result.success()
+                }
                 appInstaller.getPreferredInstaller(notifyOnFallback = true).install(download)
                 Result.success()
             } catch (exception: Exception) {
@@ -376,7 +386,9 @@ class DownloadWorker @AssistedInject constructor(
         val cancelReasons = listOf(STOP_REASON_USER, STOP_REASON_CANCELLED_BY_APP)
         if (isSAndAbove && stopReason in cancelReasons) return true
         return runCatching {
-            downloadDao.getDownload(download.packageName).status == DownloadStatus.CANCELLED
+            downloadDao.getDownload(download.packageName).let {
+                it.versionCode == download.versionCode && it.status == DownloadStatus.CANCELLED
+            }
         }.getOrDefault(false)
     }
 
@@ -444,17 +456,19 @@ class DownloadWorker @AssistedInject constructor(
                             else -> exception.message?.takeIf { it.isNotBlank() }
                                 ?: context.getString(R.string.download_failed)
                         }
-                        notifyStatus(
+                        val recorded = notifyStatus(
                             status = DownloadStatus.FAILED,
                             message = userMessage
                         )
-                        AuroraApp.events.send(
-                            InstallerEvent.Failed(
-                                packageName = download.packageName,
-                                error = userMessage,
-                                extra = exception.stackTraceToString()
+                        if (recorded) {
+                            AuroraApp.events.send(
+                                InstallerEvent.Failed(
+                                    packageName = download.packageName,
+                                    error = userMessage,
+                                    extra = exception.stackTraceToString()
+                                )
                             )
-                        )
+                        }
                     }
                 }
             }
@@ -837,9 +851,14 @@ class DownloadWorker @AssistedInject constructor(
                     // re-purchases fresh URLs instead of hammering the dead one.
                     if (code == HTTP_FORBIDDEN || code == HTTP_GONE) {
                         Log.w(TAG, "Download URL for ${download.packageName} expired (code=$code)")
-                        downloadDao.updateFiles(download.packageName, emptyList())
-                        downloadDao.updateSharedLibs(
+                        downloadDao.updateWorkerFiles(
                             download.packageName,
+                            download.versionCode,
+                            emptyList()
+                        )
+                        downloadDao.updateWorkerSharedLibs(
+                            download.packageName,
+                            download.versionCode,
                             download.sharedLibs.map { it.copy(fileList = emptyList()) }
                         )
                         throw ExpiredUrlException()
@@ -931,8 +950,9 @@ class DownloadWorker @AssistedInject constructor(
                     this.timeRemaining = (bytesRemaining / speed) * 1000
                 }
 
-                downloadDao.updateProgress(
+                downloadDao.updateWorkerProgress(
                     download.packageName,
+                    download.versionCode,
                     download.progress,
                     download.speed,
                     download.timeRemaining
@@ -966,10 +986,19 @@ class DownloadWorker @AssistedInject constructor(
         status: DownloadStatus,
         isProgress: Boolean = false,
         message: String? = null
-    ) {
-        // Update status in database
+    ): Boolean {
+        // A user cancellation or a newer version always wins over old callbacks.
+        if (isStopped && status != DownloadStatus.CANCELLED) return false
+        val updated = downloadDao.updateWorkerStatus(
+            download.packageName,
+            download.versionCode,
+            status
+        )
+        if (updated == 0) {
+            Log.i(TAG, "Ignoring obsolete status $status for ${download.packageName}")
+            return false
+        }
         download.status = status
-        downloadDao.updateStatus(download.packageName, status)
 
         when (status) {
             // Internal phases the user doesn't need a separate notification for: the ongoing
@@ -980,13 +1009,19 @@ class DownloadWorker @AssistedInject constructor(
             DownloadStatus.VERIFYING,
             DownloadStatus.CANCELLED -> {
                 notificationManager.cancel(download.packageName.hashCode())
-                return
+                return true
             }
 
             DownloadStatus.COMPLETED -> {
                 // Mark progress as 100 manually to avoid race conditions
                 download.progress = 100
-                downloadDao.updateProgress(download.packageName, 100, 0, 0)
+                downloadDao.updateWorkerProgress(
+                    download.packageName,
+                    download.versionCode,
+                    100,
+                    0,
+                    0
+                )
 
                 // Silently-installable apps install automatically and get a single
                 // "installed" notification afterwards, so a separate "download complete"
@@ -999,7 +1034,7 @@ class DownloadWorker @AssistedInject constructor(
                 )
                 if (!needsUserAction) {
                     notificationManager.cancel(download.packageName.hashCode())
-                    return
+                    return true
                 }
             }
 
@@ -1008,7 +1043,7 @@ class DownloadWorker @AssistedInject constructor(
 
         // Skip detailed progress refreshes when the user has hidden progress; the minimal
         // foreground notification posted via getForegroundInfo keeps the download alive.
-        if (isProgress && !showProgress) return
+        if (isProgress && !showProgress) return true
 
         val notification = NotificationUtil.getDownloadNotification(
             context,
@@ -1026,6 +1061,7 @@ class DownloadWorker @AssistedInject constructor(
         if (status == DownloadStatus.FAILED) {
             NotificationUtil.refreshGroupSummaries(context)
         }
+        return true
     }
 
     /**
