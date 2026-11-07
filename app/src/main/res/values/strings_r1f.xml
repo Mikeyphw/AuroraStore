@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<resources>
+    <string name="r1f_download_retry">Retry download</string>
+    <string name="r1f_download_clear_all_warning">Delete all download records and cached files? Active downloads will be cancelled. This cannot be undone.</string>
+</resources>

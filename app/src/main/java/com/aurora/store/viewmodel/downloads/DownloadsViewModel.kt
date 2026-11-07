@@ -64,6 +64,28 @@ class DownloadsViewModel @Inject constructor(
         }
     }
 
+    fun cancel(download: Download) {
+        viewModelScope.launch(NonCancellable) {
+            downloadHelper.cancelDownload(download.packageName, download.downloadedAt)
+        }
+    }
+
+    fun retry(download: Download) {
+        viewModelScope.launch(NonCancellable) {
+            downloadHelper.retryDownload(download.packageName, download.downloadedAt)
+        }
+    }
+
+    fun clear(download: Download) {
+        viewModelScope.launch(NonCancellable) {
+            downloadHelper.clearDownload(
+                download.packageName,
+                download.versionCode,
+                download.downloadedAt
+            )
+        }
+    }
+
     fun cancelAll() {
         viewModelScope.launch(NonCancellable) {
             downloadHelper.cancelAll()

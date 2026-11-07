@@ -83,3 +83,6 @@ Path(sys.argv[1]).write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n
 PYR1E
 
 echo 'R1E_EMULATOR_ACCEPTANCE_PASS: 32 offline Android device tests'
+
+# R1F adds UI acceptance after all 32 previous tests and their receipts pass.
+bash scripts/ci/r1f_emulator_ci.sh

@@ -35,6 +35,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import com.aurora.store.R
 import com.aurora.store.compose.composable.app.AnimatedAppIcon
+import com.aurora.store.compose.ui.downloads.DownloadUiPolicy
 import com.aurora.store.data.model.DownloadStatus
 import com.aurora.store.data.room.download.Download
 import com.aurora.store.util.PackageUtil
@@ -47,12 +48,14 @@ fun DownloadActionsSheet(
     onDismiss: () -> Unit,
     onShowDetails: () -> Unit,
     onCancel: () -> Unit,
+    onRetry: () -> Unit,
     onInstall: () -> Unit,
     onExport: () -> Unit,
     onClear: () -> Unit
 ) {
     val context = LocalContext.current
     val canInstall = download.canInstall(context)
+    val canRetry = DownloadUiPolicy.canRetry(download.status, canInstall)
     val canExport = PathUtil.getExportableFiles(context, download).isNotEmpty()
 
     ModalBottomSheet(
@@ -96,7 +99,17 @@ fun DownloadActionsSheet(
                 )
             }
 
-            if (!PackageUtil.isInstalled(context, download.packageName)) {
+            if (canRetry) {
+                Item(
+                    label = stringResource(R.string.r1f_download_retry),
+                    onClick = {
+                        onRetry()
+                        onDismiss()
+                    }
+                )
+            }
+
+            if (!canRetry && !PackageUtil.isInstalled(context, download.packageName)) {
                 Item(
                     label = stringResource(R.string.action_install),
                     enabled = canInstall,

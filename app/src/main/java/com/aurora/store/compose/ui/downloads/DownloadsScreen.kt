@@ -14,9 +14,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -95,11 +98,10 @@ fun DownloadsScreen(
         onCancelAll = { viewModel.cancelAll() },
         onForceClearAll = { viewModel.clearAll() },
         onClearFinished = { viewModel.clearFinished() },
-        onCancel = { packageName -> viewModel.cancel(packageName) },
+        onCancel = { download -> viewModel.cancel(download) },
+        onRetry = { download -> viewModel.retry(download) },
         onInstall = { download -> viewModel.install(download) },
-        onClear = { download ->
-            viewModel.clear(download.packageName, download.versionCode)
-        },
+        onClear = { download -> viewModel.clear(download) },
         onExport = { download ->
             requestedExport = download
             documentLauncher.launch("${download.packageName}.zip")
@@ -114,7 +116,8 @@ private fun ScreenContent(
     sort: DownloadSort = DownloadSort(),
     onSortChange: (DownloadSort) -> Unit = {},
     onNavigateTo: (Destination) -> Unit = {},
-    onCancel: (packageName: String) -> Unit = {},
+    onCancel: (download: Download) -> Unit = {},
+    onRetry: (download: Download) -> Unit = {},
     onClear: (download: Download) -> Unit = {},
     onExport: (download: Download) -> Unit = {},
     onInstall: (download: Download) -> Unit = {},
@@ -131,6 +134,29 @@ private fun ScreenContent(
     var initialLoad by rememberSaveable { mutableStateOf(true) }
     var actionsTarget by rememberSaveable { mutableStateOf<Download?>(null) }
     var sortSheetVisible by remember { mutableStateOf(false) }
+    var confirmClearAll by rememberSaveable { mutableStateOf(false) }
+    val liveByPackage = remember(liveDownloads) { liveDownloads.associateBy { it.packageName } }
+
+    if (confirmClearAll) {
+        AlertDialog(
+            onDismissRequest = { confirmClearAll = false },
+            title = { Text(stringResource(R.string.download_force_clear_all)) },
+            text = { Text(stringResource(R.string.r1f_download_clear_all_warning)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmClearAll = false
+                    onForceClearAll()
+                }) {
+                    Text(stringResource(R.string.download_force_clear_all))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearAll = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
 
     if (sortSheetVisible) {
         SortSheet(
@@ -145,13 +171,17 @@ private fun ScreenContent(
     }
 
     actionsTarget?.let { selected ->
-        val target = liveDownloads.firstOrNull { it.packageName == selected.packageName }
-            ?: selected
+        val target = liveByPackage[selected.packageName]
+            ?.takeIf { live ->
+                live.versionCode == selected.versionCode &&
+                    live.downloadedAt == selected.downloadedAt
+            } ?: selected
         DownloadActionsSheet(
             download = target,
             onDismiss = { actionsTarget = null },
             onShowDetails = { onNavigateTo(Destination.AppDetails(target.packageName)) },
-            onCancel = { onCancel(target.packageName) },
+            onCancel = { onCancel(target) },
+            onRetry = { onRetry(target) },
             onInstall = { onInstall(target) },
             onExport = { onExport(target) },
             onClear = { onClear(target) }
@@ -163,7 +193,7 @@ private fun ScreenContent(
         DownloadsMenu { menuItem ->
             when (menuItem) {
                 MenuItem.CANCEL_ALL -> onCancelAll()
-                MenuItem.FORCE_CLEAR_ALL -> onForceClearAll()
+                MenuItem.FORCE_CLEAR_ALL -> confirmClearAll = true
                 MenuItem.CLEAR_FINISHED -> onClearFinished()
             }
         }
@@ -220,8 +250,12 @@ private fun ScreenContent(
                                     downloads[index]?.let { download ->
                                         DownloadListItem(
                                             modifier = Modifier.animateItem(),
-                                            download = download,
-                                            onClick = { actionsTarget = download }
+                                            download = liveByPackage[download.packageName]
+                                                ?: download,
+                                            onClick = {
+                                                actionsTarget = liveByPackage[download.packageName]
+                                                    ?: download
+                                            }
                                         )
                                     }
                                 }

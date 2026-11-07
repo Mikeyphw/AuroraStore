@@ -25,6 +25,7 @@ import com.aurora.store.R
 import com.aurora.store.compose.composable.app.AnimatedAppIcon
 import com.aurora.store.compose.preview.AppPreviewProvider
 import com.aurora.store.compose.preview.ThemePreviewProvider
+import com.aurora.store.compose.ui.downloads.DownloadUiPolicy
 import com.aurora.store.compose.theme.colorGreen
 import com.aurora.store.compose.theme.colorRed
 import com.aurora.store.data.model.DownloadStatus
@@ -36,13 +37,33 @@ fun DownloadListItem(modifier: Modifier = Modifier, download: Download, onClick:
     val context = LocalContext.current
 
     val statusLine = stringResource(download.status.localized)
-    val tertiaryLine = if (download.status in DownloadStatus.running) {
-        val progress = "${download.progress}%"
-        val speed = "${Formatter.formatShortFileSize(context, download.speed)}/s"
-        val eta = getETAString(context, download.timeRemaining)
-        "$progress • $speed • $eta"
-    } else {
-        DateUtils.formatDateTime(context, download.downloadedAt, DateUtils.FORMAT_SHOW_DATE)
+    val tertiaryLine = when {
+        DownloadUiPolicy.showTransferStats(download.status) -> {
+            buildList {
+                add("${download.progress.coerceIn(0, 100)}%")
+                if (download.speed > 0L) {
+                    add("${Formatter.formatShortFileSize(context, download.speed)}/s")
+                }
+                if (download.timeRemaining > 0L) {
+                    add(getETAString(context, download.timeRemaining))
+                }
+            }.joinToString(" • ")
+        }
+
+        download.status in DownloadStatus.running ||
+            download.status in DownloadStatus.installerStates -> {
+            if (download.size > 0L) {
+                Formatter.formatShortFileSize(context, download.size)
+            } else {
+                null
+            }
+        }
+
+        download.downloadedAt > 0L -> {
+            DateUtils.formatDateTime(context, download.downloadedAt, DateUtils.FORMAT_SHOW_DATE)
+        }
+
+        else -> null
     }
 
     AuroraListItem(
@@ -71,12 +92,11 @@ fun DownloadListItem(modifier: Modifier = Modifier, download: Download, onClick:
                 }
             }
 
-            DownloadStatus.CANCELLED, DownloadStatus.FAILED
-            -> {
+            DownloadStatus.CANCELLED, DownloadStatus.FAILED, DownloadStatus.UNAVAILABLE -> {
                 {
                     Icon(
                         painter = painterResource(R.drawable.ic_cancel),
-                        contentDescription = stringResource(R.string.download_canceled),
+                        contentDescription = stringResource(download.status.localized),
                         tint = colorRed
                     )
                 }
