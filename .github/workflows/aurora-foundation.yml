@@ -49,8 +49,10 @@ jobs:
           java-version: '21'
       - name: Configure Android SDK
         uses: android-actions/setup-android@v4
-      - name: Install Android API 37
-        run: sdkmanager --install 'platforms;android-37'
+      - name: Install Android API 37.0
+        run: |
+          sdkmanager --install 'platforms;android-37.0'
+          test -f "${ANDROID_SDK_ROOT}/platforms/android-37.0/android.jar"
       - name: Configure Gradle cache and validate wrapper
         uses: gradle/actions/setup-gradle@v4
       - name: Build, lint and test vanilla debug
