@@ -116,7 +116,9 @@ internal object BinaryApkManifest {
         val count = int(buf, start + 8)
         val flags = int(buf, start + 16)
         val stringsStart = int(buf, start + 20)
-        if (count < 0 || count > 50000 || stringsStart < header ||
+        if (count < 0 ||
+            count > 50000 ||
+            stringsStart < header ||
             header.toLong() + 4L * count > size
         ) {
             throw ApkVerificationException("Invalid APK string table bounds")
@@ -169,7 +171,8 @@ internal object BinaryApkManifest {
     private fun readString(values: List<String>, index: Int): String = values.getOrNull(index) ?: ""
 
     private fun requireChunk(buf: ByteBuffer, offset: Int, type: Int, minSize: Int) {
-        if (buf.limit() < 8 || ushort(buf, offset) != type ||
+        if (buf.limit() < 8 ||
+            ushort(buf, offset) != type ||
             int(buf, offset + 4) != minSize
         ) {
             throw ApkVerificationException("APK manifest is not a valid compiled Android manifest")

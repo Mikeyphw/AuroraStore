@@ -127,7 +127,8 @@ object ApkSetVerifier {
         val groups = buildList {
             add(Triple("", download.packageName to download.versionCode, download.fileList))
             for (lib in download.sharedLibs) {
-                if (!packagePattern.matches(lib.packageName) || lib.versionCode <= 0L ||
+                if (!packagePattern.matches(lib.packageName) ||
+                    lib.versionCode <= 0L ||
                     lib.packageName == download.packageName
                 ) {
                     throw ApkVerificationException("Invalid requested shared-library identity")
@@ -158,9 +159,12 @@ object ApkSetVerifier {
                 throw ApkVerificationException("Duplicate APK names for ${pkgVersion.first}")
             }
             apks.map { entry ->
-                if (entry.name.isEmpty() || !entry.name.endsWith(".apk") ||
-                    entry.name == ".apk" || File(entry.name).name != entry.name ||
-                    entry.name.contains('\\') || entry.name.contains("..") ||
+                if (entry.name.isEmpty() ||
+                    !entry.name.endsWith(".apk") ||
+                    entry.name == ".apk" ||
+                    File(entry.name).name != entry.name ||
+                    entry.name.contains('\\') ||
+                    entry.name.contains("..") ||
                     entry.size <= 0L
                 ) {
                     throw ApkVerificationException("Unsafe or incomplete APK metadata")
@@ -227,7 +231,8 @@ object ApkSetVerifier {
         for (entry in requested) {
             if (interrupted()) throw ApkVerificationException("APK verification was cancelled")
             val path = fileFor(entry)
-            if (!path.isFile || path.length() != entry.metadata.size ||
+            if (!path.isFile ||
+                path.length() != entry.metadata.size ||
                 File(entry.original.absolutePath + ".tmp").exists()
             ) {
                 throw ApkVerificationException(
@@ -257,8 +262,10 @@ object ApkSetVerifier {
                 }
                 val signed = verified.apkContentsSigners.orEmpty()
                     .map(::signatureDigest).toSet()
-                if (signed.isEmpty() || (
-                        info != null && signingDigests(info).let {
+                if (signed.isEmpty() ||
+                    (
+                        info != null &&
+                            signingDigests(info).let {
                             it.isNotEmpty() && it != signed
                         }
                         )

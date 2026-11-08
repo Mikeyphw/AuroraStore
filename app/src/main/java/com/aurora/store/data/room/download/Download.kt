@@ -141,9 +141,12 @@ data class Download(
             }
         }
         return allFiles.all { apk ->
-            apk.name.endsWith(".apk") && File(apk.name).name == apk.name &&
-                apk.size > 0L && PathUtil.getLocalFile(context, apk, this).let { file ->
-                    file.isFile && file.length() == apk.size &&
+            apk.name.endsWith(".apk") &&
+                File(apk.name).name == apk.name &&
+                apk.size > 0L &&
+                PathUtil.getLocalFile(context, apk, this).let { file ->
+                    file.isFile &&
+                        file.length() == apk.size &&
                         !File(file.absolutePath + ".tmp").exists()
                 }
         }

@@ -53,8 +53,101 @@ jobs:
       - name: Validate R3B APK identity and installer snapshot contracts
         run: python3 -B scripts/ci/check_r3b.py
 
+  kotlin-format:
+    name: Kotlin formatting — every app source set
+    needs: source-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Configure Android SDK
+        uses: android-actions/setup-android@v4
+      - name: Install Android API 37.0
+        run: |
+          sdkmanager --install 'platforms;android-37.0'
+          test -f "${ANDROID_SDK_ROOT}/platforms/android-37.0/android.jar"
+      - name: Configure Gradle cache and validate wrapper
+        uses: gradle/actions/setup-gradle@v4
+      - name: Check all app Kotlin and Kotlin-script source sets
+        run: ./gradlew --no-daemon --max-workers=2 --stacktrace :app:ktlintCheck
+      - name: Upload app ktlint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-ktlint-${{ github.run_id }}-${{ github.run_attempt }}
+          path: app/build/reports/ktlint/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  root-gradle-format:
+    name: Kotlin formatting — root Gradle scripts
+    needs: source-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Configure JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Check both root Kotlin scripts with SHA-256-pinned ktlint 1.8.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 \
+            https://github.com/ktlint/ktlint/releases/download/1.8.0/ktlint \
+            -o "$RUNNER_TEMP/ktlint"
+          printf '%s  %s\n' 'a3fd620207d5c40da6ca789b95e7f823c54e854b7fade7f613e91096a3706d75' "$RUNNER_TEMP/ktlint" | sha256sum --check -
+          java -jar "$RUNNER_TEMP/ktlint" build.gradle.kts settings.gradle.kts
+
+  android-lint:
+    name: Android Lint — vanillaDebug
+    needs: source-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Configure Android SDK
+        uses: android-actions/setup-android@v4
+      - name: Install Android API 37.0
+        run: |
+          sdkmanager --install 'platforms;android-37.0'
+          test -f "${ANDROID_SDK_ROOT}/platforms/android-37.0/android.jar"
+      - name: Configure Gradle cache and validate wrapper
+        uses: gradle/actions/setup-gradle@v4
+      - name: Run Android Lint independently of ktlint and JVM tests
+        run: ./gradlew --no-daemon --max-workers=2 --stacktrace :app:lintVanillaDebug
+      - name: Upload Android Lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-android-lint-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            app/build/reports/lint-results-*
+            app/build/intermediates/lint_intermediate_text_report/**
+          if-no-files-found: warn
+          retention-days: 14
+
   android:
-    name: Android vanilla debug, lint and JVM tests
+    name: Android vanilla debug compilation and JVM tests
     needs: source-contract
     runs-on: ubuntu-latest
     timeout-minutes: 75
@@ -76,8 +169,8 @@ jobs:
           test -f "${ANDROID_SDK_ROOT}/platforms/android-37.0/android.jar"
       - name: Configure Gradle cache and validate wrapper
         uses: gradle/actions/setup-gradle@v4
-      - name: Build, lint and test vanilla debug
-        run: ./gradlew --no-daemon --stacktrace assembleVanillaDebug ktlintCheck testVanillaDebugUnitTest
+      - name: Compile vanilla debug and run complete JVM test suite
+        run: ./gradlew --no-daemon --max-workers=2 --stacktrace :app:assembleVanillaDebug :app:testVanillaDebugUnitTest
       - name: Upload debug APK and JVM test reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -87,13 +180,11 @@ jobs:
             app/build/outputs/apk/vanilla/debug/*.apk
             app/build/reports/tests/**
             app/build/test-results/**
-            app/build/reports/lint-results-*.html
           if-no-files-found: warn
           retention-days: 14
-
   unsigned-release:
     name: Compile unsigned vanilla release candidate (not certified)
-    needs: [source-contract, android]
+    needs: [source-contract, kotlin-format, root-gradle-format, android-lint, android]
     runs-on: ubuntu-24.04
     timeout-minutes: 70
     steps:
