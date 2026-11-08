@@ -222,7 +222,8 @@ class ApkSetVerifierDeviceTest {
         val staged = ApkSetVerifier.prepare(context, item)
         val original = staged.filesFor("").single()
         File(fixtureDir, "other-package.apk").copyTo(
-            PathUtil.getLocalFile(context, item.fileList.single(), item), overwrite = true
+            PathUtil.getLocalFile(context, item.fileList.single(), item),
+            overwrite = true
         )
         assertThat(digest(original)).isEqualTo(item.fileList.single().sha256)
         rejects { ApkSetVerifier.verify(context, item) }
