@@ -166,7 +166,9 @@ class SessionInstaller @Inject constructor(
             for (lib in download.sharedLibs) {
                 if (isSharedLibraryInstalled(context, lib.packageName, lib.versionCode)) continue
                 val sessionId = stageInstall(
-                    download.packageName, download.versionCode, lib.packageName
+                    download.packageName,
+                    download.versionCode,
+                    lib.packageName
                 )
                 if (sessionId == null) {
                     stagingFailed = true
@@ -177,11 +179,18 @@ class SessionInstaller @Inject constructor(
 
             if (!stagingFailed) {
                 val sessionId = stageInstall(download.packageName, download.versionCode)
-                if (sessionId == null) stagingFailed = true
-                else stagedSessions.add(
-                    SessionInfo(sessionId, download.packageName, download.versionCode,
-                        download.displayName)
-                )
+                if (sessionId == null) {
+                    stagingFailed = true
+                } else {
+                    stagedSessions.add(
+                        SessionInfo(
+                            sessionId,
+                            download.packageName,
+                            download.versionCode,
+                            download.displayName
+                        )
+                    )
+                }
             }
 
             if (stagingFailed || stagedSessions.isEmpty()) {
@@ -190,7 +199,13 @@ class SessionInstaller @Inject constructor(
                     runCatching { packageInstaller.abandonSession(session.sessionId) }
                 }
                 removeFromInstallQueue(download.packageName)
-                if (!stagingFailed) postError(download.packageName, "No APK session was staged", null)
+                if (!stagingFailed) {
+                    postError(
+                        download.packageName,
+                        "No APK session was staged",
+                        null
+                    )
+                }
                 return
             }
             enqueuedSessions.add(stagedSessions)
@@ -245,9 +260,12 @@ class SessionInstaller @Inject constructor(
         }
 
         val sessionId = try {
-            packageInstaller.createSession(buildSessionParams(
-                resolvedPackageName, files.sumOf { it.length() }
-            ))
+            packageInstaller.createSession(
+                buildSessionParams(
+                    resolvedPackageName,
+                    files.sumOf { it.length() }
+                )
+            )
         } catch (error: Exception) {
             postError(packageName, error.localizedMessage, error.stackTraceToString())
             return null
@@ -259,7 +277,9 @@ class SessionInstaller @Inject constructor(
                 files.forEach { file ->
                     file.inputStream().use { input ->
                         session.openWrite(
-                            "${resolvedPackageName}_${file.name}", 0, file.length()
+                            "${resolvedPackageName}_${file.name}",
+                            0,
+                            file.length()
                         ).use { output ->
                             input.copyTo(output)
                             session.fsync(output)

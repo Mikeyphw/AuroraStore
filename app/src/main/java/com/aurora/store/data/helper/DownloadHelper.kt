@@ -158,10 +158,16 @@ class DownloadHelper @Inject constructor(
             if (next == item.status) return@forEach
 
             val changed = downloadDao.reconcileInstallStatus(
-                item.packageName, item.versionCode, item.downloadedAt, next
+                item.packageName,
+                item.versionCode,
+                item.downloadedAt,
+                next
             )
             if (changed > 0) {
-                Log.i(TAG, "Reconciled installation for ${item.packageName}: ${item.status} -> $next")
+                Log.i(
+                    TAG,
+                    "Reconciled installation for ${item.packageName}: ${item.status} -> $next"
+                )
                 // Cancel only this generation, never a newer attempt for the same package.
                 cancelWorkFor(item)
             }
