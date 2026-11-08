@@ -3,10 +3,7 @@ package com.aurora.store.compose.ui.downloads
 
 import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -81,11 +78,7 @@ class DownloadFinalUiDeviceTest : IsolatedTest() {
     }
 
     @Composable
-    private fun actions(
-        download: Download,
-        onCancel: () -> Unit = {},
-        onRetry: () -> Unit = {}
-    ) {
+    private fun actions(download: Download, onCancel: () -> Unit = {}, onRetry: () -> Unit = {}) {
         DownloadActionsSheet(
             download = download,
             onDismiss = {},
@@ -119,9 +112,18 @@ class DownloadFinalUiDeviceTest : IsolatedTest() {
     )
 
     private fun screenshot(filename: String) {
-        val bitmap = composeTestRule.onRoot().captureToImage().asAndroidBitmap()
+        // Keep the real Compose assertions and idle synchronization, but avoid
+        // captureToImage()'s intermittent Android 16 forceRedraw timeout.
+        composeTestRule.waitForIdle()
+        val bitmap = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()) {
+            "Device display screenshot unavailable: $filename"
+        }
         val file = File(context.filesDir, filename)
-        FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        FileOutputStream(file).use { stream ->
+            check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                "PNG encoding failed for $filename"
+            }
+        }
         assertThat(file.length()).isGreaterThan(100L)
     }
 }
