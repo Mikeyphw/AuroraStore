@@ -25,6 +25,22 @@ interface DownloadDao {
     @Query("UPDATE download SET downloadStatus=:downloadStatus WHERE packageName=:packageName")
     suspend fun updateStatus(packageName: String, downloadStatus: DownloadStatus)
 
+    /** Reconcile an installer attempt without overwriting a replacement download generation. */
+    @Query(
+        """
+        UPDATE download SET downloadStatus = :replacement
+        WHERE packageName = :packageName AND versionCode = :versionCode
+          AND downloadedAt = :attemptKey
+          AND downloadStatus IN ('COMPLETED', 'INSTALLING', 'AWAITING_INSTALL')
+        """
+    )
+    suspend fun reconcileInstallStatus(
+        packageName: String,
+        versionCode: Long,
+        attemptKey: Long,
+        replacement: DownloadStatus
+    ): Int
+
     /** Cancel only the selected version before asking WorkManager to stop its worker. */
     @Query(
         """

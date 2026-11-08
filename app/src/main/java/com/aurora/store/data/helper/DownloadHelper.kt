@@ -24,6 +24,7 @@ import com.aurora.store.AuroraApp
 import com.aurora.store.data.AccountRepository
 import com.aurora.store.data.event.InstallerEvent
 import com.aurora.store.data.installer.AppInstaller
+import com.aurora.store.data.installer.InstallRecoveryPolicy
 import com.aurora.store.data.model.DownloadSortBy
 import com.aurora.store.data.model.DownloadStatus
 import com.aurora.store.data.room.download.Download
@@ -114,8 +115,7 @@ class DownloadHelper @Inject constructor(
         AuroraApp.scope.launch {
             val downloads = downloadDao.downloads().firstOrNull() ?: emptyList()
             cancelFailedDownloads(downloads)
-            finalizeStaleSelfUpdate(downloads)
-            recoverStalledInstalls(downloads)
+            reconcileInstallationRows(downloads, includeCompleted = true)
         }.invokeOnCompletion {
             observeDownloads()
             observeInstalls()
@@ -123,38 +123,48 @@ class DownloadHelper @Inject constructor(
         }
     }
 
-    private suspend fun recoverStalledInstalls(downloads: List<Download>) {
-        downloads.filter {
-            it.packageName != context.packageName &&
-                it.status in setOf(DownloadStatus.COMPLETED, DownloadStatus.INSTALLING) &&
-                it.hasDownloadedFiles(context) &&
-                !PackageUtil.isInstalled(context, it.packageName, it.versionCode)
-        }.forEach {
-            Log.i(TAG, "Recovering stalled install for ${it.packageName}")
-            downloadDao.updateStatus(it.packageName, DownloadStatus.AWAITING_INSTALL)
-            WorkManager.getInstance(context)
-                .cancelAllWorkByTag("$PACKAGE_NAME:${it.packageName}")
-        }
-    }
-
     /**
-     * Finalizes a self-update download left dangling in [DownloadStatus.INSTALLING]. Replacing
-     * the app's own APK kills the process before the installer's "installed" event can advance
-     * the row, so on the next launch it would otherwise show as installing forever. Reaching
-     * INSTALLING means the install was already committed, so mark it installed; if it actually
-     * failed, the periodic update check re-offers and re-enqueues it.
+     * Reconcile the persisted install handoff against the OS rather than abandoning Android
+     * confirmation sessions on process restart. Do not recommit sessions here: that launches
+     * duplicate confirmation activities and can fail the install that was already pending.
      *
-     * The worker is cancelled too: it never got to return a result either, so WorkManager would
-     * keep re-running it on every launch, re-installing the app over itself each time.
+     * During periodic checks, COMPLETED is excluded because a live worker may be in the tiny
+     * gap between writing COMPLETED and handing control to the installer.
      */
-    private suspend fun finalizeStaleSelfUpdate(downloads: List<Download>) {
-        downloads.firstOrNull {
-            it.packageName == context.packageName && it.status == DownloadStatus.INSTALLING
-        }?.let {
-            Log.i(TAG, "Finalizing stale self-update install for ${it.packageName}")
-            downloadDao.updateStatus(it.packageName, DownloadStatus.INSTALLED)
-            WorkManager.getInstance(context)
-                .cancelAllWorkByTag("$PACKAGE_NAME:${it.packageName}")
+    private suspend fun reconcileInstallationRows(
+        downloads: List<Download>,
+        includeCompleted: Boolean = false
+    ) {
+        val packageInstaller = context.packageManager.packageInstaller
+        val livePackages = runCatching {
+            packageInstaller.mySessions.mapNotNull { it.appPackageName }.toSet()
+        }.getOrElse { error ->
+            // If platform session enumeration fails, never guess that a confirmation vanished.
+            Log.w(TAG, "Could not enumerate owned installation sessions", error)
+            return
+        }
+
+        downloads.filter { item ->
+            item.status in setOf(DownloadStatus.INSTALLING, DownloadStatus.AWAITING_INSTALL) ||
+                (includeCompleted && item.status == DownloadStatus.COMPLETED)
+        }.forEach { item ->
+            val next = InstallRecoveryPolicy.resolve(
+                status = item.status,
+                installedVersion = PackageUtil.getInstalledVersionCode(context, item.packageName),
+                targetVersion = item.versionCode,
+                hasLiveSession = item.packageName in livePackages,
+                hasCachedApks = item.hasDownloadedFiles(context)
+            ) ?: return@forEach
+            if (next == item.status) return@forEach
+
+            val changed = downloadDao.reconcileInstallStatus(
+                item.packageName, item.versionCode, item.downloadedAt, next
+            )
+            if (changed > 0) {
+                Log.i(TAG, "Reconciled installation for ${item.packageName}: ${item.status} -> $next")
+                // Cancel only this generation, never a newer attempt for the same package.
+                cancelWorkFor(item)
+            }
         }
     }
 
@@ -484,7 +494,9 @@ class DownloadHelper @Inject constructor(
             while (true) {
                 delay(ORPHAN_CHECK_INTERVAL_MS)
                 try {
-                    cancelFailedDownloads(downloadDao.downloads().firstOrNull().orEmpty())
+                    val snapshot = downloadDao.downloads().firstOrNull().orEmpty()
+                    cancelFailedDownloads(snapshot)
+                    reconcileInstallationRows(downloadDao.downloads().firstOrNull().orEmpty())
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {

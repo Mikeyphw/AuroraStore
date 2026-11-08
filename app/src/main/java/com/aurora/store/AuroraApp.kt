@@ -25,7 +25,6 @@ import com.aurora.store.data.event.EventFlow
 import com.aurora.store.data.helper.DownloadHelper
 import com.aurora.store.data.helper.UpdateHelper
 import com.aurora.store.data.receiver.PackageManagerReceiver
-import com.aurora.store.util.CommonUtil
 import com.aurora.store.util.NotificationUtil
 import com.aurora.store.util.PackageUtil
 import com.aurora.store.util.Preferences
@@ -100,7 +99,7 @@ class AuroraApp : Application(), Configuration.Provider, SingletonImageLoader.Fa
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
 
-        CommonUtil.cleanupInstallationSessions(applicationContext)
+        // DownloadHelper reconciles interrupted installs without abandoning confirmations.
     }
 
     private val foregroundTracker = object : ActivityLifecycleCallbacks {
