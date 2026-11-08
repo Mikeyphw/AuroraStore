@@ -50,7 +50,12 @@ class NativeInstaller @Inject constructor(
             requireNoPendingLibraries()
             val files = getFiles(download.packageName, download.versionCode)
             if (files.size != 1) {
-                postError(download.packageName, "Native installer cannot install split APKs", null, download)
+                postError(
+                    download.packageName,
+                    "Native installer cannot install split APKs",
+                    null,
+                    download
+                )
                 return
             }
             Log.i(TAG, "Received native install request for ${download.packageName}")
