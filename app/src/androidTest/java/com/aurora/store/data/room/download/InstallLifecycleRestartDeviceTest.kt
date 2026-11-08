@@ -12,7 +12,9 @@ import com.aurora.store.data.room.AuroraDatabase
 import com.aurora.store.data.room.account.AccountConverter
 import com.aurora.store.util.PackageUtil
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -106,6 +108,13 @@ class InstallLifecycleRestartDeviceTest {
         val installer = context.packageManager.packageInstaller
         assertThat(installer.mySessions.any { it.sessionId == sessionId }).isTrue()
         installer.abandonSession(sessionId)
+        // PackageInstaller session removal can be asynchronous on API 36.
+        // Still require the owned session to disappear, with a strict timeout.
+        withTimeout(15_000) {
+            while (installer.mySessions.any { it.sessionId == sessionId }) {
+                delay(200)
+            }
+        }
         assertThat(installer.mySessions.none { it.sessionId == sessionId }).isTrue()
         preferences.edit().clear().commit()
         Unit

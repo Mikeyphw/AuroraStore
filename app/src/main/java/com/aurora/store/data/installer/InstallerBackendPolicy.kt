@@ -13,10 +13,11 @@ internal object InstallerBackendPolicy {
         return sessionPattern.find(output)?.groupValues?.get(1)?.toIntOrNull()
     }
 
-    fun commandSucceeded(exitOk: Boolean, output: String): Boolean =
-        exitOk &&
+    fun commandSucceeded(exitOk: Boolean, output: String): Boolean {
+        return exitOk &&
             successPattern.containsMatchIn(output) &&
             !output.contains("Failure", ignoreCase = true)
+    }
 
     fun isInstalled(installedVersion: Long, expectedVersion: Long): Boolean =
         expectedVersion > 0L && installedVersion >= expectedVersion
