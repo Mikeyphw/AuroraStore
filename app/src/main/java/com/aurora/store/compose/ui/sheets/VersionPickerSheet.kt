@@ -190,7 +190,11 @@ private fun VersionRow(report: Report, installedVersionCode: Long, onClick: () -
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        if (HistoricalVersionPolicy.isDowngrade(report.versionCode.toLong(), installedVersionCode)) {
+        val isDowngrade = HistoricalVersionPolicy.isDowngrade(
+            report.versionCode.toLong(),
+            installedVersionCode
+        )
+        if (isDowngrade) {
             Text(
                 text = stringResource(R.string.r3_history_older),
                 style = MaterialTheme.typography.labelMedium,

@@ -154,7 +154,11 @@ private fun ScreenContent(
             title = { Text(stringResource(R.string.r3_downgrade_title)) },
             text = {
                 Text(
-                    stringResource(R.string.r3_downgrade_warning, installedAtConfirmation, requested)
+                    stringResource(
+                        R.string.r3_downgrade_warning,
+                        installedAtConfirmation,
+                        requested
+                    )
                 )
             },
             confirmButton = {
