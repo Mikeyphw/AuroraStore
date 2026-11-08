@@ -16,11 +16,7 @@ class ApkVerificationException(message: String) : IllegalStateException(message)
 
 /** Pure contract shared by JVM tests and the Android package-archive verifier. */
 object ApkSetPolicy {
-    fun check(
-        expectedPackage: String,
-        expectedVersion: Long,
-        entries: List<ApkIdentity>
-    ) {
+    fun check(expectedPackage: String, expectedVersion: Long, entries: List<ApkIdentity>) {
         if (expectedPackage.isBlank() || expectedVersion <= 0L || entries.isEmpty()) {
             throw ApkVerificationException("No complete APK set is available for installation")
         }
