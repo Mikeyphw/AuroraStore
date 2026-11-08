@@ -123,7 +123,5 @@ class RootInstaller @Inject constructor(
         }
     }
 
-    private fun quote(argument: String): String =
-        "'" + argument.replace("'", "'\"'\"'") + "'"
-
+    private fun quote(argument: String): String = "'" + argument.replace("'", "'\"'\"'") + "'"
 }

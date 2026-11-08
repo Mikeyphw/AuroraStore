@@ -133,10 +133,19 @@ jobs:
           set -euo pipefail
           sdkmanager --install 'platforms;android-37.0'
           test -f "$ANDROID_SDK_ROOT/platforms/android-37.0/android.jar"
-          for attempt in 1 2 3; do
-            if sdkmanager --install 'system-images;android-36;google_apis;x86_64'; then break; fi
-            if [ "$attempt" -eq 3 ]; then echo R1D_SDK_IMAGE_FAILED >&2; exit 1; fi
-            sleep 10
+          for attempt in 1 2 3 4; do
+            if sdkmanager --install 'system-images;android-36;google_apis;x86_64'; then
+              break
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo R1D_SDK_IMAGE_FAILED >&2
+              exit 1
+            fi
+            # A partial SDK image ZIP can survive a failed attempt and poison retries.
+            rm -rf -- "$ANDROID_SDK_ROOT/.temp" \
+              "$ANDROID_SDK_ROOT/system-images/android-36/google_apis/x86_64" \
+              "$HOME/.android/cache"
+            sleep "$(( attempt * 10 ))"
           done
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
       - name: Build vanillaDebug application and instrumentation APKs on GitHub

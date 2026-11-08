@@ -178,5 +178,4 @@ class ServiceInstaller @Inject constructor(
             CALLBACK_TIMEOUT_MS
         )
     }
-
 }

@@ -60,6 +60,8 @@ class InstallLifecycleRestartDeviceTest {
         val sessionId = installer.createSession(params)
         assertThat(installer.mySessions.any { it.sessionId == sessionId }).isTrue()
         context.getSharedPreferences(PREFS, 0).edit().putInt(SESSION_ID, sessionId).commit()
+        // JUnit4 methods must return Java void, not the Boolean result of commit().
+        Unit
     }
 
     @Test
@@ -106,6 +108,7 @@ class InstallLifecycleRestartDeviceTest {
         installer.abandonSession(sessionId)
         assertThat(installer.mySessions.none { it.sessionId == sessionId }).isTrue()
         preferences.edit().clear().commit()
+        Unit
     }
 
     companion object {

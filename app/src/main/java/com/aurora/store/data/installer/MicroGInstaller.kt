@@ -46,8 +46,8 @@ class MicroGInstaller @Inject constructor(
             }
 
         /** A companion package alone does not prove that its install activity is exported. */
-        fun isAvailable(context: Context): Boolean =
-            hasMicroGCompanion(context) && runCatching {
+        fun isAvailable(context: Context): Boolean = hasMicroGCompanion(context) &&
+            runCatching {
                 context.packageManager.resolveActivity(
                     buildMicroGInstallIntent(arrayListOf()),
                     0

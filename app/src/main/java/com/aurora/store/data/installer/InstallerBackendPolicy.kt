@@ -14,7 +14,8 @@ internal object InstallerBackendPolicy {
     }
 
     fun commandSucceeded(exitOk: Boolean, output: String): Boolean =
-        exitOk && successPattern.containsMatchIn(output) &&
+        exitOk &&
+            successPattern.containsMatchIn(output) &&
             !output.contains("Failure", ignoreCase = true)
 
     fun isInstalled(installedVersion: Long, expectedVersion: Long): Boolean =
