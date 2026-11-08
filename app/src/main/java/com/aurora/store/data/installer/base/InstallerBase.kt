@@ -16,9 +16,9 @@ import com.aurora.store.BuildConfig
 import com.aurora.store.R
 import com.aurora.store.data.event.InstallAttempt
 import com.aurora.store.data.event.InstallerEvent
-import com.aurora.store.data.room.download.Download
 import com.aurora.store.data.installer.verification.ApkSetVerifier
 import com.aurora.store.data.installer.verification.ApkVerificationException
+import com.aurora.store.data.room.download.Download
 import com.aurora.store.util.NotificationUtil
 import java.io.File
 
@@ -135,9 +135,11 @@ abstract class InstallerBase(private val context: Context) : IInstaller {
     ): List<File> {
         val attempt = download ?: throw ApkVerificationException("Install attempt is missing")
         val snapshot = verified ?: throw ApkVerificationException("APK set is not verified")
-        if (packageName != attempt.packageName || versionCode != attempt.versionCode ||
+        if (packageName != attempt.packageName ||
+            versionCode != attempt.versionCode ||
             attempt.downloadedAt != snapshot.attempt ||
-            snapshot.packageName != packageName || snapshot.versionCode != versionCode
+            snapshot.packageName != packageName ||
+            snapshot.versionCode != versionCode
         ) {
             throw ApkVerificationException("Stale or mismatched APK installation attempt")
         }
