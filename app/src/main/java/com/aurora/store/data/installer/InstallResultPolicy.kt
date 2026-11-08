@@ -22,11 +22,7 @@ internal object InstallResultPolicy {
         resultAttempt: Long
     ): Boolean = currentVersion == resultVersion && currentAttempt == resultAttempt
 
-    fun next(
-        current: DownloadStatus,
-        outcome: Outcome,
-        hasCachedApks: Boolean
-    ): DownloadStatus? {
+    fun next(current: DownloadStatus, outcome: Outcome, hasCachedApks: Boolean): DownloadStatus? {
         val result = when (outcome) {
             Outcome.PROGRESS -> when (current) {
                 DownloadStatus.COMPLETED -> DownloadStatus.INSTALLING

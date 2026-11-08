@@ -188,12 +188,16 @@ class DownloadHelper @Inject constructor(
         AuroraApp.events.installerEvent.onEach { event ->
             val current = getDownload(event.packageName) ?: return@onEach
             val attempt = event.attempt
-            val matchesAttempt = attempt == null || InstallResultPolicy.matches(
-                current.versionCode,
-                current.downloadedAt,
-                attempt.versionCode,
-                attempt.downloadedAt
-            )
+            val matchesAttempt = if (attempt == null) {
+                true
+            } else {
+                InstallResultPolicy.matches(
+                    current.versionCode,
+                    current.downloadedAt,
+                    attempt.versionCode,
+                    attempt.downloadedAt
+                )
+            }
             if (!matchesAttempt) {
                 Log.i(TAG, "Ignoring stale install event for ${event.packageName}")
                 return@onEach
