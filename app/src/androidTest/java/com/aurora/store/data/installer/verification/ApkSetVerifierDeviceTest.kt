@@ -96,7 +96,17 @@ class ApkSetVerifierDeviceTest {
 
     @Test
     fun wrongRequestedPackageIsRejected() {
-        rejects { ApkSetVerifier.verify(context, download(requestedPackage = "com.aurora.r3b.other")) }
+        rejects {
+            ApkSetVerifier.verify(context, download(requestedPackage = "com.aurora.r3b.other"))
+        }
+    }
+
+    @Test
+    fun validCompiledManifestWithStandardHeaderIsParsed() {
+        val parsed = BinaryApkManifest.read(File(fixtureDir, "base.apk"))
+        assertThat(parsed.packageName).isEqualTo(packageName)
+        assertThat(parsed.versionCode).isEqualTo(73L)
+        assertThat(parsed.splitName).isNull()
     }
 
     @Test

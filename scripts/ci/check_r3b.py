@@ -64,6 +64,9 @@ checks = {
         ) and all('requireNoPendingLibraries()' in source(
             f'app/src/main/java/com/aurora/store/data/installer/{name}Installer.kt'
         ) for name in ('Native','Service','MicroG')),
+    'Android binary manifest parser handles 16-byte AAPT2 node headers':
+        'header != 16 || size < 36' in manifest and
+        'validCompiledManifestWithStandardHeaderIsParsed' in android_test,
     'Android binary manifest parser rejects malformed files':
         'APK manifest has invalid chunk bounds' in manifest and
         'APK manifest exceeds safe size limit' in manifest and

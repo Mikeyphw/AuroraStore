@@ -49,7 +49,9 @@ internal object BinaryApkManifest {
             when (type) {
                 0x0001 -> strings.addAll(stringPool(buffer, offset, header, size))
                 0x0102 -> {
-                    if (header < 36 || strings.isEmpty()) {
+                    // ResXMLTree_node has a 16-byte header; the 20-byte attrExt follows it.
+                    // The node size (not header size) includes both metadata and attributes.
+                    if (header != 16 || size < 36 || strings.isEmpty()) {
                         throw ApkVerificationException("APK manifest has invalid element metadata")
                     }
                     if (readString(strings, int(buffer, offset + 20)) == "manifest") {
