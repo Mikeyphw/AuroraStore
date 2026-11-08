@@ -115,9 +115,8 @@ class DownloadFinalUiDeviceTest : IsolatedTest() {
         // Keep the real Compose assertions and idle synchronization, but avoid
         // captureToImage()'s intermittent Android 16 forceRedraw timeout.
         composeTestRule.waitForIdle()
-        val bitmap = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()) {
-            "Device display screenshot unavailable: $filename"
-        }
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val bitmap = checkNotNull(automation.takeScreenshot())
         val file = File(context.filesDir, filename)
         FileOutputStream(file).use { stream ->
             check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
