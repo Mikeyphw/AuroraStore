@@ -21,7 +21,7 @@ import java.util.UUID
 
 /**
  * Turns Play delivery metadata into an exact, signer-checked APK set. The package manager
- * verifies the archive certificates; Android 16 additionally verifies stand-alone split APKs
+ * verifies the archive certificates; Android 16 verifies v2+ signatures on stand-alone split APKs
  * using getVerifiedSigningInfo(). Neither a valid certificate nor a matching downloaded hash
  * establishes Google Play provenance. The OS remains the installation authority.
  */
@@ -209,6 +209,8 @@ object ApkSetVerifier {
             }
             // The manifest identity must be parsed for a SPLIT-only APK too; the regular
             // archive package parser may reject it because it does not contain a base APK.
+            // API 36 requires an APK signing-block v2+ signature, not a v1-only
+            // certificate: v1 verification does not authenticate the v2 signing block.
             val manifest = BinaryApkManifest.read(path)
             if ((entry.metadata.type == AppFile.Type.BASE) != manifest.splitName.isNullOrEmpty()) {
                 throw ApkVerificationException("APK base/split declaration is inconsistent")
@@ -217,7 +219,7 @@ object ApkSetVerifier {
             val signers = if (Build.VERSION.SDK_INT >= 36) {
                 val verified = try {
                     PackageManager.getVerifiedSigningInfo(
-                        path.absolutePath, SigningInfo.VERSION_JAR
+                        path.absolutePath, SigningInfo.VERSION_SIGNING_BLOCK_V2
                     )
                 } catch (_: Exception) {
                     throw ApkVerificationException("APK signature invalid: ${entry.metadata.name}")

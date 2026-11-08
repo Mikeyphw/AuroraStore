@@ -12,8 +12,11 @@ before receiving its paths. Cached APK replacement cannot silently alter the sta
 Extra undeclared APKs, missing/truncated files, stale `.tmp` files, unsafe names, duplicate
 BASE entries, inconsistent splits, invalid archives or wrong signers fail closed.
 
-On API 36+, `PackageManager.getVerifiedSigningInfo` verifies every APK, including independent
-split archives. On API 23–35 the PackageManager archive verifier is used; if it cannot
+On API 36+, `PackageManager.getVerifiedSigningInfo` requires an authenticated APK
+Signature Scheme v2-or-newer signer for every APK, including independent split archives.
+**v1-only historical APKs cannot pass this API-36 verification path** and will be
+rejected rather than silently downgrading signature-scheme strength. On API 23–35 the
+PackageManager archive verifier is used; if it cannot
 independently authenticate an archive or split, Aurora refuses that particular artifact rather
 than inferring signer trust. The compiled APK binary manifest is parsed defensively to obtain
 package identity, full 64-bit versionCode, and base/split declaration even for split-only APKs.
@@ -48,7 +51,11 @@ remain separately signature and identity checked.
 ## Hosted qualification
 
 The existing R2D API 36 workflow is extended rather than duplicated. It builds disposable,
-locally signed fixture APKs for distinct versions, packages, and signers, and exercises the
+locally signed fixture APKs for distinct versions, packages, and signers. It also flips a
+SHA-256 digest byte inside the v2 signed-data record and asserts `apksigner verify` rejects
+the corrupted fixture before the Android test presents it with a newly matching download
+checksum. The on-device validator must independently reject that fixture because its
+**cryptographic APK signature** is invalid, not because the supplied hash is stale. It exercises the
 production archive verifier with Android instrumentation on x86_64. Foundation CI also runs
 pure Kotlin JVM policy tests, ktlint and fail-closed Python source contracts. The R2D suite
 continues to exercise real PackageInstaller session commit and process restart.

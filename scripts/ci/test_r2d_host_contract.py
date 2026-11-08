@@ -57,12 +57,42 @@ def main() -> None:
             'while (($#)); do if [[ "$1" == "-o" ]]; then '
             'shift; printf "fixture" > "$1"; break; fi; shift; done\n',
         )
-        executable(
-            buildtools / "apksigner",
-            'if [[ "$1" == "verify" ]]; then test -s "${@: -1}"; exit; fi\n'
-            'while (($#)); do if [[ "$1" == "--out" ]]; then '
-            'shift; printf "signed-fixture" > "$1"; exit; fi; shift; done\nexit 1\n',
-        )
+        # The fake apksigner has a deterministic v2-shaped signer record so the
+        # production negative-fixture builder is exercised by this host test.
+        # This is not a substitute for cryptographic apksigner / Android runtime.
+        fake_signer = work / "mock_apksigner.py"
+        fake_signer.write_text('''#!/usr/bin/env python3
+import os
+import struct
+import sys
+from pathlib import Path
+
+args = sys.argv[1:]
+if args and args[0] == "verify":
+    if os.environ.get("MOCK_ACCEPT_INVALID_V2") == "1":
+        print("Verifies")
+        sys.exit(0)
+    raw = Path(args[-1]).read_bytes()
+    if b"APK Sig Block 42" in raw and bytes.fromhex("55" * 32) in raw:
+        print("Verifies")
+        sys.exit(0)
+    print("DOES NOT VERIFY")
+    sys.exit(1)
+if "--out" not in args:
+    sys.exit(2)
+out = Path(args[args.index("--out") + 1])
+digest = bytes.fromhex("55" * 32)
+record = struct.pack("<I", 4 + 4 + len(digest)) + struct.pack("<I", 0x0101) + struct.pack("<I", len(digest)) + digest
+signed = struct.pack("<I", len(record)) + record + struct.pack("<I", 0) + struct.pack("<I", 0)
+signer = struct.pack("<I", len(signed)) + signed + struct.pack("<I", 0) + struct.pack("<I", 0)
+signers = struct.pack("<I", len(signer)) + signer
+value = struct.pack("<I", len(signers)) + signers
+pair = struct.pack("<Q", 4 + len(value)) + struct.pack("<I", 0x7109871a) + value
+size = len(pair) + 24
+block = struct.pack("<Q", size) + pair + struct.pack("<Q", size) + b"APK Sig Block 42"
+out.write_bytes(b"mock-signed-fixture" + block + b"zip-central-directory")
+''')
+        executable(buildtools / "apksigner", 'exec python3 "$MOCK_APKSIGNER" "$@"\n')
         executable(
             toolbin / "keytool",
             'while (($#)); do if [[ "$1" == "-keystore" ]]; then '
@@ -78,9 +108,10 @@ def main() -> None:
                "GITHUB_RUN_ID": "123",
                "GITHUB_RUN_ATTEMPT": "1",
                "MOCK_LOG": str(work / "adb-commands.txt"),
-               "MOCK_MODE": "success"}
+               "MOCK_MODE": "success",
+               "MOCK_APKSIGNER": str(fake_signer)}
         check_code(["bash", str(FIXTURE)], env, True)
-        assert (out / "r2d-fixture.apk").read_bytes() == b"signed-fixture"
+        assert b"APK Sig Block 42" in (out / "r2d-fixture.apk").read_bytes()
         assert not (out / "r2d-fixture.keystore").exists(), "CI signing key leaked"
         assert not (out / "r2d-fixture-unsigned.apk").exists()
         assert (out / "r2d-fixture.sha256").read_text().split()[0] == hashlib.sha256(
@@ -89,10 +120,22 @@ def main() -> None:
         print("R2D_HOST_PASS: ephemeral signed fixture and signing-key cleanup")
         check_code(["bash", str(R3B_FIXTURE)], env, True)
         r3b = out / "r3b"
-        assert len(list(r3b.glob("*.apk"))) == 7
+        assert len(list(r3b.glob("*.apk"))) == 8
         assert len(list(r3b.glob("*.keystore"))) == 0
-        assert len((r3b / "sha256sums.txt").read_text().splitlines()) == 7
-        print("R3B_HOST_PASS: seven signed test fixtures, no leaked keys")
+        assert len((r3b / "sha256sums.txt").read_text().splitlines()) == 8
+        assert (r3b / "tampered-v2.apk").is_file()
+        assert (r3b / "tampered-v2-rejection.txt").is_file()
+        print("R3B_HOST_PASS: seven positive fixtures, one signing-block tamper, no leaked keys")
+        # Negative gate: even if an apksigner tool mistakenly accepts the
+        # deliberately tampered v2 digest, the fixture build must refuse.
+        unsafe_env = {**env, "MOCK_ACCEPT_INVALID_V2": "1"}
+        unsafe = subprocess.run(
+            ["bash", str(R3B_FIXTURE)], cwd=ROOT, env=unsafe_env,
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+        assert unsafe.returncode != 0
+        assert "R3B_REFUSED: corrupt v2 fixture incorrectly passed apksigner" in unsafe.stderr
+        print("R3B_HOST_REFUSAL_PASS: false-positive cryptographic verifier")
 
         executable(toolbin / "adb", '''printf '%s\\n' "$*" >> "$MOCK_LOG"
 if [[ "$1" == "install" || "$1" == "push" ]]; then echo Success; exit 0; fi

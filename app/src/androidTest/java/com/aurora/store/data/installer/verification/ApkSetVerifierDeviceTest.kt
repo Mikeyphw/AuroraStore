@@ -170,17 +170,12 @@ class ApkSetVerifierDeviceTest {
     fun alteredSigningBlockIsRejectedEvenWithUpdatedDownloadHash() {
         val item = download()
         val original = PathUtil.getLocalFile(context, item.fileList.single(), item)
-        val raw = original.readBytes()
-        val magic = "APK Sig Block 42".toByteArray()
-        val magicAt = raw.indices.firstOrNull { i ->
-            i + magic.size <= raw.size && magic.indices.all { j -> raw[i + j] == magic[j] }
-        } ?: throw AssertionError("Hosted fixture lacks an APK v2 signing block")
-        assertThat(magicAt).isGreaterThan(64)
-        raw[magicAt - 40] = (raw[magicAt - 40].toInt() xor 0x01).toByte()
-        original.writeBytes(raw)
-        val updated = item.copy(
-            fileList = listOf(item.fileList.single().copy(sha256 = digest(original)))
-        )
+        // The hosted fixture builder confirms this altered v2 digest fails apksigner.
+        // Updating the delivery checksum must not make it installation-eligible.
+        File(fixtureDir, "tampered-v2.apk").copyTo(original, overwrite = true)
+        val declared = item.fileList.single()
+        val replacement = declared.copy(sha256 = digest(original), size = original.length())
+        val updated = item.copy(fileList = listOf(replacement))
         try {
             ApkSetVerifier.verify(context, updated)
             throw AssertionError("Corrupted APK signer was accepted")

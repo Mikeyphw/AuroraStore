@@ -40,7 +40,8 @@ checks = {
         'entry.packageName != expectedPackage' in policy,
     'APK signatures verified by OS before backend handoff':
         'PackageManager.getVerifiedSigningInfo(' in verifier and
-        'SigningInfo.VERSION_JAR' in verifier and
+        'SigningInfo.VERSION_SIGNING_BLOCK_V2' in verifier and
+        'SigningInfo.VERSION_JAR' not in verifier and
         'signingDigests(info)' in verifier,
     'split, stale cache and transient files fail closed':
         'it.name !in declared' in verifier and
@@ -78,6 +79,9 @@ checks = {
         'validSignedSplitsRequireMatchingManifestAndSigner' in emulator and
         'installedPackageWithDifferentSignerIsRejected' in emulator and
         'alteredSigningBlockIsRejectedEvenWithUpdatedDownloadHash' in emulator and
+        'tampered-v2.apk' in android_test and
+        'R3B_SIGNING_BLOCK_MUTATION_NEGATIVE_PASS' in fixtures and
+        '0x7109871a' in fixtures and
         'apksigner" verify' in fixtures,
 }
 for description, ok in checks.items():
