@@ -22,6 +22,7 @@ import com.aurora.store.data.installer.AppInstaller
 import com.aurora.store.data.paging.GenericPagingSource.Companion.pager
 import com.aurora.store.data.room.download.Download
 import com.aurora.store.data.work.ExportWorker
+import com.aurora.store.util.PathUtil
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -110,16 +111,33 @@ class DownloadsViewModel @Inject constructor(
         }
     }
 
+    /** A sheet may outlive the selected download generation. Always reread Room. */
+    private suspend fun currentAttempt(selected: Download): Download? {
+        val current = downloadHelper.getDownload(selected.packageName) ?: return null
+        return current.takeIf {
+            current.versionCode == selected.versionCode &&
+                current.downloadedAt == selected.downloadedAt
+        }
+    }
+
     fun install(download: Download) {
-        try {
-            appInstaller.getPreferredInstaller(notifyOnFallback = true).install(download)
-        } catch (exception: Exception) {
-            Log.e(TAG, "Failed to install ${download.packageName}", exception)
+        viewModelScope.launch {
+            val current = currentAttempt(download) ?: return@launch
+            if (!current.canInstall(context)) return@launch
+            try {
+                appInstaller.getPreferredInstaller(notifyOnFallback = true).install(current)
+            } catch (exception: Exception) {
+                Log.e(TAG, "Failed to install ${download.packageName}", exception)
+            }
         }
     }
 
     fun export(download: Download, uri: Uri) {
-        ExportWorker.exportDownloadedApp(context, download, uri)
+        viewModelScope.launch {
+            val current = currentAttempt(download) ?: return@launch
+            if (PathUtil.getExportableFiles(context, current).isEmpty()) return@launch
+            ExportWorker.exportDownloadedApp(context, current, uri)
+        }
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

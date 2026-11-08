@@ -12,7 +12,10 @@ on:
       - 'scripts/ci/check_r1d2.py'
       - 'scripts/ci/check_r1e.py'
       - 'scripts/ci/check_r1f.py'
+      - 'scripts/ci/check_r1g.py'
       - 'scripts/ci/r1f_emulator_ci.sh'
+      - 'scripts/ci/r1g_emulator_ci.sh'
+      - 'scripts/ci/r1g_evidence_gate.py'
       - 'app/src/main/java/com/aurora/store/compose/**'
       - 'app/src/main/java/com/aurora/store/viewmodel/downloads/**'
       - 'app/src/main/java/com/aurora/store/data/helper/DownloadHelper.kt'
@@ -37,7 +40,10 @@ on:
       - 'scripts/ci/check_r1d2.py'
       - 'scripts/ci/check_r1e.py'
       - 'scripts/ci/check_r1f.py'
+      - 'scripts/ci/check_r1g.py'
       - 'scripts/ci/r1f_emulator_ci.sh'
+      - 'scripts/ci/r1g_emulator_ci.sh'
+      - 'scripts/ci/r1g_evidence_gate.py'
       - 'app/src/main/java/com/aurora/store/compose/**'
       - 'app/src/main/java/com/aurora/store/viewmodel/downloads/**'
       - 'app/src/main/java/com/aurora/store/data/helper/DownloadHelper.kt'
@@ -82,6 +88,7 @@ jobs:
           python3 -B scripts/ci/check_r1d2.py
           python3 -B scripts/ci/check_r1e.py
           python3 -B scripts/ci/check_r1f.py
+          python3 -B scripts/ci/check_r1g.py
 
   emulator:
     name: R1D production Room DAO + watchdog + process restart on API 36
@@ -104,6 +111,9 @@ jobs:
           mkdir -p "$RUNNER_TEMP/aurora-r1d2-emulator"
           mkdir -p "$RUNNER_TEMP/aurora-r1e-emulator"
           mkdir -p "$RUNNER_TEMP/aurora-r1f-emulator"
+          mkdir -p "$RUNNER_TEMP/aurora-r1g-emulator"
+          printf '%s\n' '{"overall":"NOT_RUN","physical_device_qualified":false,"release_qualified":false}' \
+            > "$RUNNER_TEMP/aurora-r1g-emulator/R1G_QUALIFICATION_RECEIPT.json"
           printf '%s\n' '{"overall":"NOT_RUN","real_compose_screenshots":0,"release_qualified":false}' \
             > "$RUNNER_TEMP/aurora-r1f-emulator/R1F_EMULATOR_RECEIPT.json"
           printf '%s\n' '{"overall":"NOT_RUN","real_worker":false,"release_qualified":false}' \
@@ -142,7 +152,7 @@ jobs:
           test -c /dev/kvm || { echo R1D_KVM_UNAVAILABLE >&2; exit 1; }
           if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then sudo chmod a+rw /dev/kvm; fi
           test -r /dev/kvm && test -w /dev/kvm
-      - name: Execute 36 R1D through R1F Android device tests and screenshots (KVM/API 36)
+      - name: Execute 40 R1D through R1G Android device tests and screenshots (KVM/API 36)
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: 36
@@ -165,5 +175,6 @@ jobs:
             ${{ runner.temp }}/aurora-r1d2-emulator/
             ${{ runner.temp }}/aurora-r1e-emulator/
             ${{ runner.temp }}/aurora-r1f-emulator/
+            ${{ runner.temp }}/aurora-r1g-emulator/
           if-no-files-found: warn
           retention-days: 14

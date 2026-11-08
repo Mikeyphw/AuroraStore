@@ -86,3 +86,6 @@ echo 'R1E_EMULATOR_ACCEPTANCE_PASS: 32 offline Android device tests'
 
 # R1F adds UI acceptance after all 32 previous tests and their receipts pass.
 bash scripts/ci/r1f_emulator_ci.sh
+
+# R1G is appended after the complete 36-case legacy gate; never replace its entry point.
+bash scripts/ci/r1g_emulator_ci.sh

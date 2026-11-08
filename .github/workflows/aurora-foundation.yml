@@ -37,6 +37,8 @@ jobs:
         run: python3 scripts/ci/check_r1b.py
       - name: Validate R1C stall recovery invariants
         run: python3 scripts/ci/check_r1c.py
+      - name: Validate R1G final qualification contract
+        run: python3 -B scripts/ci/check_r1g.py
 
   android:
     name: Android vanilla debug, lint and JVM tests
@@ -73,5 +75,74 @@ jobs:
             app/build/reports/tests/**
             app/build/test-results/**
             app/build/reports/lint-results-*.html
+          if-no-files-found: warn
+          retention-days: 14
+
+  unsigned-release:
+    name: Compile unsigned vanilla release candidate (not certified)
+    needs: [source-contract, android]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+      - name: Require unsigned, source-bound candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -f signing.properties
+          test ! -f app/signing.properties
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          sdkmanager --install 'platforms;android-37.0'
+          test -f "$ANDROID_SDK_ROOT/platforms/android-37.0/android.jar"
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
+      - name: Compile unsigned vanillaRelease on hosted runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon --max-workers=2 :app:assembleVanillaRelease
+      - name: Hash unsigned APK with explicit release blockers
+        shell: bash
+        run: |
+          python3 - <<'PYR1G_RELEASE'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path('app/build/outputs/apk/vanilla/release')
+          apks = list(root.glob('*.apk'))
+          if len(apks) != 1 or apks[0].stat().st_size <= 0:
+              raise SystemExit('R1G_RELEASE_REFUSED: expected one nonempty unsigned APK')
+          apk = apks[0]
+          receipt = {
+              "overall": "COMPILED_UNSIGNED_ONLY",
+              "source_sha": os.environ['GITHUB_SHA'],
+              "run_id": os.environ['GITHUB_RUN_ID'],
+              "filename": apk.name,
+              "size_bytes": apk.stat().st_size,
+              "sha256": hashlib.sha256(apk.read_bytes()).hexdigest(),
+              "release_signed": False,
+              "release_qualified": False,
+              "physical_device_qualified": False,
+              "actual_google_play_delivery_qualified": False,
+          }
+          (root / 'R1G_UNSIGNED_RELEASE_RECEIPT.json').write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + '\n'
+          )
+          print('R1G_UNSIGNED_RELEASE_COMPILED: signing/publishing remain blocked')
+          PYR1G_RELEASE
+      - name: Upload unsigned candidate and manifest (not a release)
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: aurora-r1g-unsigned-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            app/build/outputs/apk/vanilla/release/*.apk
+            app/build/outputs/apk/vanilla/release/R1G_UNSIGNED_RELEASE_RECEIPT.json
           if-no-files-found: warn
           retention-days: 14
