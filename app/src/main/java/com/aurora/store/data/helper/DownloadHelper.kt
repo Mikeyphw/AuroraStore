@@ -343,8 +343,9 @@ class DownloadHelper @Inject constructor(
      * re-installs without re-downloading. No-op if the download is already active.
      * @param packageName Name of the package to retry
      */
-    suspend fun retryDownload(packageName: String) {
+    suspend fun retryDownload(packageName: String, expectedAttempt: Long? = null) {
         val existing = getDownload(packageName) ?: return
+        if (expectedAttempt != null && existing.downloadedAt != expectedAttempt) return
         if (existing.isActive || existing.status == DownloadStatus.INSTALLING) {
             Log.i(TAG, "Skipping retry for $packageName; already ${existing.status}")
             return
@@ -393,8 +394,13 @@ class DownloadHelper @Inject constructor(
      * @param packageName Name of the package of the app
      * @param versionCode Version of the package
      */
-    suspend fun clearDownload(packageName: String, versionCode: Long) {
+    suspend fun clearDownload(
+        packageName: String,
+        versionCode: Long,
+        expectedAttempt: Long? = null
+    ) {
         val current = getDownload(packageName) ?: return
+        if (expectedAttempt != null && current.downloadedAt != expectedAttempt) return
         if (current.versionCode != versionCode || current.status == DownloadStatus.INSTALLING) {
             return // Never delete a replacement download or APKs handed to the installer.
         }
