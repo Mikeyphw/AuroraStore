@@ -79,9 +79,11 @@ checks = {
         'validSignedSplitsRequireMatchingManifestAndSigner' in emulator and
         'installedPackageWithDifferentSignerIsRejected' in emulator and
         'alteredSigningBlockIsRejectedEvenWithUpdatedDownloadHash' in emulator and
-        'tampered-v2.apk' in android_test and
+        'tampered-v2-v3.apk' in android_test and
         'R3B_SIGNING_BLOCK_MUTATION_NEGATIVE_PASS' in fixtures and
         '0x7109871a' in fixtures and
+        '0xf05368c0' in fixtures and
+        'need v2 and v3 signers' in fixtures and
         'apksigner" verify' in fixtures,
 }
 for description, ok in checks.items():

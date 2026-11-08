@@ -146,13 +146,15 @@ class ApkSetVerifierDeviceTest {
         File(fixtureDir, "other-signer-split.apk").copyTo(target, overwrite = true)
         // Update the delivery checksum too: this must fail due to the SPLIT CERTIFICATE,
         // not only because a prior file hash no longer matches.
-        val updated = item.copy(fileList = item.fileList.map { file ->
-            if (file.type == AppFile.Type.SPLIT) {
-                file.copy(sha256 = digest(target), size = target.length())
-            } else {
-                file
+        val updated = item.copy(
+            fileList = item.fileList.map { file ->
+                if (file.type == AppFile.Type.SPLIT) {
+                    file.copy(sha256 = digest(target), size = target.length())
+                } else {
+                    file
+                }
             }
-        })
+        )
         rejects { ApkSetVerifier.verify(context, updated) }
     }
 
@@ -170,9 +172,9 @@ class ApkSetVerifierDeviceTest {
     fun alteredSigningBlockIsRejectedEvenWithUpdatedDownloadHash() {
         val item = download()
         val original = PathUtil.getLocalFile(context, item.fileList.single(), item)
-        // The hosted fixture builder confirms this altered v2 digest fails apksigner.
+        // The hosted fixture builder confirms both v2 and v3 digests are invalid.
         // Updating the delivery checksum must not make it installation-eligible.
-        File(fixtureDir, "tampered-v2.apk").copyTo(original, overwrite = true)
+        File(fixtureDir, "tampered-v2-v3.apk").copyTo(original, overwrite = true)
         val declared = item.fileList.single()
         val replacement = declared.copy(sha256 = digest(original), size = original.length())
         val updated = item.copy(fileList = listOf(replacement))

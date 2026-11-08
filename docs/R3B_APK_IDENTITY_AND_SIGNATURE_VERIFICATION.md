@@ -52,9 +52,12 @@ remain separately signature and identity checked.
 
 The existing R2D API 36 workflow is extended rather than duplicated. It builds disposable,
 locally signed fixture APKs for distinct versions, packages, and signers. It also flips a
-SHA-256 digest byte inside the v2 signed-data record and asserts `apksigner verify` rejects
+SHA-256 digest byte in **each v2 and v3 signed-data record** and asserts `apksigner verify` rejects
 the corrupted fixture before the Android test presents it with a newly matching download
-checksum. The on-device validator must independently reject that fixture because its
+checksum. Mutating only v2 is insufficient: Android 16 may legitimately authenticate a
+still-valid v3 signer. The fixture builder therefore refuses missing v2/v3 schemes and
+never regards an `apksigner` rejection caused by a single broken scheme as sufficient.
+The on-device validator must independently reject the doubly corrupted fixture because its
 **cryptographic APK signature** is invalid, not because the supplied hash is stale. It exercises the
 production archive verifier with Android instrumentation on x86_64. Foundation CI also runs
 pure Kotlin JVM policy tests, ktlint and fail-closed Python source contracts. The R2D suite

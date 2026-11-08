@@ -57,8 +57,8 @@ def main() -> None:
             'while (($#)); do if [[ "$1" == "-o" ]]; then '
             'shift; printf "fixture" > "$1"; break; fi; shift; done\n',
         )
-        # The fake apksigner has a deterministic v2-shaped signer record so the
-        # production negative-fixture builder is exercised by this host test.
+        # The fake apksigner has deterministic v2 AND v3 signer records so
+        # the host gate detects an incompletely corrupted signing-block set.
         # This is not a substitute for cryptographic apksigner / Android runtime.
         fake_signer = work / "mock_apksigner.py"
         fake_signer.write_text('''#!/usr/bin/env python3
@@ -69,11 +69,12 @@ from pathlib import Path
 
 args = sys.argv[1:]
 if args and args[0] == "verify":
-    if os.environ.get("MOCK_ACCEPT_INVALID_V2") == "1":
+    if os.environ.get("MOCK_ACCEPT_INVALID_SIGNATURE") == "1":
         print("Verifies")
         sys.exit(0)
     raw = Path(args[-1]).read_bytes()
-    if b"APK Sig Block 42" in raw and bytes.fromhex("55" * 32) in raw:
+    expected_signers = 1 if os.environ.get("MOCK_OMIT_V3_SCHEME") == "1" else 2
+    if b"APK Sig Block 42" in raw and raw.count(bytes.fromhex("55" * 32)) == expected_signers:
         print("Verifies")
         sys.exit(0)
     print("DOES NOT VERIFY")
@@ -87,7 +88,12 @@ signed = struct.pack("<I", len(record)) + record + struct.pack("<I", 0) + struct
 signer = struct.pack("<I", len(signed)) + signed + struct.pack("<I", 0) + struct.pack("<I", 0)
 signers = struct.pack("<I", len(signer)) + signer
 value = struct.pack("<I", len(signers)) + signers
-pair = struct.pack("<Q", 4 + len(value)) + struct.pack("<I", 0x7109871a) + value
+pair = b"".join(
+    struct.pack("<Q", 4 + len(value)) + struct.pack("<I", scheme_id) + value
+    for scheme_id in (0x7109871a, 0xf05368c0)
+)
+if os.environ.get("MOCK_OMIT_V3_SCHEME") == "1":
+    pair = struct.pack("<Q", 4 + len(value)) + struct.pack("<I", 0x7109871a) + value
 size = len(pair) + 24
 block = struct.pack("<Q", size) + pair + struct.pack("<Q", size) + b"APK Sig Block 42"
 out.write_bytes(b"mock-signed-fixture" + block + b"zip-central-directory")
@@ -123,19 +129,38 @@ out.write_bytes(b"mock-signed-fixture" + block + b"zip-central-directory")
         assert len(list(r3b.glob("*.apk"))) == 8
         assert len(list(r3b.glob("*.keystore"))) == 0
         assert len((r3b / "sha256sums.txt").read_text().splitlines()) == 8
-        assert (r3b / "tampered-v2.apk").is_file()
-        assert (r3b / "tampered-v2-rejection.txt").is_file()
-        print("R3B_HOST_PASS: seven positive fixtures, one signing-block tamper, no leaked keys")
-        # Negative gate: even if an apksigner tool mistakenly accepts the
-        # deliberately tampered v2 digest, the fixture build must refuse.
-        unsafe_env = {**env, "MOCK_ACCEPT_INVALID_V2": "1"}
+        assert (r3b / "tampered-v2-v3.apk").is_file()
+        assert (r3b / "tampered-v2-v3-rejection.txt").is_file()
+        print("R3B_HOST_PASS: seven positive fixtures, both signature schemes invalid, no leaked keys")
+        # Negative gate: a deliberately misbehaving apksigner must never
+        # allow an invalid signed digest to become an accepted fixture.
+        # Negative fixture runs must never rewrite the known-good fixture set.
+        unsafe_env = {
+            **env,
+            "RUNNER_TEMP": str(work / "negative-accept"),
+            "MOCK_ACCEPT_INVALID_SIGNATURE": "1",
+        }
         unsafe = subprocess.run(
             ["bash", str(R3B_FIXTURE)], cwd=ROOT, env=unsafe_env,
             capture_output=True, text=True, timeout=30, check=False,
         )
         assert unsafe.returncode != 0
-        assert "R3B_REFUSED: corrupt v2 fixture incorrectly passed apksigner" in unsafe.stderr
+        assert "R3B_REFUSED: corrupt v2+v3 fixture incorrectly passed apksigner" in unsafe.stderr
         print("R3B_HOST_REFUSAL_PASS: false-positive cryptographic verifier")
+        # A tool that silently signs v2 alone must also be refused: otherwise
+        # this test would reproduce the original API36 fallback mistake.
+        missing_v3 = subprocess.run(
+            ["bash", str(R3B_FIXTURE)], cwd=ROOT,
+            env={
+                **env,
+                "RUNNER_TEMP": str(work / "negative-missing-v3"),
+                "MOCK_OMIT_V3_SCHEME": "1",
+            },
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+        assert missing_v3.returncode != 0
+        assert "R3B_TAMPER_REFUSED: need v2 and v3 signers" in missing_v3.stderr
+        print("R3B_HOST_REFUSAL_PASS: missing v3 scheme")
 
         executable(toolbin / "adb", '''printf '%s\\n' "$*" >> "$MOCK_LOG"
 if [[ "$1" == "install" || "$1" == "push" ]]; then echo Success; exit 0; fi
