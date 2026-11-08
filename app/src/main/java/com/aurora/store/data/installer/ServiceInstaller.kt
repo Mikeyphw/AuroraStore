@@ -52,6 +52,7 @@ class ServiceInstaller @Inject constructor(
 
     override fun install(download: Download) {
         super.install(download)
+        requireNoPendingLibraries()
         // Reserve before posting asynchronous binder work; a second caller must not
         // bind the same request while the first bind is still pending.
         val reserved = synchronized(AuroraApp.enqueuedInstalls) {

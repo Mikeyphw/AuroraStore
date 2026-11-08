@@ -46,8 +46,15 @@ class NativeInstaller @Inject constructor(
         if (isAlreadyQueued(download.packageName)) {
             Log.i(TAG, "${download.packageName} already queued")
         } else {
+            super.install(download)
+            requireNoPendingLibraries()
+            val files = getFiles(download.packageName, download.versionCode)
+            if (files.size != 1) {
+                postError(download.packageName, "Native installer cannot install split APKs", null, download)
+                return
+            }
             Log.i(TAG, "Received native install request for ${download.packageName}")
-            getFiles(download.packageName, download.versionCode).forEach { xInstall(it) }
+            xInstall(files.single())
         }
     }
 

@@ -50,6 +50,8 @@ jobs:
         run: python3 -B scripts/ci/test_r2d_host_contract.py
       - name: Validate R3 historical versions, exact delivery, and downgrade consent
         run: python3 -B scripts/ci/check_r3.py
+      - name: Validate R3B APK identity and installer snapshot contracts
+        run: python3 -B scripts/ci/check_r3b.py
 
   android:
     name: Android vanilla debug, lint and JVM tests

@@ -43,6 +43,8 @@ import com.aurora.store.data.AccountRepository
 import com.aurora.store.data.event.InstallerEvent
 import com.aurora.store.data.helper.DownloadHelper
 import com.aurora.store.data.installer.AppInstaller
+import com.aurora.store.data.installer.verification.ApkSetVerifier
+import com.aurora.store.data.installer.verification.ApkVerificationException
 import com.aurora.store.data.model.Algorithm
 import com.aurora.store.data.model.DownloadInfo
 import com.aurora.store.data.model.DownloadStatus
@@ -424,12 +426,17 @@ class DownloadWorker @AssistedInject constructor(
                 Log.i(TAG, "Play frosting of ${download.packageName} @ ${file.name}: $result")
                 require(result != FrostingVerifier.Result.INVALID)
             }
+            withContext(Dispatchers.IO) {
+                ApkSetVerifier.verify(context, download) { isStopped }
+            }
         } catch (exception: Exception) {
             Log.e(TAG, "Failed to verify ${download.packageName}", exception)
             // Drop the corrupt files so the next attempt re-downloads them clean instead
             // of resuming from a poisoned offset.
             runCatching { files.forEach { deleteFile(it) } }
-            return onFailure(VerificationFailedException())
+            return onFailure(
+                if (exception is ApkVerificationException) exception else VerificationFailedException()
+            )
         }
 
         Log.i(TAG, "Finished downloading & verifying ${download.packageName}")
@@ -495,7 +502,13 @@ class DownloadWorker @AssistedInject constructor(
                 Result.success()
             } catch (exception: Exception) {
                 Log.e(TAG, "Failed to install ${download.packageName}", exception)
-                onFailure(exception)
+                if (exception is ApkVerificationException) {
+                    // InstallerBase already emitted the one attempt-bound failure event;
+                    // don't post a second failure from the worker for the same rejection.
+                    Result.success()
+                } else {
+                    onFailure(exception)
+                }
             }
         }
     }

@@ -18,6 +18,7 @@ import com.aurora.store.data.room.AppFileParceler
 import com.aurora.store.data.room.suite.ExternalApk
 import com.aurora.store.data.room.update.Update
 import com.aurora.store.util.PathUtil
+import java.io.File
 import java.util.Date
 import kotlinx.parcelize.Parcelize
 import kotlinx.parcelize.TypeParceler
@@ -123,9 +124,24 @@ data class Download(
     fun canInstall(context: Context): Boolean = isSuccessful && hasDownloadedFiles(context)
 
     fun hasDownloadedFiles(context: Context): Boolean {
-        val dir = PathUtil.getAppDownloadDir(context, packageName, versionCode)
-        // Require at least one actual APK on disk, not just that the directory exists —
-        // an empty/partially-cleaned directory must not look installable.
-        return dir.listFiles()?.any { it.name.endsWith(".apk") } == true
+        val apks = fileList.filter {
+            it.type == AppFile.Type.BASE || it.type == AppFile.Type.SPLIT
+        }
+        if (apks.count { it.type == AppFile.Type.BASE } != 1) return false
+        if (apks.isEmpty()) return false
+        val allFiles = apks + sharedLibs.filterNot {
+            com.aurora.store.util.PackageUtil.isSharedLibraryInstalled(
+                context, it.packageName, it.versionCode
+            )
+        }.flatMap { it.fileList.filter { file ->
+            file.type == AppFile.Type.BASE || file.type == AppFile.Type.SPLIT
+        } }
+        return allFiles.all { apk ->
+            apk.name.endsWith(".apk") && File(apk.name).name == apk.name &&
+                apk.size > 0L && PathUtil.getLocalFile(context, apk, this).let { file ->
+                    file.isFile && file.length() == apk.size &&
+                        !File(file.absolutePath + ".tmp").exists()
+                }
+        }
     }
 }

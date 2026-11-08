@@ -34,6 +34,51 @@ run_case() {
     exit 1
   }
 }
+# R3B uses signed fixture APKs in Aurora's private cache. This exercises the real
+# Android package archive reader and signature verifier, not a mocked result.
+R3B="$OUT/r3b"
+sha256sum -c "$R3B/sha256sums.txt"
+adb shell run-as "$TARGET" mkdir -p cache/r3b-fixtures
+for fixture in "$R3B"/*.apk; do
+  filename="$(basename "$fixture")"
+  adb push "$fixture" "/data/local/tmp/$filename" >/dev/null
+  adb shell run-as "$TARGET" cp "/data/local/tmp/$filename" "cache/r3b-fixtures/$filename"
+  adb shell rm -f "/data/local/tmp/$filename"
+done
+# OS state is real: installed package signer must match a subsequent verified APK set.
+adb install -r "$R3B/base.apk"
+R3B_SUITE='com.aurora.store.data.installer.verification.ApkSetVerifierDeviceTest'
+for case in \
+  correctOfflineSignedApkAndVersionAreAccepted \
+  wrongRequestedPackageIsRejected \
+  wrongRequestedVersionIsRejected \
+  validHistoricalVersionIsAcceptedAsExactArtifact \
+  truncatedApkIsRejectedEvenWhenMetadataMatchesItsBytes \
+  invalidPlayHashIsRejected \
+  missingSplitIsRejected \
+  mismatchedSplitSignerIsRejected \
+  installedPackageWithDifferentSignerIsRejected \
+  alteredSigningBlockIsRejectedEvenWithUpdatedDownloadHash \
+  undeclaredCachedApkIsRejected \
+  stalePartialDownloadIsRejected \
+  cancelledAndReplacedAttemptsAreNotInstallable \
+  verificationInterruptedBeforeInstallIsRejected \
+  privateVerifiedSnapshotCannotBeSwappedWithCacheReplacement \
+  validSignedSplitsRequireMatchingManifestAndSigner; do
+  run_case "r3b-$case" "$R3B_SUITE#$case"
+done
+python3 - "$R3B/receipt.json" <<'PYR3B'
+import json,os,sys
+from pathlib import Path
+Path(sys.argv[1]).write_text(json.dumps({
+  'result':'PASS', 'source_sha':os.environ['GITHUB_SHA'],
+  'run_id':os.environ['GITHUB_RUN_ID'],
+  'device':'hosted-api36-x86_64','signed_fixture_archive_tests':14,
+  'google_play_provenance_verified':False, 'physical_arm64_verified':False,
+  'live_privileged_backend_verified':False,
+  'release_qualified':False
+},sort_keys=True,indent=2)+'\n')
+PYR3B
 run_case seed "$SUITE#seedInterruptedInstallAndOwnedSession"
 adb shell am force-stop "$TARGET"
 # Exercise the real Android PackageInstaller lifecycle using an offline signed APK.

@@ -7,10 +7,14 @@ on:
     paths:
       - '.github/workflows/aurora-r2d-install-emulator.yml'
       - 'scripts/ci/r2d_*'
+      - 'scripts/ci/r3b_*'
       - 'scripts/ci/fixture_r2d/**'
+      - 'scripts/ci/fixture_r3b/**'
       - 'scripts/ci/check_r2c.py'
       - 'scripts/ci/check_r2d.py'
+      - 'scripts/ci/check_r3b.py'
       - 'app/src/androidTest/java/com/aurora/store/data/room/download/InstallLifecycleRestartDeviceTest.kt'
+      - 'app/src/androidTest/java/com/aurora/store/data/installer/verification/**'
       - 'app/src/main/java/com/aurora/store/data/installer/**'
       - 'app/src/main/java/com/aurora/store/data/helper/DownloadHelper.kt'
       - 'app/src/main/java/com/aurora/store/data/room/download/**'
@@ -18,10 +22,14 @@ on:
     paths:
       - '.github/workflows/aurora-r2d-install-emulator.yml'
       - 'scripts/ci/r2d_*'
+      - 'scripts/ci/r3b_*'
       - 'scripts/ci/fixture_r2d/**'
+      - 'scripts/ci/fixture_r3b/**'
       - 'scripts/ci/check_r2c.py'
       - 'scripts/ci/check_r2d.py'
+      - 'scripts/ci/check_r3b.py'
       - 'app/src/androidTest/java/com/aurora/store/data/room/download/InstallLifecycleRestartDeviceTest.kt'
+      - 'app/src/androidTest/java/com/aurora/store/data/installer/verification/**'
       - 'app/src/main/java/com/aurora/store/data/installer/**'
       - 'app/src/main/java/com/aurora/store/data/helper/DownloadHelper.kt'
   workflow_dispatch:
@@ -49,6 +57,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           python3 -B scripts/ci/check_r2c.py
           python3 -B scripts/ci/check_r2d.py
+          python3 -B scripts/ci/check_r3b.py
 
   emulator:
     name: R2D real APK session, force-stop and Room recovery on API 36
@@ -91,6 +100,9 @@ jobs:
       - name: Build isolated signed fixture APK (ephemeral test key)
         shell: bash
         run: bash scripts/ci/r2d_build_fixture.sh
+      - name: Build real signed R3B identity, version and split fixtures
+        shell: bash
+        run: bash scripts/ci/r3b_build_fixtures.sh
       - name: Require KVM-enabled runner
         shell: bash
         run: |

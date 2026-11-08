@@ -13,6 +13,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "scripts/ci/r2d_build_fixture.sh"
+R3B_FIXTURE = ROOT / "scripts/ci/r3b_build_fixtures.sh"
 EMULATOR = ROOT / "scripts/ci/r2d_emulator_ci.sh"
 
 
@@ -58,7 +59,7 @@ def main() -> None:
         )
         executable(
             buildtools / "apksigner",
-            'if [[ "$1" == "verify" ]]; then test -s "$2"; exit; fi\n'
+            'if [[ "$1" == "verify" ]]; then test -s "${@: -1}"; exit; fi\n'
             'while (($#)); do if [[ "$1" == "--out" ]]; then '
             'shift; printf "signed-fixture" > "$1"; exit; fi; shift; done\nexit 1\n',
         )
@@ -86,9 +87,15 @@ def main() -> None:
             (out / "r2d-fixture.apk").read_bytes()
         ).hexdigest()
         print("R2D_HOST_PASS: ephemeral signed fixture and signing-key cleanup")
+        check_code(["bash", str(R3B_FIXTURE)], env, True)
+        r3b = out / "r3b"
+        assert len(list(r3b.glob("*.apk"))) == 7
+        assert len(list(r3b.glob("*.keystore"))) == 0
+        assert len((r3b / "sha256sums.txt").read_text().splitlines()) == 7
+        print("R3B_HOST_PASS: seven signed test fixtures, no leaked keys")
 
         executable(toolbin / "adb", '''printf '%s\\n' "$*" >> "$MOCK_LOG"
-if [[ "$1" == "install" ]]; then echo Success; exit 0; fi
+if [[ "$1" == "install" || "$1" == "push" ]]; then echo Success; exit 0; fi
 if [[ "$1" == "logcat" ]]; then echo 'Production restart log'; exit 0; fi
 if [[ "$1" != "shell" ]]; then exit 1; fi
 shift
@@ -103,6 +110,9 @@ case "$*" in
       echo 'OK (1 test)'
     fi ;;
   'am force-stop'* ) ;;
+  'run-as com.aurora.store.debug mkdir'* ) ;;
+  'run-as com.aurora.store.debug cp'* ) ;;
+  'rm -f /data/local/tmp/'* ) ;;
   'am start -W -n'* )
     if [[ "$MOCK_MODE" == 'startup_failure' ]]; then echo 'Error: app did not start'
     else echo 'Status: ok'; fi ;;

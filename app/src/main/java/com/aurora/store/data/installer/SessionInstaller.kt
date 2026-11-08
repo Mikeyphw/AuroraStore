@@ -145,8 +145,6 @@ class SessionInstaller @Inject constructor(
     }
 
     override fun install(download: Download) {
-        super.install(download)
-
         val sessionSet =
             enqueuedSessions.find { set -> set.any { it.packageName == download.packageName } }
         if (sessionSet != null) {
@@ -168,6 +166,9 @@ class SessionInstaller @Inject constructor(
                 return
             }
 
+            // A duplicate/pending OS-owned session is not a new install attempt: avoid
+            // copying APKs or emitting a stale-file error when no new session is needed.
+            super.install(download)
             val stagedSessions = mutableSetOf<SessionInfo>()
             var stagingFailed = false
 

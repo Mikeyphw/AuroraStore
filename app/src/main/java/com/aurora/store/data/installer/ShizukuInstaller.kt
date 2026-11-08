@@ -74,11 +74,11 @@ class ShizukuInstaller @Inject constructor(
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun install(download: Download) {
-        super.install(download)
         if (isAlreadyQueued(download.packageName)) {
             Log.i(TAG, "${download.packageName} already queued")
             return
         }
+        super.install(download)
         // Fail the entire request if any prerequisite library cannot be staged.
         for (library in download.sharedLibs) {
             if (!isSharedLibraryInstalled(context, library.packageName, library.versionCode) &&

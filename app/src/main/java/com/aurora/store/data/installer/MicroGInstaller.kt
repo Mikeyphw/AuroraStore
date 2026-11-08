@@ -57,6 +57,7 @@ class MicroGInstaller @Inject constructor(
 
     override fun install(download: Download) {
         super.install(download)
+        requireNoPendingLibraries()
 
         when {
             isAlreadyQueued(download.packageName) -> {
