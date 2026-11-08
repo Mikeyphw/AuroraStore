@@ -56,9 +56,13 @@ object ApkSetVerifier {
             val entries = requested(context, download)
             verifyEntries(context, entries, interrupted) { it.original }
         } catch (error: Exception) {
-            throw if (error is ApkVerificationException) error else ApkVerificationException(
-                "Downloaded APK is unreadable or corrupt: ${error.javaClass.simpleName}"
-            )
+            throw if (error is ApkVerificationException) {
+                error
+            } else {
+                ApkVerificationException(
+                    "Downloaded APK is unreadable or corrupt: ${error.javaClass.simpleName}"
+                )
+            }
         }
     }
 
@@ -78,7 +82,8 @@ object ApkSetVerifier {
         }
         try {
             val copied = entries.associateWith { entry ->
-                val dir = File(target, if (entry.group.isEmpty()) "app" else "libraries/${entry.group}")
+                val dir =
+                    File(target, if (entry.group.isEmpty()) "app" else "libraries/${entry.group}")
                 if (!dir.mkdirs() && !dir.isDirectory) {
                     throw ApkVerificationException("Could not stage APK installation files")
                 }
@@ -104,9 +109,13 @@ object ApkSetVerifier {
             )
         } catch (error: Exception) {
             target.deleteRecursively()
-            throw if (error is ApkVerificationException) error else ApkVerificationException(
-                "Unable to prepare a complete verified APK set: ${error.javaClass.simpleName}"
-            )
+            throw if (error is ApkVerificationException) {
+                error
+            } else {
+                ApkVerificationException(
+                    "Unable to prepare a complete verified APK set: ${error.javaClass.simpleName}"
+                )
+            }
         }
     }
 
@@ -119,10 +128,16 @@ object ApkSetVerifier {
             add(Triple("", download.packageName to download.versionCode, download.fileList))
             for (lib in download.sharedLibs) {
                 if (!packagePattern.matches(lib.packageName) || lib.versionCode <= 0L ||
-                    lib.packageName == download.packageName) {
+                    lib.packageName == download.packageName
+                ) {
                     throw ApkVerificationException("Invalid requested shared-library identity")
                 }
-                if (PackageUtil.isSharedLibraryInstalled(context, lib.packageName, lib.versionCode)) {
+                if (PackageUtil.isSharedLibraryInstalled(
+                        context,
+                        lib.packageName,
+                        lib.versionCode
+                    )
+                ) {
                     continue
                 }
                 add(Triple(lib.packageName, lib.packageName to lib.versionCode, lib.fileList))
@@ -132,7 +147,9 @@ object ApkSetVerifier {
             throw ApkVerificationException("Duplicate shared-library package in download metadata")
         }
         val requested = groups.flatMap { (group, pkgVersion, files) ->
-            val apks = files.filter { it.type == AppFile.Type.BASE || it.type == AppFile.Type.SPLIT }
+            val apks = files.filter {
+                it.type == AppFile.Type.BASE || it.type == AppFile.Type.SPLIT
+            }
             if (apks.isEmpty() || apks.count { it.type == AppFile.Type.BASE } != 1) {
                 throw ApkVerificationException("Missing base APK for ${pkgVersion.first}")
             }
@@ -156,11 +173,16 @@ object ApkSetVerifier {
                     File(
                         if (group.isEmpty()) {
                             PathUtil.getAppDownloadDir(
-                                context, download.packageName, download.versionCode
+                                context,
+                                download.packageName,
+                                download.versionCode
                             )
                         } else {
                             PathUtil.getLibDownloadDir(
-                                context, download.packageName, download.versionCode, group
+                                context,
+                                download.packageName,
+                                download.versionCode,
+                                group
                             )
                         },
                         entry.name
@@ -175,14 +197,20 @@ object ApkSetVerifier {
                 PathUtil.getAppDownloadDir(context, download.packageName, download.versionCode)
             } else {
                 PathUtil.getLibDownloadDir(
-                    context, download.packageName, download.versionCode, group
+                    context,
+                    download.packageName,
+                    download.versionCode,
+                    group
                 )
             }
             val declared = requested.filter { it.group == group }.map { it.metadata.name }.toSet()
             if (folder.listFiles().orEmpty().any {
-                it.name.endsWith(".apk") && it.name !in declared
-            }) {
-                throw ApkVerificationException("Undeclared cached APK exists for ${pkgVersion.first}")
+                    it.name.endsWith(".apk") && it.name !in declared
+                }
+            ) {
+                throw ApkVerificationException(
+                    "Undeclared cached APK exists for ${pkgVersion.first}"
+                )
             }
         }
         return requested
@@ -202,7 +230,9 @@ object ApkSetVerifier {
             if (!path.isFile || path.length() != entry.metadata.size ||
                 File(entry.original.absolutePath + ".tmp").exists()
             ) {
-                throw ApkVerificationException("APK missing, incomplete or still downloading: ${entry.metadata.name}")
+                throw ApkVerificationException(
+                    "APK missing, incomplete or still downloading: ${entry.metadata.name}"
+                )
             }
             if (!matchesPlayDigest(path, entry.metadata, interrupted)) {
                 throw ApkVerificationException("APK integrity mismatch: ${entry.metadata.name}")
@@ -219,16 +249,20 @@ object ApkSetVerifier {
             val signers = if (Build.VERSION.SDK_INT >= 36) {
                 val verified = try {
                     PackageManager.getVerifiedSigningInfo(
-                        path.absolutePath, SigningInfo.VERSION_SIGNING_BLOCK_V2
+                        path.absolutePath,
+                        SigningInfo.VERSION_SIGNING_BLOCK_V2
                     )
                 } catch (_: Exception) {
                     throw ApkVerificationException("APK signature invalid: ${entry.metadata.name}")
                 }
                 val signed = verified.apkContentsSigners.orEmpty()
                     .map(::signatureDigest).toSet()
-                if (signed.isEmpty() || (info != null && signingDigests(info).let {
-                    it.isNotEmpty() && it != signed
-                })) {
+                if (signed.isEmpty() || (
+                        info != null && signingDigests(info).let {
+                            it.isNotEmpty() && it != signed
+                        }
+                        )
+                ) {
                     throw ApkVerificationException("APK signature mismatch: ${entry.metadata.name}")
                 }
                 signed
@@ -237,7 +271,9 @@ object ApkSetVerifier {
                 // A split it cannot independently authenticate is refused, never trusted.
                 val signed = info?.let(::signingDigests).orEmpty()
                 if (signed.isEmpty()) {
-                    throw ApkVerificationException("APK signer cannot be authenticated on this Android version")
+                    throw ApkVerificationException(
+                        "APK signer cannot be authenticated on this Android version"
+                    )
                 }
                 signed
             }
@@ -253,7 +289,11 @@ object ApkSetVerifier {
         val groups = requested.groupBy { it.group }
         for ((group, entries) in groups) {
             val packageName = entries.first().packageName
-            ApkSetPolicy.check(packageName, entries.first().versionCode, identities[group].orEmpty())
+            ApkSetPolicy.check(
+                packageName,
+                entries.first().versionCode,
+                identities[group].orEmpty()
+            )
             ensureInstalledSignerCompatibility(
                 packageManager,
                 packageName,
@@ -307,7 +347,9 @@ object ApkSetVerifier {
         val history = if (Build.VERSION.SDK_INT >= 28) {
             installed.signingInfo?.signingCertificateHistory.orEmpty()
                 .map(::signatureDigest).toSet()
-        } else installedSigners
+        } else {
+            installedSigners
+        }
         if (!ApkSetPolicy.compatibleInstalledSigners(candidateSigners, installedSigners, history)) {
             throw ApkVerificationException("APK signer differs from the installed $packageName")
         }

@@ -48,6 +48,7 @@ internal object BinaryApkManifest {
             }
             when (type) {
                 0x0001 -> strings.addAll(stringPool(buffer, offset, header, size))
+
                 0x0102 -> {
                     // ResXMLTree_node has a 16-byte header; the 20-byte attrExt follows it.
                     // The node size (not header size) includes both metadata and attributes.
@@ -65,20 +66,35 @@ internal object BinaryApkManifest {
                         for (i in 0 until attributeCount) {
                             val position = offset.toLong() + 16 + attributeStart + i * attributeSize
                             if (position + 20 > offset.toLong() + size) {
-                                throw ApkVerificationException("APK manifest attributes exceed chunk")
+                                throw ApkVerificationException(
+                                    "APK manifest attributes exceed chunk"
+                                )
                             }
                             val p = position.toInt()
                             val key = readString(strings, int(buffer, p + 4))
                             val raw = int(buffer, p + 8)
                             val dataType = bytes[p + 15].toInt() and 0xff
                             val value = int(buffer, p + 16)
-                            val stringValue = if (raw >= 0) raw else if (dataType == 3) value else -1
+                            val stringValue = if (raw >=
+                                0
+                            ) {
+                                raw
+                            } else if (dataType == 3) {
+                                value
+                            } else {
+                                -1
+                            }
                             attrs[key] = stringValue to (value.toLong() and 0xffffffffL)
                         }
                         val packageIndex = attrs["package"]?.first ?: -1
                         val pkg = readString(strings, packageIndex)
-                        if (!pkg.matches(Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+"))) {
-                            throw ApkVerificationException("APK package identity is missing or invalid")
+                        if (!pkg.matches(
+                                Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+")
+                            )
+                        ) {
+                            throw ApkVerificationException(
+                                "APK package identity is missing or invalid"
+                            )
                         }
                         val code = attrs["versionCode"]?.second
                             ?: throw ApkVerificationException("APK version code is missing")
@@ -100,7 +116,9 @@ internal object BinaryApkManifest {
         val count = int(buf, start + 8)
         val flags = int(buf, start + 16)
         val stringsStart = int(buf, start + 20)
-        if (count < 0 || count > 50000 || stringsStart < header || header.toLong() + 4L * count > size) {
+        if (count < 0 || count > 50000 || stringsStart < header ||
+            header.toLong() + 4L * count > size
+        ) {
             throw ApkVerificationException("Invalid APK string table bounds")
         }
         val utf8 = flags and 0x100 != 0
@@ -113,13 +131,19 @@ internal object BinaryApkManifest {
             var at = position.toInt()
             fun length8(): Int {
                 val first = buf.get(at++).toInt() and 0xff
-                return if (first and 0x80 == 0) first else ((first and 0x7f) shl 8) or
-                    (buf.get(at++).toInt() and 0xff)
+                return if (first and 0x80 == 0) {
+                    first
+                } else {
+                    ((first and 0x7f) shl 8) or
+                        (buf.get(at++).toInt() and 0xff)
+                }
             }
             fun length16(): Int {
                 val first = ushort(buf, at)
                 at += 2
-                return if (first and 0x8000 == 0) first else {
+                return if (first and 0x8000 == 0) {
+                    first
+                } else {
                     val second = ushort(buf, at)
                     at += 2
                     ((first and 0x7fff) shl 16) or second
@@ -142,12 +166,12 @@ internal object BinaryApkManifest {
         }
     }
 
-    private fun readString(values: List<String>, index: Int): String =
-        values.getOrNull(index) ?: ""
+    private fun readString(values: List<String>, index: Int): String = values.getOrNull(index) ?: ""
 
     private fun requireChunk(buf: ByteBuffer, offset: Int, type: Int, minSize: Int) {
         if (buf.limit() < 8 || ushort(buf, offset) != type ||
-            int(buf, offset + 4) != minSize) {
+            int(buf, offset + 4) != minSize
+        ) {
             throw ApkVerificationException("APK manifest is not a valid compiled Android manifest")
         }
     }

@@ -131,11 +131,15 @@ data class Download(
         if (apks.isEmpty()) return false
         val allFiles = apks + sharedLibs.filterNot {
             com.aurora.store.util.PackageUtil.isSharedLibraryInstalled(
-                context, it.packageName, it.versionCode
+                context,
+                it.packageName,
+                it.versionCode
             )
-        }.flatMap { it.fileList.filter { file ->
-            file.type == AppFile.Type.BASE || file.type == AppFile.Type.SPLIT
-        } }
+        }.flatMap {
+            it.fileList.filter { file ->
+                file.type == AppFile.Type.BASE || file.type == AppFile.Type.SPLIT
+            }
+        }
         return allFiles.all { apk ->
             apk.name.endsWith(".apk") && File(apk.name).name == apk.name &&
                 apk.size > 0L && PathUtil.getLocalFile(context, apk, this).let { file ->

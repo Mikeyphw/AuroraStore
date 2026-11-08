@@ -32,10 +32,14 @@ object ApkSetPolicy {
         }
         for (entry in entries) {
             if (entry.packageName != expectedPackage) {
-                throw ApkVerificationException("APK package differs from requested $expectedPackage")
+                throw ApkVerificationException(
+                    "APK package differs from requested $expectedPackage"
+                )
             }
             if (entry.versionCode != expectedVersion) {
-                throw ApkVerificationException("APK version differs from requested $expectedVersion")
+                throw ApkVerificationException(
+                    "APK version differs from requested $expectedVersion"
+                )
             }
             if (entry.signerDigests.isEmpty() || entry.signerDigests != baseSigners) {
                 throw ApkVerificationException("APK split certificates do not match the base APK")

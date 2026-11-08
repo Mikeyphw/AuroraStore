@@ -435,7 +435,11 @@ class DownloadWorker @AssistedInject constructor(
             // of resuming from a poisoned offset.
             runCatching { files.forEach { deleteFile(it) } }
             return onFailure(
-                if (exception is ApkVerificationException) exception else VerificationFailedException()
+                if (exception is ApkVerificationException) {
+                    exception
+                } else {
+                    VerificationFailedException()
+                }
             )
         }
 
@@ -538,6 +542,7 @@ class DownloadWorker @AssistedInject constructor(
      */
     private fun isRetryable(throwable: Throwable?): Boolean = when (throwable) {
         null -> false
+
         is NoNetworkException,
         is SocketException,
         is SocketTimeoutException,
@@ -546,6 +551,7 @@ class DownloadWorker @AssistedInject constructor(
         is ExpiredUrlException,
         is InvalidResumeRangeException,
         is DownloadStalledException -> true
+
         // A truncated HTTP response may surface as ProtocolException rather than SocketException.
         is IOException -> true
 
@@ -724,6 +730,7 @@ class DownloadWorker @AssistedInject constructor(
                     deliveryClient = playClient
                     resolveWith(playClient)
                 }
+
                 else -> throw exception
             }
         }

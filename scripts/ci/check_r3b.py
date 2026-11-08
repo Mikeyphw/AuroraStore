@@ -13,6 +13,7 @@ def source(name):
 
 installer = source('app/src/main/java/com/aurora/store/data/installer/base/InstallerBase.kt')
 verifier = source('app/src/main/java/com/aurora/store/data/installer/verification/ApkSetVerifier.kt')
+verifier_compact = re.sub(r'\s+', '', verifier)
 manifest = source('app/src/main/java/com/aurora/store/data/installer/verification/BinaryApkManifest.kt')
 policy = source('app/src/main/java/com/aurora/store/data/installer/verification/ApkSetPolicy.kt')
 worker = source('app/src/main/java/com/aurora/store/data/work/DownloadWorker.kt')
@@ -35,7 +36,7 @@ checks = {
         worker.index('notifyStatus(DownloadStatus.COMPLETED)'),
     'metadata binds exact package and version to real APK manifest':
         'BinaryApkManifest.read(path)' in verifier and
-        'ApkSetPolicy.check(packageName' in verifier and
+        'ApkSetPolicy.check(packageName' in verifier_compact and
         'entry.versionCode != expectedVersion' in policy and
         'entry.packageName != expectedPackage' in policy,
     'APK signatures verified by OS before backend handoff':
@@ -45,12 +46,12 @@ checks = {
         'signingDigests(info)' in verifier,
     'split, stale cache and transient files fail closed':
         'it.name !in declared' in verifier and
-        'File(entry.original.absolutePath + ".tmp").exists()' in verifier and
-        'entry.metadata.type == AppFile.Type.BASE' in verifier and
+        'File(entry.original.absolutePath+".tmp").exists()' in verifier_compact and
+        'entry.metadata.type==AppFile.Type.BASE' in verifier_compact and
         'entry.signerDigests != baseSigners' in policy,
     'snapshot is private unique and verified again after copying':
         'UUID.randomUUID()' in verifier and
-        'verifyEntries(context, entries, { false }) { copied.getValue(it) }' in verifier and
+        'verifyEntries(context,entries,{false}){copied.getValue(it)}' in verifier_compact and
         'file.setReadOnly()' in verifier,
     'cancelled attempts cannot start installation':
         'download.status !in DownloadStatus.installable + DownloadStatus.INSTALLING' in verifier and
