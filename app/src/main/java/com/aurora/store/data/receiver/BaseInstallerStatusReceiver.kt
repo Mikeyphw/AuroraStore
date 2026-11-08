@@ -15,13 +15,16 @@ import androidx.core.content.IntentCompat
 import com.aurora.extensions.TAG
 import com.aurora.extensions.runOnUiThread
 import com.aurora.store.AuroraApp
+import com.aurora.store.data.event.InstallAttempt
 import com.aurora.store.data.event.InstallerEvent
 import com.aurora.store.data.installer.AppInstaller.Companion.ACTION_INSTALL_STATUS
+import com.aurora.store.data.installer.AppInstaller.Companion.EXTRA_ATTEMPT_KEY
 import com.aurora.store.data.installer.AppInstaller.Companion.EXTRA_DISPLAY_NAME
 import com.aurora.store.data.installer.AppInstaller.Companion.EXTRA_PACKAGE_NAME
+import com.aurora.store.data.installer.AppInstaller.Companion.EXTRA_PARENT_PACKAGE_NAME
 import com.aurora.store.data.installer.AppInstaller.Companion.EXTRA_VERSION_CODE
+import com.aurora.store.data.installer.InstallResultPolicy
 import com.aurora.store.data.installer.base.InstallerBase
-import com.aurora.store.data.model.DownloadStatus
 import com.aurora.store.data.room.download.DownloadDao
 import com.aurora.store.util.NotificationUtil
 import com.aurora.store.util.PackageUtil
@@ -43,65 +46,128 @@ internal interface InstallerStatusEntryPoint {
 abstract class BaseInstallerStatusReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context?, intent: Intent?) {
-        if (context != null && intent?.action == ACTION_INSTALL_STATUS) {
-            val packageName = intent.getStringExtra(EXTRA_PACKAGE_NAME) ?: return
-            val displayName = intent.getStringExtra(EXTRA_DISPLAY_NAME) ?: packageName
+        if (context == null || intent?.action != ACTION_INSTALL_STATUS) return
 
-            val versionCode = intent.getLongExtra(EXTRA_VERSION_CODE, -1)
-            val sessionId = intent.getIntExtra(EXTRA_SESSION_ID, -1)
-            val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, -1)
-            val extra = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+        val packageName = intent.getStringExtra(EXTRA_PACKAGE_NAME) ?: return
+        val displayName = intent.getStringExtra(EXTRA_DISPLAY_NAME) ?: packageName
+        val parentPackageName = intent.getStringExtra(EXTRA_PARENT_PACKAGE_NAME) ?: packageName
+        val versionCode = intent.getLongExtra(EXTRA_VERSION_CODE, -1L)
+        val downloadedAt = intent.getLongExtra(EXTRA_ATTEMPT_KEY, -1L)
+        val sessionId = intent.getIntExtra(EXTRA_SESSION_ID, -1)
+        // STATUS_PENDING_USER_ACTION is -1; use a distinct sentinel for a missing status.
+        val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, Int.MIN_VALUE)
+        val extra = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
 
-            Log.i(
-                TAG,
-                "$packageName ($versionCode) sessionId=$sessionId, status=$status, extra=$extra"
-            )
+        if (versionCode < 0 || sessionId < 0 || status == Int.MIN_VALUE) {
+            Log.w(TAG, "Ignoring incomplete installer callback for $packageName")
+            return
+        }
 
-            // If package was successfully installed, exit after notifying user and doing cleanup
-            if (status == PackageInstaller.STATUS_SUCCESS) {
-                // No post-install steps for shared libraries
-                if (PackageUtil.isSharedLibrary(context, packageName)) return
+        val identity = InstallAttempt(versionCode, downloadedAt, sessionId)
+        Log.i(
+            TAG,
+            "$packageName ($versionCode) attempt=$downloadedAt session=$sessionId status=$status"
+        )
 
-                AuroraApp.enqueuedInstalls.remove(packageName)
-                InstallerBase.notifyInstallation(context, displayName, packageName)
-
-                if (Preferences.getBoolean(context, PREFERENCE_AUTO_DELETE)) {
-                    PathUtil.getAppDownloadDir(context, packageName, versionCode)
-                        .deleteRecursively()
+        // Shared library sessions have no independent Room download row. Their callbacks are
+        // still needed to continue the library chain and prompt for system authorization.
+        if (parentPackageName != packageName || PackageUtil.isSharedLibrary(context, packageName)) {
+            when (status) {
+                PackageInstaller.STATUS_SUCCESS -> return
+                PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                    doAppropriatePrompt(context, intent, sessionId)
+                    return
                 }
 
-                return postStatus(status, packageName, extra, context)
-            }
-
-            if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
-                parkAwaitingInstall(context, packageName)
-                AuroraApp.events.send(InstallerEvent.PendingUserAction(packageName))
-                doAppropriatePrompt(context, intent, sessionId)
-            } else {
-                AuroraApp.enqueuedInstalls.remove(packageName)
-                if (status != PackageInstaller.STATUS_FAILURE_ABORTED) {
+                else -> {
                     notifyUser(context, packageName, displayName, status)
+                    postStatus(status, packageName, extra, context, identity)
+                    return
                 }
-
-                postStatus(status, packageName, extra, context)
             }
         }
-    }
 
-    private fun parkAwaitingInstall(context: Context, packageName: String) {
-        val downloadDao = EntryPointAccessors
-            .fromApplication(context, InstallerStatusEntryPoint::class.java)
-            .downloadDao()
-
+        // A broadcast can arrive after the original download was cancelled, retried or
+        // superseded. Do not show a prompt, delete APKs, or emit an event for a stale attempt.
+        if (downloadedAt < 0L) {
+            Log.w(TAG, "Unattributed installer callback ignored for $packageName")
+            return
+        }
+        val pendingResult = goAsync()
         AuroraApp.scope.launch {
-            runCatching {
-                val existing = downloadDao.getDownload(packageName)
-                // A stale session can report back while a newer version is mid-download; parking
-                // the row then would clobber that download and free the serialization slot.
-                if (existing.status != DownloadStatus.INSTALLED && !existing.isActive) {
-                    downloadDao.updateStatus(packageName, DownloadStatus.AWAITING_INSTALL)
+            try {
+                val downloadDao = EntryPointAccessors
+                    .fromApplication(context, InstallerStatusEntryPoint::class.java)
+                    .downloadDao()
+                val current = downloadDao.getDownload(packageName)
+                val matchesAttempt = InstallResultPolicy.matches(
+                    current.versionCode,
+                    current.downloadedAt,
+                    identity.versionCode,
+                    identity.downloadedAt
+                )
+                if (!matchesAttempt) {
+                    Log.w(TAG, "Discarding stale installation result for $packageName")
+                    return@launch
                 }
-            }.onFailure { Log.e(TAG, "Failed to park $packageName", it) }
+
+                val outcome = when (status) {
+                    PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                        InstallResultPolicy.Outcome.PENDING_USER_ACTION
+                    }
+
+                    PackageInstaller.STATUS_SUCCESS -> InstallResultPolicy.Outcome.SUCCESS
+                    else -> InstallResultPolicy.Outcome.FAILURE
+                }
+                val replacement = InstallResultPolicy.next(
+                    current.status,
+                    outcome,
+                    current.hasDownloadedFiles(context)
+                ) ?: return@launch
+                val updated = downloadDao.transitionInstallAttempt(
+                    packageName,
+                    identity.versionCode,
+                    identity.downloadedAt,
+                    current.status,
+                    replacement
+                )
+                if (updated == 0) {
+                    Log.i(TAG, "Installer callback lost a concurrent transition: $packageName")
+                    return@launch
+                }
+
+                when (status) {
+                    PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                        AuroraApp.events.send(
+                            InstallerEvent.PendingUserAction(packageName, identity)
+                        )
+                        doAppropriatePrompt(context, intent, sessionId)
+                    }
+
+                    PackageInstaller.STATUS_SUCCESS -> {
+                        AuroraApp.enqueuedInstalls.remove(packageName)
+                        InstallerBase.notifyInstallation(context, displayName, packageName)
+                        if (Preferences.getBoolean(context, PREFERENCE_AUTO_DELETE)) {
+                            PathUtil.getAppDownloadDir(context, packageName, versionCode)
+                                .deleteRecursively()
+                        }
+                        postStatus(status, packageName, extra, context, identity)
+                    }
+
+                    else -> {
+                        AuroraApp.enqueuedInstalls.remove(packageName)
+                        if (status != PackageInstaller.STATUS_FAILURE_ABORTED) {
+                            notifyUser(context, packageName, displayName, status)
+                        }
+                        postStatus(status, packageName, extra, context, identity)
+                    }
+                }
+            } catch (error: Exception) {
+                // Fail closed: a database error must never authorize an uncorrelated callback.
+                Log.e(TAG, "Unable to reconcile installer callback for $packageName", error)
+            } finally {
+                pendingResult.finish()
+            }
         }
     }
 
@@ -160,17 +226,25 @@ abstract class BaseInstallerStatusReceiver : BroadcastReceiver() {
         promptUser(context, intent)
     }
 
-    open fun postStatus(status: Int, packageName: String, extra: String?, context: Context) {
+    open fun postStatus(
+        status: Int,
+        packageName: String,
+        extra: String?,
+        context: Context,
+        attempt: InstallAttempt? = null
+    ) {
         val event = when (status) {
             PackageInstaller.STATUS_SUCCESS -> InstallerEvent.Installed(
-                packageName = packageName
+                packageName = packageName,
+                attempt = attempt
             )
 
             else -> InstallerEvent.Failed(
                 packageName = packageName,
                 error = InstallerBase.getErrorString(context, status),
                 extra = extra,
-                cancelled = status == PackageInstaller.STATUS_FAILURE_ABORTED
+                cancelled = status == PackageInstaller.STATUS_FAILURE_ABORTED,
+                attempt = attempt
             )
         }
 

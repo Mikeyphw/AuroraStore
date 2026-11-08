@@ -59,6 +59,10 @@ class AppInstaller @Inject constructor(
             "com.aurora.store.data.installer.AppInstaller.EXTRA_PACKAGE_NAME"
         const val EXTRA_VERSION_CODE =
             "com.aurora.store.data.installer.AppInstaller.EXTRA_VERSION_CODE"
+        const val EXTRA_ATTEMPT_KEY =
+            "com.aurora.store.data.installer.AppInstaller.EXTRA_ATTEMPT_KEY"
+        const val EXTRA_PARENT_PACKAGE_NAME =
+            "com.aurora.store.data.installer.AppInstaller.EXTRA_PARENT_PACKAGE_NAME"
         const val EXTRA_DISPLAY_NAME =
             "com.aurora.store.data.installer.AppInstaller.EXTRA_DISPLAY_NAME"
 

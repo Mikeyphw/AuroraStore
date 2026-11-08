@@ -38,6 +38,10 @@ jobs:
         run: python3 -B scripts/ci/check_r1g.py
       - name: Validate R2A installation recovery contract
         run: python3 -B scripts/ci/check_r2a.py
+      - name: Validate R2B installer callback ordering contract
+        run: python3 -B scripts/ci/check_r2b.py
+      - name: Test R2B Room generation CAS with SQLite
+        run: python3 -B scripts/ci/test_r2b_sql_cas.py
 
   android:
     name: Android vanilla debug, lint and JVM tests

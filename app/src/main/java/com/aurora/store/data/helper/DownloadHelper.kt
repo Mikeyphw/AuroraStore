@@ -25,6 +25,8 @@ import com.aurora.store.data.AccountRepository
 import com.aurora.store.data.event.InstallerEvent
 import com.aurora.store.data.installer.AppInstaller
 import com.aurora.store.data.installer.InstallRecoveryPolicy
+import com.aurora.store.data.installer.InstallResultPolicy
+import com.aurora.store.data.installer.base.InstallerBase
 import com.aurora.store.data.model.DownloadSortBy
 import com.aurora.store.data.model.DownloadStatus
 import com.aurora.store.data.room.download.Download
@@ -35,6 +37,8 @@ import com.aurora.store.data.work.DownloadWorker
 import com.aurora.store.util.NotificationUtil
 import com.aurora.store.util.PackageUtil
 import com.aurora.store.util.PathUtil
+import com.aurora.store.util.Preferences
+import com.aurora.store.util.Preferences.PREFERENCE_AUTO_DELETE
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -175,45 +179,80 @@ class DownloadHelper @Inject constructor(
     }
 
     /**
-     * Advances a download row through the installer phase so its history reflects whether the
-     * app actually installed, not just that the bytes finished downloading:
-     * - [InstallerEvent.Installing] moves a [DownloadStatus.COMPLETED] row to
-     *   [DownloadStatus.INSTALLING];
-     * - [InstallerEvent.Installed] marks it [DownloadStatus.INSTALLED] (kept so the user can
-     *   still export the APK);
-     * - [InstallerEvent.Failed] reverts an in-progress install to
-     *   [DownloadStatus.AWAITING_INSTALL] so the downloaded files can be re-installed without
-     *   re-downloading.
+     * Apply installer events using optimistic Room compare-and-set transitions.
+     * Session callbacks carry both the version and the original durable download attempt.
+     * Unscoped package-added broadcasts can prove success only by querying Android's actual
+     * installed version; unscoped failures/progress are never allowed to mutate Room.
      */
     private fun observeInstalls() {
         AuroraApp.events.installerEvent.onEach { event ->
-            val existing = getDownload(event.packageName) ?: return@onEach
-            when (event) {
-                is InstallerEvent.Installing -> if (existing.status == DownloadStatus.COMPLETED) {
-                    downloadDao.updateStatus(event.packageName, DownloadStatus.INSTALLING)
+            val current = getDownload(event.packageName) ?: return@onEach
+            val attempt = event.attempt
+            val matchesAttempt = attempt == null || InstallResultPolicy.matches(
+                current.versionCode,
+                current.downloadedAt,
+                attempt.versionCode,
+                attempt.downloadedAt
+            )
+            if (!matchesAttempt) {
+                Log.i(TAG, "Ignoring stale install event for ${event.packageName}")
+                return@onEach
+            }
+
+            val outcome = when (event) {
+                is InstallerEvent.Installing -> InstallResultPolicy.Outcome.PROGRESS
+                is InstallerEvent.PendingUserAction -> {
+                    InstallResultPolicy.Outcome.PENDING_USER_ACTION
                 }
 
-                is InstallerEvent.Installed -> if (existing.status != DownloadStatus.INSTALLED) {
-                    downloadDao.updateStatus(event.packageName, DownloadStatus.INSTALLED)
-                }
+                is InstallerEvent.Installed -> InstallResultPolicy.Outcome.SUCCESS
+                is InstallerEvent.Failed -> InstallResultPolicy.Outcome.FAILURE
+                else -> return@onEach
+            }
+            if (attempt == null) {
+                // ACTION_PACKAGE_ADDED is not an installer receipt. It may describe an unrelated
+                // installation; the OS-installed target version is the only safe evidence.
+                if (outcome != InstallResultPolicy.Outcome.SUCCESS) return@onEach
+                val installedVersion = PackageUtil.getInstalledVersionCode(
+                    context,
+                    event.packageName
+                )
+                if (installedVersion < current.versionCode) return@onEach
+            }
 
-                is InstallerEvent.Failed -> if (
-                    existing.status in setOf(
-                        DownloadStatus.INSTALLING,
-                        DownloadStatus.AWAITING_INSTALL
+            val replacement = InstallResultPolicy.next(
+                current.status,
+                outcome,
+                current.hasDownloadedFiles(context)
+            ) ?: return@onEach
+            val updated = downloadDao.transitionInstallAttempt(
+                current.packageName,
+                current.versionCode,
+                current.downloadedAt,
+                current.status,
+                replacement
+            )
+            if (updated > 0) {
+                Log.i(
+                    TAG,
+                    "Installer result for ${current.packageName}: ${current.status} -> $replacement"
+                )
+                // The system package-added broadcast can beat PackageInstaller.STATUS_SUCCESS.
+                // Whichever callback wins the Room CAS owns the one-time success side effects.
+                if (attempt == null && event is InstallerEvent.Installed) {
+                    InstallerBase.notifyInstallation(
+                        context,
+                        current.displayName,
+                        current.packageName
                     )
-                ) {
-                    downloadDao.updateStatus(
-                        event.packageName,
-                        if (existing.hasDownloadedFiles(context)) {
-                            DownloadStatus.AWAITING_INSTALL
-                        } else {
-                            DownloadStatus.COMPLETED
-                        }
-                    )
+                    if (Preferences.getBoolean(context, PREFERENCE_AUTO_DELETE)) {
+                        PathUtil.getAppDownloadDir(
+                            context,
+                            current.packageName,
+                            current.versionCode
+                        ).deleteRecursively()
+                    }
                 }
-
-                else -> {}
             }
         }.launchIn(AuroraApp.scope)
     }

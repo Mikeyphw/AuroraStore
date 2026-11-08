@@ -41,6 +41,22 @@ interface DownloadDao {
         replacement: DownloadStatus
     ): Int
 
+    /** Only the same persisted generation and expected state may accept an installer callback. */
+    @Query(
+        """
+        UPDATE download SET downloadStatus = :replacement
+        WHERE packageName = :packageName AND versionCode = :versionCode
+          AND downloadedAt = :attemptKey AND downloadStatus = :expected
+        """
+    )
+    suspend fun transitionInstallAttempt(
+        packageName: String,
+        versionCode: Long,
+        attemptKey: Long,
+        expected: DownloadStatus,
+        replacement: DownloadStatus
+    ): Int
+
     /** Cancel only the selected version before asking WorkManager to stop its worker. */
     @Query(
         """

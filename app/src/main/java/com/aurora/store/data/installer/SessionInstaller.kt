@@ -27,10 +27,13 @@ import com.aurora.extensions.isUAndAbove
 import com.aurora.extensions.runOnUiThread
 import com.aurora.store.AuroraApp
 import com.aurora.store.R
+import com.aurora.store.data.event.InstallAttempt
 import com.aurora.store.data.event.InstallerEvent
 import com.aurora.store.data.installer.AppInstaller.Companion.ACTION_INSTALL_STATUS
+import com.aurora.store.data.installer.AppInstaller.Companion.EXTRA_ATTEMPT_KEY
 import com.aurora.store.data.installer.AppInstaller.Companion.EXTRA_DISPLAY_NAME
 import com.aurora.store.data.installer.AppInstaller.Companion.EXTRA_PACKAGE_NAME
+import com.aurora.store.data.installer.AppInstaller.Companion.EXTRA_PARENT_PACKAGE_NAME
 import com.aurora.store.data.installer.AppInstaller.Companion.EXTRA_VERSION_CODE
 import com.aurora.store.data.installer.base.InstallerBase
 import com.aurora.store.data.model.BuildType
@@ -67,16 +70,21 @@ class SessionInstaller @Inject constructor(
         override fun onActiveChanged(sessionId: Int, active: Boolean) {}
 
         override fun onProgressChanged(sessionId: Int, progress: Float) {
-            val packageName = enqueuedSessions
-                .find { set -> set.any { it.sessionId == sessionId } }
-                ?.first()
-                ?.packageName
+            val activeSession = enqueuedSessions
+                .asSequence()
+                .flatMap { it.asSequence() }
+                .firstOrNull { it.sessionId == sessionId }
 
-            if (packageName != null && progress > 0.0) {
+            if (activeSession != null && progress > 0.0) {
                 AuroraApp.events.send(
                     InstallerEvent.Installing(
-                        packageName = packageName,
-                        progress = progress
+                        packageName = activeSession.packageName,
+                        progress = progress,
+                        attempt = InstallAttempt(
+                            activeSession.versionCode,
+                            activeSession.downloadedAt,
+                            sessionId
+                        )
                     )
                 )
             }
@@ -174,7 +182,15 @@ class SessionInstaller @Inject constructor(
                     stagingFailed = true
                     break
                 }
-                stagedSessions.add(SessionInfo(sessionId, lib.packageName, lib.versionCode))
+                stagedSessions.add(
+                    SessionInfo(
+                        sessionId,
+                        lib.packageName,
+                        lib.versionCode,
+                        downloadedAt = download.downloadedAt,
+                        parentPackageName = download.packageName
+                    )
+                )
             }
 
             if (!stagingFailed) {
@@ -187,7 +203,8 @@ class SessionInstaller @Inject constructor(
                             sessionId,
                             download.packageName,
                             download.versionCode,
-                            download.displayName
+                            download.displayName,
+                            download.downloadedAt
                         )
                     )
                 }
@@ -358,6 +375,8 @@ class SessionInstaller @Inject constructor(
             putExtra(EXTRA_SESSION_ID, sessionInfo.sessionId)
             putExtra(EXTRA_PACKAGE_NAME, sessionInfo.packageName)
             putExtra(EXTRA_VERSION_CODE, sessionInfo.versionCode)
+            putExtra(EXTRA_ATTEMPT_KEY, sessionInfo.downloadedAt)
+            putExtra(EXTRA_PARENT_PACKAGE_NAME, sessionInfo.parentPackageName)
             putExtra(EXTRA_DISPLAY_NAME, sessionInfo.displayName)
             addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
         }
