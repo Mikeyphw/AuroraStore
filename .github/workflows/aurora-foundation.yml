@@ -42,6 +42,12 @@ jobs:
         run: python3 -B scripts/ci/check_r2b.py
       - name: Test R2B Room generation CAS with SQLite
         run: python3 -B scripts/ci/test_r2b_sql_cas.py
+      - name: Validate R2C privileged and microG installer contract
+        run: python3 -B scripts/ci/check_r2c.py
+      - name: Validate R2D emulator real installation contract
+        run: python3 -B scripts/ci/check_r2d.py
+      - name: Test R2D fixture and emulator host fail-closed contracts
+        run: python3 -B scripts/ci/test_r2d_host_contract.py
 
   android:
     name: Android vanilla debug, lint and JVM tests

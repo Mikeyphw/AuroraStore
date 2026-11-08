@@ -69,34 +69,37 @@ class ShizukuInstaller @Inject constructor(
 
         /** The session id out of `Success: created install session [1234]`. */
         internal fun parseSessionId(output: String): Int? =
-            Regex("""\[(\d+)]""").find(output)?.groupValues?.get(1)?.toIntOrNull()
+            InstallerBackendPolicy.createdSession(true, output)
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun install(download: Download) {
         super.install(download)
-
         if (isAlreadyQueued(download.packageName)) {
             Log.i(TAG, "${download.packageName} already queued")
-        } else {
-            download.sharedLibs.forEach {
-                // Shared library packages cannot be updated
-                if (!isSharedLibraryInstalled(context, it.packageName, it.versionCode)) {
-                    install(download.packageName, download.versionCode, it.packageName)
-                }
-            }
-            install(download.packageName, download.versionCode)
+            return
         }
+        // Fail the entire request if any prerequisite library cannot be staged.
+        for (library in download.sharedLibs) {
+            if (!isSharedLibraryInstalled(context, library.packageName, library.versionCode) &&
+                !installPackage(download, library.packageName)
+            ) {
+                return
+            }
+        }
+        installPackage(download)
     }
 
-    private fun install(packageName: String, versionCode: Long, sharedLibPkgName: String = "") {
+    private fun installPackage(download: Download, sharedLibPkgName: String = ""): Boolean {
+        val packageName = download.packageName
+        val versionCode = download.versionCode
         val target = sharedLibPkgName.ifBlank { packageName }
         Log.i(TAG, "Received session install request for $target")
 
         val files = getFiles(packageName, versionCode, sharedLibPkgName)
         if (files.isEmpty()) {
-            fail(packageName, context.getString(R.string.installer_status_failure_session))
-            return
+            fail(download, context.getString(R.string.installer_status_failure_session))
+            return false
         }
 
         val created = exec(
@@ -112,20 +115,19 @@ class ShizukuInstaller @Inject constructor(
                 files.sumOf { it.length() }.toString()
             )
         ).getOrElse { error ->
-            fail(packageName, error.localizedMessage, error.stackTraceToString())
-            return
+            fail(download, error.localizedMessage, error.stackTraceToString())
+            return false
         }
 
         val sessionId = parseSessionId(created)
         if (sessionId == null) {
-            fail(packageName, context.getString(R.string.installer_status_failure_session), created)
-            return
+            fail(download, context.getString(R.string.installer_status_failure_session), created)
+            return false
         }
 
         Log.i(TAG, "Writing splits to session $sessionId for $target")
-        files.forEach { file ->
-            // Streamed into stdin, not named as a path: a server started from adb runs as shell
-            // and cannot read Aurora's own data directory.
+        for (file in files) {
+            // Stream through stdin; the Shizuku server cannot access Aurora's private paths.
             val command = listOf(
                 "pm",
                 "install-write",
@@ -135,33 +137,52 @@ class ShizukuInstaller @Inject constructor(
                 file.name,
                 "-"
             )
-            exec(command, input = file).onFailure { error ->
+            val result = exec(command, input = file)
+            val accepted = InstallerBackendPolicy.commandSucceeded(
+                result.isSuccess,
+                result.getOrNull().orEmpty()
+            )
+            if (!accepted) {
                 exec(listOf("pm", "install-abandon", sessionId.toString()))
-                fail(packageName, error.localizedMessage, error.stackTraceToString())
-                return
+                fail(
+                    download,
+                    "Privileged APK stream was not accepted",
+                    result.exceptionOrNull()?.localizedMessage ?: result.getOrNull()
+                )
+                return false
             }
         }
 
         Log.i(TAG, "Committing session $sessionId for $target")
-        exec(listOf("pm", "install-commit", sessionId.toString()))
-            .onSuccess {
-                // Installation is not yet finished if this is a shared library
-                if (packageName == download?.packageName) {
-                    AppInstaller.recordPlayAttributedInstall(context, packageName)
-                    onInstallationSuccess()
-                }
-            }
-            .onFailure { error ->
-                fail(packageName, error.localizedMessage, error.stackTraceToString())
-            }
+        val committed = exec(listOf("pm", "install-commit", sessionId.toString()))
+        if (!InstallerBackendPolicy.commandSucceeded(
+                committed.isSuccess,
+                committed.getOrNull().orEmpty()
+            )
+        ) {
+            exec(listOf("pm", "install-abandon", sessionId.toString()))
+            fail(
+                download,
+                "Package manager did not confirm success",
+                committed.exceptionOrNull()?.localizedMessage ?: committed.getOrNull()
+            )
+            return false
+        }
+        // Libraries are prerequisites, not a terminal installation of the parent app.
+        if (sharedLibPkgName.isBlank()) {
+            AppInstaller.recordPlayAttributedInstall(context, packageName)
+            onInstallationSuccess(download)
+        }
+        return true
     }
 
-    private fun fail(packageName: String, error: String?, extra: String? = null) {
-        removeFromInstallQueue(packageName)
+    private fun fail(download: Download, error: String?, extra: String? = null) {
+        removeFromInstallQueue(download.packageName)
         postError(
-            packageName,
+            download.packageName,
             error ?: context.getString(R.string.installer_status_failure),
-            extra ?: context.getString(R.string.installer_shizuku_unavailable)
+            extra ?: context.getString(R.string.installer_shizuku_unavailable),
+            download
         )
     }
 

@@ -14,12 +14,11 @@ import com.aurora.extensions.TAG
 import com.aurora.store.AuroraApp
 import com.aurora.store.BuildConfig
 import com.aurora.store.R
+import com.aurora.store.data.event.InstallAttempt
 import com.aurora.store.data.event.InstallerEvent
 import com.aurora.store.data.room.download.Download
 import com.aurora.store.util.NotificationUtil
 import com.aurora.store.util.PathUtil
-import com.aurora.store.util.Preferences
-import com.aurora.store.util.Preferences.PREFERENCE_AUTO_DELETE
 import java.io.File
 
 abstract class InstallerBase(private val context: Context) : IInstaller {
@@ -76,23 +75,32 @@ abstract class InstallerBase(private val context: Context) : IInstaller {
         AuroraApp.enqueuedInstalls.remove(packageName)
     }
 
-    fun onInstallationSuccess() {
-        download?.let {
-            notifyInstallation(context, it.displayName, it.packageName)
-            if (Preferences.getBoolean(context, PREFERENCE_AUTO_DELETE)) {
-                PathUtil.getAppDownloadDir(context, it.packageName, it.versionCode)
-                    .deleteRecursively()
-            }
+    /** A backend receipt is only a candidate; Room CAS authorizes final side effects. */
+    fun onInstallationSuccess(accepted: Download? = download) {
+        accepted?.let {
+            AuroraApp.events.send(
+                InstallerEvent.Installed(
+                    it.packageName,
+                    InstallAttempt(it.versionCode, it.downloadedAt)
+                )
+            )
         }
     }
 
-    open fun postError(packageName: String, error: String?, extra: String?) {
+    open fun postError(
+        packageName: String,
+        error: String?,
+        extra: String?,
+        failed: Download? = download
+    ) {
         Log.e(TAG, "Installer Error :$error")
+        val identified = failed?.takeIf { it.packageName == packageName }
         AuroraApp.events.send(
             InstallerEvent.Failed(
                 packageName = packageName,
                 error = error,
-                extra = extra
+                extra = extra,
+                attempt = identified?.let { InstallAttempt(it.versionCode, it.downloadedAt) }
             )
         )
     }
@@ -107,7 +115,7 @@ abstract class InstallerBase(private val context: Context) : IInstaller {
         } else {
             PathUtil.getAppDownloadDir(context, packageName, versionCode)
         }
-        return downloadDir.listFiles()!!.filter { it.path.endsWith(".apk") }
+        return downloadDir.listFiles().orEmpty().filter { it.path.endsWith(".apk") && it.isFile }
     }
 
     fun getUri(file: File): Uri = FileProvider.getUriForFile(

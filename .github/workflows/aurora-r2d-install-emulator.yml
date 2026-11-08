@@ -1,0 +1,121 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: Aurora R2D — API 36 Real APK Install and Restart
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/aurora-r2d-install-emulator.yml'
+      - 'scripts/ci/r2d_*'
+      - 'scripts/ci/fixture_r2d/**'
+      - 'scripts/ci/check_r2c.py'
+      - 'scripts/ci/check_r2d.py'
+      - 'app/src/androidTest/java/com/aurora/store/data/room/download/InstallLifecycleRestartDeviceTest.kt'
+      - 'app/src/main/java/com/aurora/store/data/installer/**'
+      - 'app/src/main/java/com/aurora/store/data/helper/DownloadHelper.kt'
+      - 'app/src/main/java/com/aurora/store/data/room/download/**'
+  pull_request:
+    paths:
+      - '.github/workflows/aurora-r2d-install-emulator.yml'
+      - 'scripts/ci/r2d_*'
+      - 'scripts/ci/fixture_r2d/**'
+      - 'scripts/ci/check_r2c.py'
+      - 'scripts/ci/check_r2d.py'
+      - 'app/src/androidTest/java/com/aurora/store/data/room/download/InstallLifecycleRestartDeviceTest.kt'
+      - 'app/src/main/java/com/aurora/store/data/installer/**'
+      - 'app/src/main/java/com/aurora/store/data/helper/DownloadHelper.kt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurora-r2d-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    name: R2C and R2D fail-closed contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - name: Validate pinned source and offline installer contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -B scripts/ci/check_r2c.py
+          python3 -B scripts/ci/check_r2d.py
+
+  emulator:
+    name: R2D real APK session, force-stop and Room recovery on API 36
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - name: Verify immutable source identity and init receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p "$RUNNER_TEMP/aurora-r2d-emulator"
+          echo '{"overall":"NOT_RUN","real_android_apk_installed":false,"release_qualified":false}'             > "$RUNNER_TEMP/aurora-r2d-emulator/R2D_INSTALL_LIFECYCLE_RECEIPT.json"
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+      - name: Install compilation platform and API 36 image
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install 'platforms;android-37.0'
+          for attempt in 1 2 3; do
+            if sdkmanager --install 'system-images;android-36;google_apis;x86_64'; then break; fi
+            if [[ "$attempt" -eq 3 ]]; then exit 1; fi
+            sleep 10
+          done
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
+      - name: Compile debug application and instrumentation only on GitHub
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon --max-workers=2 :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest
+      - name: Build isolated signed fixture APK (ephemeral test key)
+        shell: bash
+        run: bash scripts/ci/r2d_build_fixture.sh
+      - name: Require KVM-enabled runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm || exit 1
+          if [[ ! -w /dev/kvm ]]; then sudo chmod a+rw /dev/kvm; fi
+          test -r /dev/kvm && test -w /dev/kvm
+      - name: Exercise real OS APK install and process-death recovery
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 2048M
+          disk-size: 3072M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: bash scripts/ci/r2d_emulator_ci.sh
+      - name: Upload fail-closed evidence and instrumentation logs
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: aurora-r2d-api36-real-install-evidence
+          path: ${{ runner.temp }}/aurora-r2d-emulator/
+          if-no-files-found: warn
+          retention-days: 14

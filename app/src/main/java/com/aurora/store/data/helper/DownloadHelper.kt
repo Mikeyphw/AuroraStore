@@ -213,10 +213,13 @@ class DownloadHelper @Inject constructor(
                 is InstallerEvent.Failed -> InstallResultPolicy.Outcome.FAILURE
                 else -> return@onEach
             }
-            if (attempt == null) {
-                // ACTION_PACKAGE_ADDED is not an installer receipt. It may describe an unrelated
-                // installation; the OS-installed target version is the only safe evidence.
-                if (outcome != InstallResultPolicy.Outcome.SUCCESS) return@onEach
+            if (attempt == null && outcome != InstallResultPolicy.Outcome.SUCCESS) {
+                // Unattributed progress/failure must never update a persisted install attempt.
+                return@onEach
+            }
+            if (outcome == InstallResultPolicy.Outcome.SUCCESS) {
+                // A privileged backend's success text is not proof of installation. Android's
+                // installed version is the authority for all backends, not just package broadcasts.
                 val installedVersion = PackageUtil.getInstalledVersionCode(
                     context,
                     event.packageName
@@ -243,7 +246,7 @@ class DownloadHelper @Inject constructor(
                 )
                 // The system package-added broadcast can beat PackageInstaller.STATUS_SUCCESS.
                 // Whichever callback wins the Room CAS owns the one-time success side effects.
-                if (attempt == null && event is InstallerEvent.Installed) {
+                if (event is InstallerEvent.Installed) {
                     InstallerBase.notifyInstallation(
                         context,
                         current.displayName,

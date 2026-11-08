@@ -101,7 +101,7 @@ class AppInstaller @Inject constructor(
             } else {
                 null
             },
-            if (hasMicroGCompanion(context)) MicroGInstaller.installerInfo else null
+            if (MicroGInstaller.isAvailable(context)) MicroGInstaller.installerInfo else null
         )
 
         /**
@@ -315,7 +315,7 @@ class AppInstaller @Inject constructor(
                 defaultInstaller
             }
 
-            Installer.MICROG -> if (hasMicroGCompanion(context)) {
+            Installer.MICROG -> if (MicroGInstaller.isAvailable(context)) {
                 microGInstaller
             } else {
                 defaultInstaller

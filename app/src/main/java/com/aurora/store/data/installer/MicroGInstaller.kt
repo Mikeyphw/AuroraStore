@@ -44,6 +44,15 @@ class MicroGInstaller @Inject constructor(
                 setType("application/vnd.android.package-archive")
                 putExtra(Intent.EXTRA_STREAM, uris)
             }
+
+        /** A companion package alone does not prove that its install activity is exported. */
+        fun isAvailable(context: Context): Boolean =
+            hasMicroGCompanion(context) && runCatching {
+                context.packageManager.resolveActivity(
+                    buildMicroGInstallIntent(arrayListOf()),
+                    0
+                ) != null
+            }.getOrDefault(false)
     }
 
     override fun install(download: Download) {
@@ -54,13 +63,25 @@ class MicroGInstaller @Inject constructor(
                 Log.i(TAG, "${download.packageName} already queued")
             }
 
-            hasMicroGCompanion(context) -> {
+            isAvailable(context) -> {
                 Log.i(TAG, "Received microG install request for ${download.packageName}")
 
                 val files = getFiles(download.packageName, download.versionCode)
-                MicroGInstallerActivity.launch(context, download.packageName, files)
+                if (files.isEmpty()) {
+                    postError(download.packageName, "No APK files for microG", null, download)
+                    return
+                }
+                runCatching { MicroGInstallerActivity.launch(context, download, files) }
+                    .onFailure { error ->
+                        postError(
+                            download.packageName,
+                            error.localizedMessage,
+                            error.stackTraceToString(),
+                            download
+                        )
+                    }
 
-                Log.i(TAG, "Sent install request to microG installer for ${download.packageName}")
+                Log.i(TAG, "Dispatched microG install request for ${download.packageName}")
             }
 
             else -> {
