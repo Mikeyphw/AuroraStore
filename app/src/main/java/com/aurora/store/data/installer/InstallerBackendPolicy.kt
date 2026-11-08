@@ -23,5 +23,5 @@ internal object InstallerBackendPolicy {
     }
 
     fun isInstalled(installedVersion: Long, expectedVersion: Long): Boolean =
-        expectedVersion > 0L && installedVersion >= expectedVersion
+        expectedVersion > 0L && installedVersion == expectedVersion
 }

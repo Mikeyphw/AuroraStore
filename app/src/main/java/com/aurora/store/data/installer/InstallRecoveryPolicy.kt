@@ -21,7 +21,7 @@ internal object InstallRecoveryPolicy {
 
         return when {
             // The OS is the authority, not an old Room status or a missed callback.
-            targetVersion > 0 && installedVersion >= targetVersion -> DownloadStatus.INSTALLED
+            targetVersion > 0 && installedVersion == targetVersion -> DownloadStatus.INSTALLED
             // Never abandon an outstanding Android confirmation just because Aurora restarted.
             hasLiveSession -> DownloadStatus.AWAITING_INSTALL
             // A vanished session can be retried using the already downloaded APKs.

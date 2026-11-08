@@ -43,7 +43,7 @@ cases = [
     ("Room CAS and OS package state are required for first-success side effects",
      "app/src/main/java/com/aurora/store/data/helper/DownloadHelper.kt",
      ("PackageUtil.getInstalledVersionCode(", "if (event is InstallerEvent.Installed)",
-      "transitionInstallAttempt(", "if (installedVersion < current.versionCode)")),
+      "transitionInstallAttempt(", "if (installedVersion != current.versionCode)")),
     ("Kotlin unit tests cover success, failure, session and version policies",
      "app/src/test/java/com/aurora/store/data/installer/InstallerBackendPolicyTest.kt",
      ("fun acceptsValidSession()", "fun rejectsNonSuccessResponseWithZeroExit()",

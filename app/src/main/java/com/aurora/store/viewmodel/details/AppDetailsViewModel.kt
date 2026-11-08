@@ -37,6 +37,7 @@ import com.aurora.store.data.event.InstallerEvent
 import com.aurora.store.data.helper.DownloadHelper
 import com.aurora.store.data.model.AppState
 import com.aurora.store.data.model.DownloadStatus
+import com.aurora.store.data.model.HistoricalVersionPolicy
 import com.aurora.store.data.model.PlexusReport
 import com.aurora.store.data.model.Report
 import com.aurora.store.data.model.Scores
@@ -57,6 +58,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -270,7 +272,7 @@ class AppDetailsViewModel @Inject constructor(
             fetchDataSafetyReport(packageName)
             fetchCategoryIcon(app.value!!.categoryStreamUrl.orEmpty())
             fetchSuggestions()
-            fetchExodusPrivacyReport(packageName)
+            lookupVersions()
             if (app.value!!.requiresGMS()) fetchPlexusReport(packageName)
         }
     }
@@ -560,15 +562,6 @@ class AppDetailsViewModel @Inject constructor(
         }
     }
 
-    private fun fetchExodusPrivacyReport(packageName: String) {
-        viewModelScope.launch {
-            val reports = exodusRepository.fetchReports(packageName)
-                .sortedByDescending { it.versionCode.toLongOrNull() ?: -1L }
-            _exodusReport.value = reports.firstOrNull()
-            _exodusReports.value = reports
-        }
-    }
-
     /**
      * Loads the list of known versions from Exodus for the version picker on the manual download
      * screen. Reuses the reports already fetched for the privacy report when available, and only
@@ -578,11 +571,26 @@ class AppDetailsViewModel @Inject constructor(
         val packageName = app.value?.packageName ?: return
         if (_exodusReports.value.isNotEmpty() || _versionLookupInProgress.value) return
 
+        // Reserve the request synchronously so two callers cannot launch duplicate fetches.
+        _versionLookupInProgress.value = true
         viewModelScope.launch {
-            _versionLookupInProgress.value = true
             try {
-                _exodusReports.value = exodusRepository.fetchReports(packageName)
-                    .sortedByDescending { it.versionCode.toLongOrNull() ?: -1L }
+                val reports = exodusRepository.fetchReports(packageName)
+                    .sortedByDescending {
+                        HistoricalVersionPolicy.parseVersionCode(it.versionCode) ?: -1L
+                    }
+                if (app.value?.packageName == packageName) {
+                    _exodusReport.value = reports.firstOrNull()
+                    _exodusReports.value = reports
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.w(TAG, "Version history lookup failed for $packageName", error)
+                if (app.value?.packageName == packageName) {
+                    _exodusReport.value = Report()
+                    _exodusReports.value = emptyList()
+                }
             } finally {
                 _versionLookupInProgress.value = false
             }

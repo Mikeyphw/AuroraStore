@@ -55,6 +55,6 @@ class InstallerBackendPolicyTest {
         assertFalse(InstallerBackendPolicy.isInstalled(0L, 42L))
         assertFalse(InstallerBackendPolicy.isInstalled(41L, 42L))
         assertTrue(InstallerBackendPolicy.isInstalled(42L, 42L))
-        assertTrue(InstallerBackendPolicy.isInstalled(43L, 42L))
+        assertFalse(InstallerBackendPolicy.isInstalled(43L, 42L))
     }
 }

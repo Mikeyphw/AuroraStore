@@ -23,8 +23,8 @@ class InstallRecoveryPolicyTest {
     }
 
     @Test
-    fun `newer installed version is installed`() {
-        assertEquals(DownloadStatus.INSTALLED, recover(installed = 57))
+    fun `newer installed version does not prove historical attempt succeeded`() {
+        assertEquals(DownloadStatus.AWAITING_INSTALL, recover(installed = 57))
     }
 
     @Test

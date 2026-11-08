@@ -224,7 +224,7 @@ class DownloadHelper @Inject constructor(
                     context,
                     event.packageName
                 )
-                if (installedVersion < current.versionCode) return@onEach
+                if (installedVersion != current.versionCode) return@onEach
             }
 
             val replacement = InstallResultPolicy.next(

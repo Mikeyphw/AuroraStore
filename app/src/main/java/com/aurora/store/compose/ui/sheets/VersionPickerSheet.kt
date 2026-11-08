@@ -28,6 +28,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aurora.store.R
+import com.aurora.store.data.model.HistoricalVersionPolicy
 import com.aurora.store.data.model.Report
 import com.aurora.store.data.model.formatExodusDate
 
@@ -50,9 +52,18 @@ import com.aurora.store.data.model.formatExodusDate
 fun VersionPickerSheet(
     reports: List<Report>,
     loading: Boolean,
+    installedVersionCode: Long = 0L,
     onSelect: (Report) -> Unit,
     onDismiss: () -> Unit
 ) {
+    // Exodus is history metadata, not a guarantee that Play still serves an APK.
+    val availableReports = remember(reports) {
+        reports.mapNotNull { report ->
+            HistoricalVersionPolicy.parseVersionCode(report.versionCode)?.let { it to report }
+        }.distinctBy { it.first }
+            .sortedByDescending { it.first }
+            .map { it.second }
+    }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
@@ -73,6 +84,13 @@ fun VersionPickerSheet(
             )
 
             Spacer(Modifier.height(dimensionResource(R.dimen.spacing_xsmall)))
+            Text(
+                text = stringResource(R.string.r3_history_source_warning),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = dimensionResource(R.dimen.spacing_medium))
+            )
+            Spacer(Modifier.height(dimensionResource(R.dimen.spacing_xsmall)))
 
             when {
                 loading -> Box(
@@ -84,7 +102,7 @@ fun VersionPickerSheet(
                     ContainedLoadingIndicator()
                 }
 
-                reports.isEmpty() -> Text(
+                availableReports.isEmpty() -> Text(
                     text = stringResource(R.string.manual_download_no_versions),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -103,11 +121,15 @@ fun VersionPickerSheet(
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 ) {
                     itemsIndexed(
-                        items = reports,
-                        key = { _, report -> "report-${report.id}" }
+                        items = availableReports,
+                        key = { _, report -> "version-${report.versionCode.toLong()}" }
                     ) { index, report ->
                         if (index > 0) HorizontalDivider()
-                        VersionRow(report = report, onClick = { onSelect(report) })
+                        VersionRow(
+                            report = report,
+                            installedVersionCode = installedVersionCode,
+                            onClick = { onSelect(report) }
+                        )
                     }
                 }
             }
@@ -144,7 +166,7 @@ private fun AvailabilityWarning(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun VersionRow(report: Report, onClick: () -> Unit) {
+private fun VersionRow(report: Report, installedVersionCode: Long, onClick: () -> Unit) {
     val title = if (report.version.isBlank()) {
         report.versionCode
     } else {
@@ -168,6 +190,13 @@ private fun VersionRow(report: Report, onClick: () -> Unit) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+        if (HistoricalVersionPolicy.isDowngrade(report.versionCode.toLong(), installedVersionCode)) {
+            Text(
+                text = stringResource(R.string.r3_history_older),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
         if (date.isNotBlank()) {
             Text(
                 text = formatExodusDate(date),

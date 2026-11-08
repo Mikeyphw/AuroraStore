@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ContainedLoadingIndicator
@@ -38,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
@@ -64,7 +66,9 @@ import com.aurora.store.compose.preview.AppPreviewProvider
 import com.aurora.store.compose.preview.ThemePreviewProvider
 import com.aurora.store.compose.ui.sheets.VersionPickerSheet
 import com.aurora.store.data.model.AppState
+import com.aurora.store.data.model.HistoricalVersionPolicy
 import com.aurora.store.data.model.Report
+import com.aurora.store.util.PackageUtil
 import com.aurora.store.viewmodel.details.AppDetailsViewModel
 import kotlinx.coroutines.launch
 
@@ -75,32 +79,42 @@ fun ManualDownloadScreen(
     viewModel: AppDetailsViewModel = hiltViewModel(key = packageName),
     windowAdaptiveInfo: WindowAdaptiveInfo = currentWindowAdaptiveInfoV2()
 ) {
+    val context = LocalContext.current
     val app by viewModel.app.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val reports by viewModel.exodusReports.collectAsStateWithLifecycle()
     val lookupInProgress by viewModel.versionLookupInProgress.collectAsStateWithLifecycle()
-    val topAppBarTitle = when {
-        windowAdaptiveInfo.isWindowCompact -> app!!.displayName
-        else -> stringResource(R.string.title_manual_download)
+    val topAppBarTitle = if (windowAdaptiveInfo.isWindowCompact) {
+        app?.displayName ?: stringResource(R.string.title_manual_download)
+    } else {
+        stringResource(R.string.title_manual_download)
     }
 
     ScreenContent(
         state = state,
         topAppBarTitle = topAppBarTitle,
-        currentVersionCode = app!!.versionCode,
+        currentVersionCode = app?.versionCode ?: 0L,
+        metadataReady = app != null,
+        installedVersionCode = PackageUtil.getInstalledVersionCode(context, packageName),
+        installedVersionProvider = { PackageUtil.getInstalledVersionCode(context, packageName) },
         reports = reports,
         lookupInProgress = lookupInProgress,
         onLookup = viewModel::lookupVersions,
         onRequestInstall = { versionCode ->
-            val requestedApp = app!!.copy(
-                versionCode = versionCode,
-                dependencies = app!!.dependencies.copy(
-                    dependentLibraries = app!!.dependencies.dependentLibraries.map { lib ->
-                        lib.copy(versionCode = versionCode)
-                    }
-                )
-            )
-            onRequestInstall(requestedApp)
+            app?.let { listedApp ->
+                // Historical files and static-library versions must not inherit metadata
+                // belonging to the current Play listing.
+                val requestedApp = if (versionCode == listedApp.versionCode) {
+                    listedApp
+                } else {
+                    listedApp.copy(
+                        versionCode = versionCode,
+                        fileList = emptyList(),
+                        dependencies = listedApp.dependencies.copy(dependentLibraries = emptyList())
+                    )
+                }
+                onRequestInstall(requestedApp)
+            }
         }
     )
 }
@@ -110,6 +124,9 @@ private fun ScreenContent(
     state: AppState = AppState.Unavailable,
     topAppBarTitle: String? = null,
     currentVersionCode: Long = 0L,
+    metadataReady: Boolean = true,
+    installedVersionCode: Long = 0L,
+    installedVersionProvider: () -> Long = { installedVersionCode },
     reports: List<Report> = emptyList(),
     lookupInProgress: Boolean = false,
     onLookup: () -> Unit = {},
@@ -122,21 +139,62 @@ private fun ScreenContent(
     val errorMessage = stringResource(R.string.manual_download_version_error)
 
     val focusManager = LocalFocusManager.current
-    var versionCode by remember {
-        val initText = currentVersionCode.toString()
+    var versionCode by remember(currentVersionCode) {
+        val initText = currentVersionCode.takeIf { it > 0L }?.toString().orEmpty()
         mutableStateOf(TextFieldValue(text = initText, selection = TextRange(initText.length)))
     }
 
     var showVersionPicker by remember { mutableStateOf(false) }
+    var pendingDowngrade by remember { mutableStateOf<Pair<Long, Long>?>(null) }
+    val selectedVersion = HistoricalVersionPolicy.parseVersionCode(versionCode.text)
+
+    pendingDowngrade?.let { (requested, installedAtConfirmation) ->
+        AlertDialog(
+            onDismissRequest = { pendingDowngrade = null },
+            title = { Text(stringResource(R.string.r3_downgrade_title)) },
+            text = {
+                Text(
+                    stringResource(R.string.r3_downgrade_warning, installedAtConfirmation, requested)
+                )
+            },
+            confirmButton = {
+                Button(
+                    enabled = metadataReady && !state.inProgress(),
+                    onClick = {
+                        pendingDowngrade = null
+                        if (HistoricalVersionPolicy.mayConfirmDowngrade(
+                                requested,
+                                installedAtConfirmation,
+                                installedVersionProvider(),
+                                versionCode.text
+                            )
+                        ) {
+                            onRequestInstall(requested)
+                            focusManager.clearFocus()
+                        }
+                    }
+                ) {
+                    Text(stringResource(R.string.r3_downgrade_try))
+                }
+            },
+            dismissButton = {
+                FilledTonalButton(onClick = { pendingDowngrade = null }) {
+                    Text(stringResource(R.string.action_close))
+                }
+            }
+        )
+    }
 
     if (showVersionPicker) {
         VersionPickerSheet(
             reports = reports,
             loading = lookupInProgress,
+            installedVersionCode = installedVersionCode,
             onSelect = { report ->
-                val code = report.versionCode
-                versionCode = TextFieldValue(text = code, selection = TextRange(code.length))
-                showVersionPicker = false
+                HistoricalVersionPolicy.canonicalVersionCode(report.versionCode)?.let { code ->
+                    versionCode = TextFieldValue(text = code, selection = TextRange(code.length))
+                    showVersionPicker = false
+                }
             },
             onDismiss = { showVersionPicker = false }
         )
@@ -171,7 +229,7 @@ private fun ScreenContent(
                 )
                 OutlinedTextField(
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !state.inProgress(),
+                    enabled = metadataReady && !state.inProgress(),
                     value = versionCode,
                     onValueChange = {
                         val code = it.text.filterNot(Char::isWhitespace)
@@ -199,9 +257,17 @@ private fun ScreenContent(
                     }
                 )
 
+                if (versionCode.text.isNotEmpty() && selectedVersion == null) {
+                    Text(
+                        text = stringResource(R.string.r3_invalid_version_code),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
                 Button(
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !state.inProgress(),
+                    enabled = metadataReady && !state.inProgress(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -241,10 +307,17 @@ private fun ScreenContent(
 
                 Button(
                     modifier = Modifier.weight(1F),
-                    enabled = !state.inProgress() && versionCode.text.isNotBlank(),
+                    enabled = metadataReady && !state.inProgress() && selectedVersion != null,
                     onClick = {
-                        onRequestInstall(versionCode.text.toLong())
-                        focusManager.clearFocus()
+                        selectedVersion?.let { code ->
+                            val installedNow = installedVersionProvider()
+                            if (HistoricalVersionPolicy.isDowngrade(code, installedNow)) {
+                                pendingDowngrade = code to installedNow
+                            } else {
+                                onRequestInstall(code)
+                                focusManager.clearFocus()
+                            }
+                        }
                     }
                 ) {
                     Text(
