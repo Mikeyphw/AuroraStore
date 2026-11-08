@@ -41,7 +41,11 @@ class ApkSetPolicyTest {
         rejects()
         rejects(apk(name = "config.apk", base = false))
         rejects(apk(), apk(name = "second.apk"))
-        rejects(apk(), apk(name = "config.apk", base = false), apk(name = "config.apk", base = false))
+        rejects(
+            apk(),
+            apk(name = "config.apk", base = false),
+            apk(name = "config.apk", base = false)
+        )
     }
 
     @Test
