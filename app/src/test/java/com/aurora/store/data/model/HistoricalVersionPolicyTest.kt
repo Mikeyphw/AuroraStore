@@ -20,7 +20,17 @@ class HistoricalVersionPolicyTest {
 
     @Test
     fun versionHistoryIsNumericDeduplicatedAndSorted() {
-        val input = listOf("7", "20", "0007", "-8", "19", "20", "0", "broken", "999999999999999999999")
+        val input = listOf(
+            "7",
+            "20",
+            "0007",
+            "-8",
+            "19",
+            "20",
+            "0",
+            "broken",
+            "999999999999999999999"
+        )
         assertThat(HistoricalVersionPolicy.knownVersions(input))
             .containsExactly(20L, 19L, 7L).inOrder()
     }
