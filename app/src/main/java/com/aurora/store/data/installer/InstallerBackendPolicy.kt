@@ -13,10 +13,13 @@ internal object InstallerBackendPolicy {
         return sessionPattern.find(output)?.groupValues?.get(1)?.toIntOrNull()
     }
 
-    fun commandSucceeded(exitOk: Boolean, output: String): Boolean {
-        return exitOk &&
-            successPattern.containsMatchIn(output) &&
-            !output.contains("Failure", ignoreCase = true)
+    fun commandSucceeded(exitOk: Boolean, output: String): Boolean = exitOk && validReceipt(output)
+
+    private fun validReceipt(output: String): Boolean {
+        if (output.contains("Failure", ignoreCase = true)) {
+            return false
+        }
+        return successPattern.containsMatchIn(output)
     }
 
     fun isInstalled(installedVersion: Long, expectedVersion: Long): Boolean =
