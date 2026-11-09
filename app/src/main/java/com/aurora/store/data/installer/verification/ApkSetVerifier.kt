@@ -266,8 +266,8 @@ object ApkSetVerifier {
                     (
                         info != null &&
                             signingDigests(info).let {
-                            it.isNotEmpty() && it != signed
-                        }
+                                it.isNotEmpty() && it != signed
+                            }
                         )
                 ) {
                     throw ApkVerificationException("APK signature mismatch: ${entry.metadata.name}")
