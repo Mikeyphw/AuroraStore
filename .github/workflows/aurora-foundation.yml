@@ -58,6 +58,10 @@ jobs:
         run: python3 -B scripts/ci/check_r3c.py
       - name: Validate R3C-02 picker and manual selection integration
         run: python3 -B scripts/ci/check_r3c02.py
+      - name: Validate R3C-03 exact-version evidence reducer source contract
+        run: python3 -B scripts/ci/check_r3c03.py
+      - name: Negative regressions for R3C-03 fail-closed proof transitions
+        run: python3 -B scripts/ci/test_r3c03_contract.py
 
   kotlin-format:
     name: Kotlin formatting — every app source set
