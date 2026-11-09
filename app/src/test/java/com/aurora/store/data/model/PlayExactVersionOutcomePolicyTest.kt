@@ -60,7 +60,9 @@ class PlayExactVersionOutcomePolicyTest {
     @Test
     fun timeoutNeverProvesUnavailable() {
         val result = PlayExactVersionOutcomePolicy.reduce(
-            key, null, Event.Failed(key, Failure.NETWORK_TIMEOUT)
+            key,
+            null,
+            Event.Failed(key, Failure.NETWORK_TIMEOUT)
         )
         assertThat(result?.state).isEqualTo(State.NETWORK_OR_AUTH_FAILURE)
         assertThat(result?.unavailableVersion).isNull()
@@ -78,10 +80,14 @@ class PlayExactVersionOutcomePolicyTest {
     @Test
     fun accountRequiredIsDistinctFromAccessDenied() {
         val required = PlayExactVersionOutcomePolicy.reduce(
-            key, null, Event.Failed(key, Failure.ACCOUNT_REQUIRED)
+            key,
+            null,
+            Event.Failed(key, Failure.ACCOUNT_REQUIRED)
         )
         val denied = PlayExactVersionOutcomePolicy.reduce(
-            key, null, Event.Failed(key, Failure.ACCESS_DENIED)
+            key,
+            null,
+            Event.Failed(key, Failure.ACCESS_DENIED)
         )
         assertThat(required?.state).isEqualTo(State.REQUIRES_ACCOUNT)
         assertThat(denied?.state).isEqualTo(State.ACCESS_DENIED)
@@ -90,7 +96,9 @@ class PlayExactVersionOutcomePolicyTest {
     @Test
     fun ambiguousPlayRejectionIsNotUnavailable() {
         val result = PlayExactVersionOutcomePolicy.reduce(
-            key, null, Event.Failed(key, Failure.AMBIGUOUS_PLAY_REJECTION)
+            key,
+            null,
+            Event.Failed(key, Failure.AMBIGUOUS_PLAY_REJECTION)
         )
         assertThat(result?.state).isEqualTo(State.DELIVERY_REJECTED_NOT_PROVEN_UNAVAILABLE)
     }
@@ -98,13 +106,21 @@ class PlayExactVersionOutcomePolicyTest {
     @Test
     fun onlyExactVersionRefusalCreatesUnavailableEvidence() {
         val wrong = PlayExactVersionOutcomePolicy.reduce(
-            key, null, Event.ExactVersionRefused(
-                key, 41L, UnavailabilityProof.EXPLICIT_EXACT_VERSION_DELIVERY_REFUSAL
+            key,
+            null,
+            Event.ExactVersionRefused(
+                key,
+                41L,
+                UnavailabilityProof.EXPLICIT_EXACT_VERSION_DELIVERY_REFUSAL
             )
         )
         val exact = PlayExactVersionOutcomePolicy.reduce(
-            key, null, Event.ExactVersionRefused(
-                key, 42L, UnavailabilityProof.EXPLICIT_EXACT_VERSION_DELIVERY_REFUSAL
+            key,
+            null,
+            Event.ExactVersionRefused(
+                key,
+                42L,
+                UnavailabilityProof.EXPLICIT_EXACT_VERSION_DELIVERY_REFUSAL
             )
         )
         assertThat(wrong).isNull()
@@ -147,7 +163,11 @@ class PlayExactVersionOutcomePolicyTest {
     @Test
     fun downloadedBytesStillAreNotVerified() {
         val urls = PlayExactVersionOutcomePolicy.reduce(key, null, Event.UrlsResolved(key, 42, 2))
-        val bytes = PlayExactVersionOutcomePolicy.reduce(key, urls, Event.BytesDownloaded(key, 42, 2))
+        val bytes = PlayExactVersionOutcomePolicy.reduce(
+            key,
+            urls,
+            Event.BytesDownloaded(key, 42, 2)
+        )
         assertThat(bytes?.state).isEqualTo(State.BYTES_DOWNLOADED_NOT_VERIFIED)
         assertThat(bytes?.verifiedApkVersion).isNull()
     }
@@ -155,7 +175,11 @@ class PlayExactVersionOutcomePolicyTest {
     @Test
     fun verificationCannotSkipDownloadOrUseOtherVersion() {
         val urls = PlayExactVersionOutcomePolicy.reduce(key, null, Event.UrlsResolved(key, 42, 2))
-        val bytes = PlayExactVersionOutcomePolicy.reduce(key, urls, Event.BytesDownloaded(key, 42, 2))
+        val bytes = PlayExactVersionOutcomePolicy.reduce(
+            key,
+            urls,
+            Event.BytesDownloaded(key, 42, 2)
+        )
         assertThat(
             PlayExactVersionOutcomePolicy.reduce(key, null, Event.R3bVerifiedSet(key, 42, 2))
         ).isNull()
@@ -170,9 +194,15 @@ class PlayExactVersionOutcomePolicyTest {
     @Test
     fun verifiedSetIsOnlyReachedAfterExactSequence() {
         val urls = PlayExactVersionOutcomePolicy.reduce(key, null, Event.UrlsResolved(key, 42, 2))
-        val bytes = PlayExactVersionOutcomePolicy.reduce(key, urls, Event.BytesDownloaded(key, 42, 2))
+        val bytes = PlayExactVersionOutcomePolicy.reduce(
+            key,
+            urls,
+            Event.BytesDownloaded(key, 42, 2)
+        )
         val verified = PlayExactVersionOutcomePolicy.reduce(
-            key, bytes, Event.R3bVerifiedSet(key, 42, 2)
+            key,
+            bytes,
+            Event.R3bVerifiedSet(key, 42, 2)
         )
         assertThat(verified?.state).isEqualTo(State.VERIFIED_SET)
         assertThat(verified?.verifiedApkVersion).isEqualTo(42L)
@@ -183,9 +213,15 @@ class PlayExactVersionOutcomePolicyTest {
         val event = Event.VerifiedManifestSdkIncompatible(key, 42)
         assertThat(PlayExactVersionOutcomePolicy.reduce(key, null, event)).isNull()
         val urls = PlayExactVersionOutcomePolicy.reduce(key, null, Event.UrlsResolved(key, 42, 1))
-        val bytes = PlayExactVersionOutcomePolicy.reduce(key, urls, Event.BytesDownloaded(key, 42, 1))
+        val bytes = PlayExactVersionOutcomePolicy.reduce(
+            key,
+            urls,
+            Event.BytesDownloaded(key, 42, 1)
+        )
         val verified = PlayExactVersionOutcomePolicy.reduce(
-            key, bytes, Event.R3bVerifiedSet(key, 42, 1)
+            key,
+            bytes,
+            Event.R3bVerifiedSet(key, 42, 1)
         )
         assertThat(PlayExactVersionOutcomePolicy.reduce(key, verified, event)?.state)
             .isEqualTo(State.SDK_INCOMPATIBLE)
@@ -195,7 +231,9 @@ class PlayExactVersionOutcomePolicyTest {
     fun abiFailureNeedsVerifiedIdentity() {
         assertThat(
             PlayExactVersionOutcomePolicy.reduce(
-                key, null, Event.VerifiedSplitOrAbiIncompatible(key, 42)
+                key,
+                null,
+                Event.VerifiedSplitOrAbiIncompatible(key, 42)
             )
         ).isNull()
     }
@@ -210,9 +248,15 @@ class PlayExactVersionOutcomePolicyTest {
     @Test
     fun refusalCannotOverrideVerifiedSet() {
         val urls = PlayExactVersionOutcomePolicy.reduce(key, null, Event.UrlsResolved(key, 42, 1))
-        val bytes = PlayExactVersionOutcomePolicy.reduce(key, urls, Event.BytesDownloaded(key, 42, 1))
+        val bytes = PlayExactVersionOutcomePolicy.reduce(
+            key,
+            urls,
+            Event.BytesDownloaded(key, 42, 1)
+        )
         val verified = PlayExactVersionOutcomePolicy.reduce(
-            key, bytes, Event.R3bVerifiedSet(key, 42, 1)
+            key,
+            bytes,
+            Event.R3bVerifiedSet(key, 42, 1)
         )
         assertThat(
             PlayExactVersionOutcomePolicy.reduce(
