@@ -67,6 +67,11 @@ SCHEMA16='app/schemas/com.aurora.store.data.room.AuroraDatabase/16.json'
   exit 1
 }
 python3 -B scripts/ci/test_r3c03_c03_schema.py
+# Fail if hosted Room KSP regenerated a schema different from the tracked export.
+git diff --exit-code -- "$SCHEMA16" || {
+  echo 'R3C03_C03_SCHEMA_DRIFT: checked-in v16 schema differs from hosted KSP' >&2
+  exit 1
+}
 cp -- "$SCHEMA16" "$OUT/HOST_GENERATED_R3C03_SCHEMA_16.json"
 python3 - "$OUT/C03_MIGRATION_RECEIPT.json" "$SCHEMA16" <<'PYR3C03C03'
 import hashlib, json, os, sys

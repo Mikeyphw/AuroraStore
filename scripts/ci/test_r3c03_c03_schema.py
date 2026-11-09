@@ -77,17 +77,22 @@ assert conn.execute('PRAGMA foreign_key_check').fetchall() == []
 conn.close()
 
 v16_path = SCHEMAS / '16.json'
-if v16_path.is_file():
-    v16 = json.loads(v16_path.read_text())['database']
-    tables = {e['tableName']: e for e in v16['entities']}
-    require('play_delivery_evidence' in tables, 'generated v16 schema lacks evidence')
-    require(len(tables) == len(v15['entities']) + 1, 'unexpected v16 table count')
-    for name in (e['tableName'] for e in v15['entities']):
-        require(name in tables, 'v16 lost v15 table: ' + name)
-    require(compact(tables['play_delivery_evidence']['createSql'].replace(
-        '${TABLE_NAME}', 'play_delivery_evidence')) == compact(sql),
-        'Room-generated v16 table differs from migration')
-    print('R3C03_C03_HOSTED_V16_SCHEMA_CONTRACT_PASS')
-else:
-    print('R3C03_C03_V16_SCHEMA_NOT_TRACKED: generate with hosted KSP; do not fabricate schema')
+# 16.json is verbatim exported by hosted KSP in run 42690464409, not handwritten.
+require(v16_path.is_file(), 'generated Room v16 schema must be tracked')
+v16 = json.loads(v16_path.read_text())['database']
+require(v16['version'] == 16, 'Room version must be 16')
+require(v16['identityHash'] == 'daa8dbc1dc7b57377b22b569846b7c85',
+        'Room v16 generated identity changed; regenerate and review from hosted KSP')
+tables = {e['tableName']: e for e in v16['entities']}
+require(len(tables) == len(v15['entities']) + 1, 'unexpected v16 table count')
+require('play_delivery_evidence' in tables, 'generated schema lacks evidence table')
+for old_entity in v15['entities']:
+    name = old_entity['tableName']
+    require(name in tables, 'v16 lost v15 table: ' + name)
+    require(tables[name] == old_entity, 'v16 unexpectedly changed v15 table: ' + name)
+require(compact(tables['play_delivery_evidence']['createSql'].replace(
+    '${TABLE_NAME}', 'play_delivery_evidence')) == compact(sql),
+    'Room-generated v16 table differs from migration')
+require(len(tables['play_delivery_evidence']['fields']) == 9, 'unexpected evidence columns')
+print('R3C03_C03_TRACKED_HOST_GENERATED_V16_SCHEMA_PASS')
 print('R3C03_C03_SQLITE_FIXTURE_PASS: offline simulation; device Room migration remains required')
