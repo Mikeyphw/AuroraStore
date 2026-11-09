@@ -34,7 +34,7 @@ worker = require('app/src/main/java/com/aurora/store/data/work/DownloadWorker.kt
     'PlayDeliveryFailureClassifier.classify(exception)',
     'R.string.r3c03_delivery_not_proven_unavailable',
     'R.string.r3c03_delivery_requires_account',
-    'ApkSetVerifier.verify(context, download) { isStopped }',
+    'R3bVerifiedProof.verify(context, download) { isStopped }',
     'if (BuildConfig.DEBUG && R1EOfflineGate.enabled(inputData))',
 ))
 if 'R.string.download_version_unavailable' in worker:

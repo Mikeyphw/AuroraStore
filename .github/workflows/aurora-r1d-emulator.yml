@@ -6,6 +6,10 @@ on:
     paths:
       - '.github/workflows/aurora-r1d-emulator.yml'
       - 'app/src/androidTest/java/com/aurora/store/data/room/download/**'
+      - 'app/src/androidTest/java/com/aurora/store/data/room/play/**'
+      - 'app/src/main/java/com/aurora/store/data/room/play/**'
+      - 'app/src/main/java/com/aurora/store/data/installer/verification/R3bVerifiedProof.kt'
+      - 'scripts/ci/r3c03_c02_emulator_ci.sh'
       - 'app/src/androidTest/java/com/aurora/store/data/work/**'
       - 'scripts/ci/check_r1d.py'
       - 'scripts/ci/r1d_emulator_ci.sh'
@@ -34,6 +38,10 @@ on:
     paths:
       - '.github/workflows/aurora-r1d-emulator.yml'
       - 'app/src/androidTest/java/com/aurora/store/data/room/download/**'
+      - 'app/src/androidTest/java/com/aurora/store/data/room/play/**'
+      - 'app/src/main/java/com/aurora/store/data/room/play/**'
+      - 'app/src/main/java/com/aurora/store/data/installer/verification/R3bVerifiedProof.kt'
+      - 'scripts/ci/r3c03_c02_emulator_ci.sh'
       - 'app/src/androidTest/java/com/aurora/store/data/work/**'
       - 'scripts/ci/check_r1d.py'
       - 'scripts/ci/r1d_emulator_ci.sh'
@@ -173,7 +181,9 @@ jobs:
           disk-size: 3072M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: bash scripts/ci/r1d2_emulator_ci.sh
+          script: |
+            bash scripts/ci/r1d2_emulator_ci.sh
+            bash scripts/ci/r3c03_c02_emulator_ci.sh
       - name: Upload source-bound emulator receipt and offline test logs
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
@@ -185,5 +195,6 @@ jobs:
             ${{ runner.temp }}/aurora-r1e-emulator/
             ${{ runner.temp }}/aurora-r1f-emulator/
             ${{ runner.temp }}/aurora-r1g-emulator/
+            ${{ runner.temp }}/aurora-r3c03-c02/
           if-no-files-found: warn
           retention-days: 14

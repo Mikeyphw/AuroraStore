@@ -68,6 +68,10 @@ jobs:
         run: python3 -B scripts/ci/test_r3c03_c01_sql.py
       - name: Negative regressions for C01 account, Play outcomes and Room CAS
         run: python3 -B scripts/ci/test_r3c03_c01_security.py
+      - name: Validate C02 real R3B evidence and installer callback boundaries
+        run: python3 -B scripts/ci/check_r3c03_c02.py
+      - name: Reject unsafe C02 source transitions
+        run: python3 -B scripts/ci/test_r3c03_c02_security.py
 
   kotlin-format:
     name: Kotlin formatting — every app source set
