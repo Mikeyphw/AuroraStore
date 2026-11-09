@@ -62,6 +62,12 @@ jobs:
         run: python3 -B scripts/ci/check_r3c03.py
       - name: Negative regressions for R3C-03 fail-closed proof transitions
         run: python3 -B scripts/ci/test_r3c03_contract.py
+      - name: Validate R3C-03 C01 worker, Room, and error contracts
+        run: python3 -B scripts/ci/check_r3c03_c01.py
+      - name: Test R3C-03 C01 Room evidence CAS with SQLite
+        run: python3 -B scripts/ci/test_r3c03_c01_sql.py
+      - name: Negative regressions for C01 account, Play outcomes and Room CAS
+        run: python3 -B scripts/ci/test_r3c03_c01_security.py
 
   kotlin-format:
     name: Kotlin formatting — every app source set
@@ -114,9 +120,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 \
+          # Two official download endpoints; identical pinned bytes required in either case.
+          # A 504 is an infrastructure failure, never a reason to skip root ktlint.
+          if ! curl --fail --location --silent --show-error --retry 5 \
+            --retry-delay 4 --retry-all-errors \
             https://github.com/ktlint/ktlint/releases/download/1.8.0/ktlint \
-            -o "$RUNNER_TEMP/ktlint"
+            -o "$RUNNER_TEMP/ktlint"; then
+            curl --fail --location --silent --show-error --retry 5 \
+              --retry-delay 4 --retry-all-errors \
+              -H 'Accept: application/octet-stream' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              https://api.github.com/repos/ktlint/ktlint/releases/assets/316074525 \
+              -o "$RUNNER_TEMP/ktlint"
+          fi
           printf '%s  %s\n' 'a3fd620207d5c40da6ca789b95e7f823c54e854b7fade7f613e91096a3706d75' "$RUNNER_TEMP/ktlint" | sha256sum --check -
           java -jar "$RUNNER_TEMP/ktlint" build.gradle.kts settings.gradle.kts
 

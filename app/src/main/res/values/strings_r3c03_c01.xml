@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="r3c03_delivery_not_proven_unavailable">Google Play rejected this delivery request. Availability of the selected version could not be confirmed.</string>
+    <string name="r3c03_delivery_requires_account">Google Play requires an account for this delivery request. Check your account and try again.</string>
+</resources>
