@@ -89,3 +89,19 @@ Path(sys.argv[1]).write_text(json.dumps({
 }, indent=2, sort_keys=True) + '\n')
 PYR3C03C03
 echo 'R3C03_C03_API36_MIGRATION_PASS: 1 on-device migration; generated schema preserved in artifact'
+
+# R3C-04: bounded local SAF and archive staging on the same API36 hosted emulator.
+# Source and JVM contracts run in targeted CI; this device lane runs only at full gates.
+python3 -B scripts/ci/test_r3c04_full_import.py
+IMPORT_CLASS='com.aurora.store.data.artifact.ArtifactPrivateStagerDeviceTest'
+timeout 300 adb shell am instrument -w -r -e class "$IMPORT_CLASS" "$RUNNER" |
+  tee "$OUT/c04_private_import.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]'   "$OUT/c04_private_import.txt"; then
+  echo 'R3C04_EMULATOR_REFUSED: private import tests failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(6 tests\)' "$OUT/c04_private_import.txt" || {
+  echo 'R3C04_EMULATOR_REFUSED: expected six real staging device tests' >&2
+  exit 1
+}
+echo 'R3C04_API36_STAGING_PASS: six bounded archive and cancellation tests'

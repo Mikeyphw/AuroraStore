@@ -5,6 +5,7 @@
 
 package com.aurora.store.compose.ui.preferences
 
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -15,6 +16,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -23,6 +25,7 @@ import com.aurora.store.R
 import com.aurora.store.compose.composable.TopAppBar
 import com.aurora.store.compose.navigation.Destination
 import com.aurora.store.compose.preview.ThemePreviewProvider
+import com.aurora.store.data.artifact.ArtifactImportActivity
 import com.aurora.store.data.model.PermissionType
 
 @Composable
@@ -32,6 +35,7 @@ fun SettingsScreen(onNavigateTo: (Destination) -> Unit) {
 
 @Composable
 private fun ScreenContent(onNavigateTo: (Destination) -> Unit = {}) {
+    val context = LocalContext.current
     Scaffold(
         topBar = {
             TopAppBar(
@@ -60,6 +64,21 @@ private fun ScreenContent(onNavigateTo: (Destination) -> Unit = {}) {
                     headlineContent = {
                         Text(stringResource(R.string.onboarding_title_permissions))
                     }
+                )
+            }
+            item {
+                ListItem(
+                    modifier = Modifier.clickable {
+                        context.startActivity(Intent(context, ArtifactImportActivity::class.java))
+                    },
+                    leadingContent = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_installation),
+                            contentDescription = null
+                        )
+                    },
+                    headlineContent = { Text("Import APK or bundle") },
+                    supportingContent = { Text("Choose a file or open a source website") }
                 )
             }
             item {
