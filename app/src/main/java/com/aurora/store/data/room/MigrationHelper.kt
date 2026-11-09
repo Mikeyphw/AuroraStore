@@ -71,6 +71,25 @@ object MigrationHelper {
         override fun migrate(db: SupportSQLiteDatabase) = migrateFrom14To15(db)
     }
 
+    /** Do not drop downloads, accounts, or old evidence when upgrading from v15. */
+    val MIGRATION_15_16 = object : Migration(15, 16) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `play_delivery_evidence` (" +
+                    "`packageName` TEXT NOT NULL, " +
+                    "`versionCode` INTEGER NOT NULL, " +
+                    "`attemptGeneration` INTEGER NOT NULL, " +
+                    "`accountBinding` TEXT NOT NULL, " +
+                    "`variant` TEXT NOT NULL, " +
+                    "`state` TEXT NOT NULL, " +
+                    "`verifiedApkVersion` INTEGER, " +
+                    "`unavailableVersion` INTEGER, " +
+                    "`resolvedFileCount` INTEGER NOT NULL, " +
+                    "PRIMARY KEY(`packageName`))"
+            )
+        }
+    }
+
     private const val TAG = "MigrationHelper"
 
     private fun migrateFrom1To2(database: SupportSQLiteDatabase) {

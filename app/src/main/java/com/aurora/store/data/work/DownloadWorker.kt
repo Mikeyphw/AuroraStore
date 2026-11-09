@@ -11,8 +11,10 @@ import android.content.Context
 import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Build
 import android.os.SystemClock
 import android.os.storage.StorageManager
+import android.util.Base64
 import android.util.Log
 import androidx.core.content.getSystemService
 import androidx.core.graphics.scale
@@ -48,10 +50,14 @@ import com.aurora.store.data.installer.verification.ApkVerificationException
 import com.aurora.store.data.model.Algorithm
 import com.aurora.store.data.model.DownloadInfo
 import com.aurora.store.data.model.DownloadStatus
+import com.aurora.store.data.model.PlayAccountFingerprint
+import com.aurora.store.data.model.PlayDeliveryFailureClassifier
+import com.aurora.store.data.model.PlayExactVersionOutcomePolicy
 import com.aurora.store.data.providers.AuthProvider
 import com.aurora.store.data.providers.GoogleAccountTokenProvider
 import com.aurora.store.data.room.download.Download
 import com.aurora.store.data.room.download.DownloadDao
+import com.aurora.store.data.room.play.PlayDeliveryEvidenceDao
 import com.aurora.store.module.NoAuth
 import com.aurora.store.util.BsPatch
 import com.aurora.store.util.CertUtil
@@ -74,6 +80,7 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.security.DigestInputStream
 import java.security.MessageDigest
+import java.security.SecureRandom
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.cancellation.CancellationException
@@ -104,6 +111,7 @@ class DownloadWorker @AssistedInject constructor(
     private val authProvider: AuthProvider,
     tokenProvider: GoogleAccountTokenProvider,
     private val downloadDao: DownloadDao,
+    private val playDeliveryEvidenceDao: PlayDeliveryEvidenceDao,
     private val appInstaller: AppInstaller,
     private val okHttpClient: OkHttpClient,
     private val httpEngine: HttpEngine,
@@ -122,10 +130,63 @@ class DownloadWorker @AssistedInject constructor(
         private const val MAX_DOWNLOAD_RETRIES = 5
         private const val STALL_POLL_INTERVAL_MS = 15_000L
         private val transferLocks = mutableMapOf<String, Mutex>()
+        private val evidenceIdentityLock = Any()
     }
 
     private lateinit var download: Download
     private lateinit var deliveryClient: PlayClient
+    private var playEvidenceKey: PlayExactVersionOutcomePolicy.RequestKey? = null
+    private var selectedPlayAccount: String? = null
+
+    /** Never persist Aurora's account IDs, which may equal the user's e-mail address. */
+    private fun privateAccountTag(id: String): String {
+        val prefs = context.getSharedPreferences("play_evidence_identity", Context.MODE_PRIVATE)
+        val key = synchronized(evidenceIdentityLock) {
+            val saved = prefs.getString("key", null)
+            if (saved != null) {
+                Base64.decode(saved, Base64.NO_WRAP)
+            } else {
+                val generated = ByteArray(32)
+                SecureRandom().nextBytes(generated)
+                val encoded = Base64.encodeToString(generated, Base64.NO_WRAP)
+                check(prefs.edit().putString("key", encoded).commit())
+                generated
+            }
+        }
+        return PlayAccountFingerprint.hmacHex(key, id)
+    }
+
+    /** Only real Play resolution outcomes are stored, never fixture/download URLs. */
+    private suspend fun storePlayOutcome(outcome: String, fileCount: Int = 0) {
+        val selectedKey = playEvidenceKey ?: return
+        // The account selection alone does not identify the actual network session:
+        // unbound apps may resolve anonymously and then fall back to an account.
+        // Capture the lane after resolveFiles() has selected the delivery client.
+        val route = when {
+            !this::deliveryClient.isInitialized -> "session-unavailable"
+            deliveryClient === noAuthPlayClient -> "anonymous"
+            else -> "authenticated"
+        }
+        val key = selectedKey.copy(variant = "${selectedKey.variant};lane:$route")
+        try {
+            val accepted = playDeliveryEvidenceDao.accept(
+                packageName = key.packageName,
+                versionCode = key.versionCode,
+                attemptGeneration = key.attemptGeneration,
+                accountBinding = requireNotNull(key.accountBinding),
+                selectedAccount = selectedPlayAccount ?: return,
+                variant = requireNotNull(key.variant),
+                outcome = outcome,
+                fileCount = fileCount
+            )
+            if (!accepted) {
+                Log.w(TAG, "Refusing stale or account-mismatched Play evidence")
+            }
+        } catch (exception: Exception) {
+            // Evidence tracking must fail closed without aborting an otherwise valid download.
+            Log.w(TAG, "Play evidence unavailable; leaving availability unknown", exception)
+        }
+    }
     private val activeHttpCall = AtomicReference<Call?>()
     private val stalledTransfer = AtomicBoolean(false)
     private val stallWatchdog = TransferStallWatchdog(SystemClock::elapsedRealtime)
@@ -245,9 +306,33 @@ class DownloadWorker @AssistedInject constructor(
             return downloadOfflineFixture()
         }
         super.doWork()
+        // This identity is checked again inside the Room transaction at every write.
+        // It never contains a Play token, e-mail address, APK URL, or signing secret.
+        if (download.downloadedAt > 0L) {
+            try {
+                val selected = playDeliveryEvidenceDao.selectedAccountIdentity(packageName)
+                selectedPlayAccount = selected
+                val deviceVariant = "offer:${download.offerType};sdk:${Build.VERSION.SDK_INT};" +
+                    "abis:${Build.SUPPORTED_ABIS.joinToString(",")};" +
+                    "density:${context.resources.displayMetrics.densityDpi}"
+                playEvidenceKey = PlayExactVersionOutcomePolicy.RequestKey(
+                    packageName = download.packageName,
+                    versionCode = download.versionCode,
+                    attemptGeneration = download.downloadedAt,
+                    accountBinding = privateAccountTag(selected),
+                    variant = deviceVariant
+                )
+            } catch (exception: Exception) {
+                // A broken evidence store cannot turn a real download into an unavailable claim.
+                Log.w(TAG, "Play evidence identity unavailable", exception)
+            }
+        }
         try {
             deliveryClient = playClientFor(packageName)
         } catch (exception: Exception) {
+            PlayDeliveryFailureClassifier.classify(exception)?.let { failure ->
+                storePlayOutcome(failure.name)
+            }
             return onFailure(exception)
         }
 
@@ -274,9 +359,21 @@ class DownloadWorker @AssistedInject constructor(
         if (!notifyStatus(DownloadStatus.PURCHASING)) return Result.success()
         try {
             download.fileList = download.fileList.ifEmpty {
-                resolveFiles(download.packageName, download.versionCode, download.offerType)
+                val resolved = resolveFiles(
+                    download.packageName,
+                    download.versionCode,
+                    download.offerType
+                )
+                if (resolved.isNotEmpty()) {
+                    // A URL is *not* R3B-verified APK content or installability proof.
+                    storePlayOutcome("URLS_RESOLVED", resolved.size)
+                }
+                resolved
             }
         } catch (exception: Exception) {
+            PlayDeliveryFailureClassifier.classify(exception)?.let { failure ->
+                storePlayOutcome(failure.name)
+            }
             return onFailure(exception)
         }
 
@@ -543,6 +640,8 @@ class DownloadWorker @AssistedInject constructor(
     private fun isRetryable(throwable: Throwable?): Boolean = when (throwable) {
         null -> false
 
+        is PlayException.RateLimited,
+        is PlayException.ServerError,
         is NoNetworkException,
         is SocketException,
         is SocketTimeoutException,
@@ -591,16 +690,12 @@ class DownloadWorker @AssistedInject constructor(
                     else -> {
                         val userMessage = when (exception) {
                             is PlayException.AppNotSupported -> context.getString(
-                                R.string.download_version_unavailable,
-                                download.versionCode
+                                R.string.r3c03_delivery_not_proven_unavailable
                             )
 
-                            // Delivery is the only call this worker makes, and both session
-                            // types carry Capability.DOWNLOAD, so the only way it can demand an
-                            // account is the signing-key rotation the anonymous endpoint cannot
-                            // express. The library's own message says so, in English only.
+                            // Require an account without guessing the server-side cause.
                             is PlayException.RequiresAccount -> context.getString(
-                                R.string.download_signing_key_rotated
+                                R.string.r3c03_delivery_requires_account
                             )
 
                             else -> exception.message?.takeIf { it.isNotBlank() }
