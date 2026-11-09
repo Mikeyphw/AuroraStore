@@ -161,8 +161,11 @@ internal object PlayExactVersionOutcomePolicy {
                 if (event.resolvedVersion != version || event.fileCount <= 0) {
                     null
                 } else {
-                    Snapshot(active, State.URLS_RESOLVED_NOT_VERIFIED,
-                        resolvedFileCount = event.fileCount)
+                    Snapshot(
+                        active,
+                        State.URLS_RESOLVED_NOT_VERIFIED,
+                        resolvedFileCount = event.fileCount
+                    )
                 }
             }
 
