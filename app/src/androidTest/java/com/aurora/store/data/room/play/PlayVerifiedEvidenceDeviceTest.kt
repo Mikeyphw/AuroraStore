@@ -143,8 +143,12 @@ class PlayVerifiedEvidenceDeviceTest {
     @Test
     fun cancelledAttemptCannotAdvance() = runBlocking {
         assertThat(urls()).isTrue()
-        assertThat(database.downloadDao().cancelActiveDownload(packageName, versionCode, generation))
-            .isEqualTo(1)
+        val cancelled = database.downloadDao().cancelActiveDownload(
+            packageName,
+            versionCode,
+            generation
+        )
+        assertThat(cancelled).isEqualTo(1)
         assertThat(store.bytesReceived(key, "unbound", 1)).isFalse()
     }
 

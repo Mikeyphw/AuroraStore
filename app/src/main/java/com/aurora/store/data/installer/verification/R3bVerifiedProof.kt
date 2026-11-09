@@ -4,6 +4,7 @@
 package com.aurora.store.data.installer.verification
 
 import android.content.Context
+import android.os.Build
 import com.aurora.gplayapi.model.AppFile
 import com.aurora.store.data.room.download.Download
 import com.aurora.store.util.PathUtil
@@ -42,8 +43,14 @@ internal class R3bVerifiedProof private constructor(
             val file = PathUtil.getLocalFile(context, base, download)
             // Parse minSdk from the same exact downloaded bytes R3B just verified. The
             // second digest protects against a cache swap while the archive is parsed.
-            val minSdk = context.packageManager.getPackageArchiveInfo(file.absolutePath, 0)
-                ?.applicationInfo?.minSdkVersion?.takeIf { it > 0 }
+            // ApplicationInfo.minSdkVersion was introduced in API 24. Older devices
+            // retain UNKNOWN rather than asserting an SDK incompatibility.
+            val minSdk = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                context.packageManager.getPackageArchiveInfo(file.absolutePath, 0)
+                    ?.applicationInfo?.minSdkVersion?.takeIf { it > 0 }
+            } else {
+                null
+            }
             val algorithm = if (base.sha256.isNotBlank()) "SHA-256" else "SHA-1"
             val expected = if (base.sha256.isNotBlank()) base.sha256 else base.sha1
             val digest = MessageDigest.getInstance(algorithm)
