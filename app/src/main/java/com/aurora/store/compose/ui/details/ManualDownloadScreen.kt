@@ -205,7 +205,8 @@ private fun ScreenContent(
                                 installedAtConfirmation,
                                 installedNow,
                                 versionCode.text
-                            ) && assessment.mayAttemptExactDelivery
+                            ) &&
+                            assessment.mayAttemptExactDelivery
                         ) {
                             onRequestInstall(requested)
                             focusManager.clearFocus()
