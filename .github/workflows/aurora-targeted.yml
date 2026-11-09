@@ -101,3 +101,9 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon --max-workers=2 \
             :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest
+      - name: Require checked-in Room schema to match hosted KSP output
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Generated schema changes may be code-facing, even if no Kotlin file changed.
+          git diff --exit-code -- app/schemas/

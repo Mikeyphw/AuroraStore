@@ -33,7 +33,37 @@ class PlanTests(unittest.TestCase):
 
     def test_selected_tests_exist_filter_never_introduces_synthetic_ones(self):
         p = policy.classify(['docs/README.md'], present={'check_foundation.py'})
-        self.assertEqual(p['tests'], ['check_foundation.py'])
+        self.assertIn('check_foundation.py', p['tests'])
+        self.assertIn('test_aurora_ci_policy.py', p['tests'])
+
+    def test_room_schema_is_hosted_android_and_play_migration_scope(self):
+        p = policy.classify(['app/schemas/com.aurora.store.data.room.AuroraDatabase/16.json'])
+        self.assertTrue(p['needs_android'])
+        self.assertIn('play', p['groups'])
+        self.assertIn('installer', p['groups'])
+        self.assertIn('check_r3b.py', p['tests'])
+
+    def test_c03_schema_test_only_when_checked_in(self):
+        paths = ['app/schemas/com.aurora.store.data.room.AuroraDatabase/16.json']
+        p = policy.classify(paths, present={'test_r3c03_c03_schema.py'})
+        self.assertIn('test_r3c03_c03_schema.py', p['tests'])
+        p2 = policy.classify(paths, present=set())
+        self.assertNotIn('test_r3c03_c03_schema.py', p2['tests'])
+
+    def test_artifact_import_uses_independent_source_and_future_regressions(self):
+        p = policy.classify(
+            ['app/src/main/java/com/aurora/store/data/artifact/ArtifactProvenance.kt'],
+            present={'test_r3c04_source_boundary.py', 'test_r3c03_c03_schema.py'}
+        )
+        self.assertTrue(p['needs_android'])
+        self.assertIn('artifact', p['groups'])
+        self.assertIn('test_r3c04_source_boundary.py', p['tests'])
+        self.assertNotIn('test_r3c03_c03_schema.py', p['tests'])
+        self.assertIn('test_r3a_downgrade_contract.py', p['tests'])
+
+    def test_rogue_dynamic_test_is_not_auto_selected(self):
+        p = policy.classify(['/data/artifact/Foo.kt'], present={'test_unrelated.py'})
+        self.assertNotIn('test_unrelated.py', p['tests'])
 
     def test_installer_runs_security_and_real_fixture_contracts(self):
         p = policy.classify(['app/src/main/java/com/aurora/store/data/installer/Foo.kt'])

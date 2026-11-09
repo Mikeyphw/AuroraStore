@@ -27,6 +27,8 @@ GROUP_TESTS = {
     'play': ['check_r3.py', 'check_r3c.py', 'check_r3c02.py', 'check_r3c03.py', 'test_r3c03_contract.py', 'check_r3c03_c01.py', 'test_r3c03_c01_sql.py', 'test_r3c03_c01_security.py', 'check_r3c03_c02.py', 'test_r3c03_c02_security.py'],
     'update': ['check_r3.py', 'test_r3a_downgrade_contract.py', 'check_r3b.py'],
     'ui': ['check_r1f.py', 'check_r3c02.py'],
+    'artifact': ['check_r3b.py', 'test_r3a_downgrade_contract.py',
+                 'check_r3c03_c02.py', 'test_r3c03_c02_security.py'],
 }
 ALL_TESTS = sorted({'check_foundation.py', 'test_aurora_ci_policy.py'} | {t for ts in GROUP_TESTS.values() for t in ts})
 WORKFLOW_SENSITIVE = ('.github/workflows/', 'scripts/ci/aurora_ci_policy.py', 'scripts/ci/test_aurora_ci_policy.py')
@@ -86,8 +88,16 @@ def classify(paths: list[str], *, present: set[str] | None = None) -> dict:
     for path in paths:
         if any(path.startswith(p) for p in WORKFLOW_SENSITIVE):
             sensitive = True
-        if path.startswith(('app/src/', 'app/build.gradle', 'gradle/', 'build.gradle', 'settings.gradle')):
+        if path.startswith(('app/src/', 'app/schemas/', 'app/build.gradle', 'gradle/',
+                            'build.gradle', 'settings.gradle')):
             android = True
+        # Room schema changes require hosted KSP compilation and all relevant schema tests.
+        if path.startswith('app/schemas/'):
+            groups.update(('play', 'installer'))
+        # Import tests belong to an independent source; no forged Play classification.
+        if ('/data/artifact/' in path or '/data/importer/' in path
+                or 'r3c04' in path.lower()):
+            groups.add('artifact')
         if path.startswith(('app/src/main/java/com/aurora/store/data/room/download/',
                             'app/src/main/java/com/aurora/store/data/work/',
                             'app/src/main/java/com/aurora/store/data/helper/DownloadHelper.kt',
@@ -113,8 +123,17 @@ def classify(paths: list[str], *, present: set[str] | None = None) -> dict:
     else:
         for group in groups:
             tests.update(GROUP_TESTS[group])
-    if present is not None:
-        tests = {x for x in tests if x in present}
+    # Optional future checks are added only when the actual source includes them.
+    # Never pretend a new test passed merely because a filename was anticipated.
+    if present is None:
+        present = {p.name for p in (Path(__file__).parent).glob('*.py')}
+    if 'play' in groups and 'test_r3c03_c03_schema.py' in present:
+        tests.add('test_r3c03_c03_schema.py')
+    if 'artifact' in groups:
+        tests.update(x for x in present if re.fullmatch(
+            r'(?:check|test)_r3c04_[a-z0-9_]+\.py', x
+        ))
+    # Baseline group contracts remain mandatory; a deleted file must fail at exec.
     return {'groups': sorted(groups) or ['baseline'], 'tests': sorted(tests),
             'needs_android': android, 'ci_sensitive': sensitive, 'changed_files': len(paths)}
 

@@ -15,6 +15,12 @@
 | Workflow, installer verification/signing, Room migration or build-system change | Immediate full gate on merge |
 | Manual gate request / release candidate | Manually dispatch `Aurora — Periodic Full Gate Router` on `master`, forces full gate |
 
+Schema or import changes (`app/schemas/`, `data/artifact/`, `data/importer/`)
+select hosted Android compilation and the applicable source/security tests.
+New `test_r3c03_c03_schema.py` and `test_r3c04_*.py` checks are discovered
+when the files exist. A hosted KSP-generated tracked Room schema must match
+`git diff --exit-code -- app/schemas/` after compilation.
+
 The cadence is `AURORA_FULL_GATE_INTERVAL` GitHub Actions repository variable,
 integer 1..25, **default 5**. Configure it under Settings → Secrets and variables
 → Actions → Variables. Counting conservatively treats **one first-parent master
