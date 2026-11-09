@@ -6,6 +6,7 @@
 
 package com.aurora.store.compose.ui.details
 
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Arrangement
@@ -66,6 +67,8 @@ import com.aurora.store.compose.preview.AppPreviewProvider
 import com.aurora.store.compose.preview.ThemePreviewProvider
 import com.aurora.store.compose.ui.sheets.VersionPickerSheet
 import com.aurora.store.data.model.AppState
+import com.aurora.store.data.model.HistoricalAvailabilityPolicy
+import com.aurora.store.data.model.HistoricalAvailabilityPolicy.Decision
 import com.aurora.store.data.model.HistoricalVersionPolicy
 import com.aurora.store.data.model.Report
 import com.aurora.store.util.PackageUtil
@@ -147,6 +150,27 @@ private fun ScreenContent(
     var showVersionPicker by remember { mutableStateOf(false) }
     var pendingDowngrade by remember { mutableStateOf<Pair<Long, Long>?>(null) }
     val selectedVersion = HistoricalVersionPolicy.parseVersionCode(versionCode.text)
+    val selectionAssessment = selectedVersion?.let { requested ->
+        // Neither Exodus reports nor latest-release metadata prove this historical APK exists.
+        // Exact-version Play delivery and R3B verification occur only after a user request.
+        val inHistory = reports.any { report ->
+            HistoricalVersionPolicy.parseVersionCode(report.versionCode) == requested
+        }
+        HistoricalAvailabilityPolicy.assess(
+            HistoricalAvailabilityPolicy.Evidence(
+                requestedVersion = requested,
+                currentListingVersion = currentVersionCode,
+                installedVersion = installedVersionCode,
+                historicalReportVersion = requested.takeIf { inHistory },
+                deviceSdk = Build.VERSION.SDK_INT
+            )
+        )
+    }
+    val mayRequestSelection = when (selectionAssessment?.decision) {
+        HistoricalAvailabilityPolicy.Decision.MAY_REQUEST_EXACT_DELIVERY,
+        HistoricalAvailabilityPolicy.Decision.DOWNGRADE_CONSENT_REQUIRED -> true
+        else -> false
+    }
 
     pendingDowngrade?.let { (requested, installedAtConfirmation) ->
         AlertDialog(
@@ -166,12 +190,22 @@ private fun ScreenContent(
                     enabled = metadataReady && !state.inProgress(),
                     onClick = {
                         pendingDowngrade = null
+                        val installedNow = installedVersionProvider()
+                        val assessment = HistoricalAvailabilityPolicy.assess(
+                            HistoricalAvailabilityPolicy.Evidence(
+                                requestedVersion = requested,
+                                currentListingVersion = currentVersionCode,
+                                installedVersion = installedNow,
+                                deviceSdk = Build.VERSION.SDK_INT,
+                                downgradeConsent = true
+                            )
+                        )
                         if (HistoricalVersionPolicy.mayConfirmDowngrade(
                                 requested,
                                 installedAtConfirmation,
-                                installedVersionProvider(),
+                                installedNow,
                                 versionCode.text
-                            )
+                            ) && assessment.mayAttemptExactDelivery
                         ) {
                             onRequestInstall(requested)
                             focusManager.clearFocus()
@@ -194,6 +228,7 @@ private fun ScreenContent(
             reports = reports,
             loading = lookupInProgress,
             installedVersionCode = installedVersionCode,
+            currentListingVersionCode = currentVersionCode,
             onSelect = { report ->
                 HistoricalVersionPolicy.canonicalVersionCode(report.versionCode)?.let { code ->
                     versionCode = TextFieldValue(text = code, selection = TextRange(code.length))
@@ -268,6 +303,13 @@ private fun ScreenContent(
                         color = MaterialTheme.colorScheme.error
                     )
                 }
+                if (selectionAssessment?.isHistorical == true) {
+                    Text(
+                        text = stringResource(R.string.r3c_selected_version_unverified),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
                 Button(
                     modifier = Modifier.fillMaxWidth(),
@@ -311,13 +353,26 @@ private fun ScreenContent(
 
                 Button(
                     modifier = Modifier.weight(1F),
-                    enabled = metadataReady && !state.inProgress() && selectedVersion != null,
+                    enabled = metadataReady && !state.inProgress() && mayRequestSelection,
                     onClick = {
                         selectedVersion?.let { code ->
                             val installedNow = installedVersionProvider()
-                            if (HistoricalVersionPolicy.isDowngrade(code, installedNow)) {
+                            val live = HistoricalAvailabilityPolicy.assess(
+                                HistoricalAvailabilityPolicy.Evidence(
+                                    requestedVersion = code,
+                                    currentListingVersion = currentVersionCode,
+                                    installedVersion = installedNow,
+                                    deviceSdk = Build.VERSION.SDK_INT
+                                )
+                            )
+                            val isDowngradeNow = HistoricalVersionPolicy.isDowngrade(
+                                code,
+                                installedNow
+                            )
+                            val needsConsent = live.decision == Decision.DOWNGRADE_CONSENT_REQUIRED
+                            if (isDowngradeNow && needsConsent) {
                                 pendingDowngrade = code to installedNow
-                            } else {
+                            } else if (live.mayAttemptExactDelivery) {
                                 onRequestInstall(code)
                                 focusManager.clearFocus()
                             }

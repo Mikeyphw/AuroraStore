@@ -4,6 +4,7 @@
  */
 package com.aurora.store.compose.ui.sheets
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,6 +39,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aurora.store.R
+import com.aurora.store.data.model.HistoricalAvailabilityPolicy
 import com.aurora.store.data.model.HistoricalVersionPolicy
 import com.aurora.store.data.model.Report
 import com.aurora.store.data.model.formatExodusDate
@@ -53,6 +55,7 @@ fun VersionPickerSheet(
     reports: List<Report>,
     loading: Boolean,
     installedVersionCode: Long = 0L,
+    currentListingVersionCode: Long = 0L,
     onSelect: (Report) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -128,6 +131,7 @@ fun VersionPickerSheet(
                         VersionRow(
                             report = report,
                             installedVersionCode = installedVersionCode,
+                            currentListingVersionCode = currentListingVersionCode,
                             onClick = { onSelect(report) }
                         )
                     }
@@ -166,7 +170,22 @@ private fun AvailabilityWarning(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun VersionRow(report: Report, installedVersionCode: Long, onClick: () -> Unit) {
+private fun VersionRow(
+    report: Report,
+    installedVersionCode: Long,
+    currentListingVersionCode: Long,
+    onClick: () -> Unit
+) {
+    val version = HistoricalVersionPolicy.parseVersionCode(report.versionCode) ?: return
+    val assessment = HistoricalAvailabilityPolicy.assess(
+        HistoricalAvailabilityPolicy.Evidence(
+            requestedVersion = version,
+            currentListingVersion = currentListingVersionCode,
+            installedVersion = installedVersionCode,
+            historicalReportVersion = version,
+            deviceSdk = Build.VERSION.SDK_INT
+        )
+    )
     val title = if (report.version.isBlank()) {
         report.versionCode
     } else {
@@ -190,11 +209,7 @@ private fun VersionRow(report: Report, installedVersionCode: Long, onClick: () -
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        val isDowngrade = HistoricalVersionPolicy.isDowngrade(
-            report.versionCode.toLong(),
-            installedVersionCode
-        )
-        if (isDowngrade) {
+        if (assessment.isDowngrade) {
             Text(
                 text = stringResource(R.string.r3_history_older),
                 style = MaterialTheme.typography.labelMedium,
@@ -205,6 +220,15 @@ private fun VersionRow(report: Report, installedVersionCode: Long, onClick: () -
             Text(
                 text = formatExodusDate(date),
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (assessment.delivery == HistoricalAvailabilityPolicy.Delivery.UNKNOWN &&
+            assessment.compatibility == HistoricalAvailabilityPolicy.Compatibility.UNKNOWN
+        ) {
+            Text(
+                text = stringResource(R.string.r3c_picker_unverified),
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

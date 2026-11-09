@@ -54,6 +54,8 @@ jobs:
         run: python3 -B scripts/ci/check_r3b.py
       - name: Validate R3C exact-version availability evidence policy
         run: python3 -B scripts/ci/check_r3c.py
+      - name: Validate R3C-02 picker and manual selection integration
+        run: python3 -B scripts/ci/check_r3c02.py
 
   kotlin-format:
     name: Kotlin formatting — every app source set

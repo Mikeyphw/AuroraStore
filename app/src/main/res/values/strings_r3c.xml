@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<resources>
+    <string name="r3c_picker_unverified">Play availability and device compatibility not verified</string>
+    <string name="r3c_selected_version_unverified">Historical version: Play delivery and device compatibility are unverified. The exact version will be checked when you request it; Android may reject installation.</string>
+</resources>
