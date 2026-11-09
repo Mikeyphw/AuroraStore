@@ -6,6 +6,10 @@ on:
     paths:
       - '.github/workflows/aurora-r1d-emulator.yml'
       - 'app/src/androidTest/java/com/aurora/store/data/room/download/**'
+      - 'app/src/androidTest/java/com/aurora/store/data/room/play/**'
+      - 'app/src/main/java/com/aurora/store/data/room/play/**'
+      - 'app/src/main/java/com/aurora/store/data/installer/verification/R3bVerifiedProof.kt'
+      - 'scripts/ci/r3c03_c02_emulator_ci.sh'
       - 'app/src/androidTest/java/com/aurora/store/data/work/**'
       - 'scripts/ci/check_r1d.py'
       - 'scripts/ci/r1d_emulator_ci.sh'
@@ -34,6 +38,10 @@ on:
     paths:
       - '.github/workflows/aurora-r1d-emulator.yml'
       - 'app/src/androidTest/java/com/aurora/store/data/room/download/**'
+      - 'app/src/androidTest/java/com/aurora/store/data/room/play/**'
+      - 'app/src/main/java/com/aurora/store/data/room/play/**'
+      - 'app/src/main/java/com/aurora/store/data/installer/verification/R3bVerifiedProof.kt'
+      - 'scripts/ci/r3c03_c02_emulator_ci.sh'
       - 'app/src/androidTest/java/com/aurora/store/data/work/**'
       - 'scripts/ci/check_r1d.py'
       - 'scripts/ci/r1d_emulator_ci.sh'
@@ -185,5 +193,6 @@ jobs:
             ${{ runner.temp }}/aurora-r1e-emulator/
             ${{ runner.temp }}/aurora-r1f-emulator/
             ${{ runner.temp }}/aurora-r1g-emulator/
+            ${{ runner.temp }}/aurora-r3c03-c02/
           if-no-files-found: warn
           retention-days: 14

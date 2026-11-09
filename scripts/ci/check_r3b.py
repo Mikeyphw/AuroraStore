@@ -32,8 +32,11 @@ checks = {
         'return snapshot.filesFor(sharedLibPackageName)' in installer and
         'downloadDir.listFiles' not in installer,
     'worker rejects mismatched APKs before completed state':
-        worker.index('ApkSetVerifier.verify(context, download)') <
-        worker.index('notifyStatus(DownloadStatus.COMPLETED)'),
+        worker.index('R3bVerifiedProof.verify(context, download)') <
+        worker.index('notifyStatus(DownloadStatus.COMPLETED)') and
+        'ApkSetVerifier.verify(context, download, interrupted)' in source(
+            'app/src/main/java/com/aurora/store/data/installer/verification/R3bVerifiedProof.kt'
+        ),
     'metadata binds exact package and version to real APK manifest':
         'BinaryApkManifest.read(path)' in verifier and
         'ApkSetPolicy.check(packageName' in verifier_compact and

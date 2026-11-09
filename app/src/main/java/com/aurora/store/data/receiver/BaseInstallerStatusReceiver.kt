@@ -26,6 +26,7 @@ import com.aurora.store.data.installer.AppInstaller.Companion.EXTRA_VERSION_CODE
 import com.aurora.store.data.installer.InstallResultPolicy
 import com.aurora.store.data.installer.base.InstallerBase
 import com.aurora.store.data.room.download.DownloadDao
+import com.aurora.store.data.room.play.PlayVerifiedEvidenceStore
 import com.aurora.store.util.NotificationUtil
 import com.aurora.store.util.PackageUtil
 import com.aurora.store.util.PathUtil
@@ -41,6 +42,7 @@ import kotlinx.coroutines.launch
 @InstallIn(SingletonComponent::class)
 internal interface InstallerStatusEntryPoint {
     fun downloadDao(): DownloadDao
+    fun playVerifiedEvidenceStore(): PlayVerifiedEvidenceStore
 }
 
 abstract class BaseInstallerStatusReceiver : BroadcastReceiver() {
@@ -134,6 +136,26 @@ abstract class BaseInstallerStatusReceiver : BroadcastReceiver() {
                 if (updated == 0) {
                     Log.i(TAG, "Installer callback lost a concurrent transition: $packageName")
                     return@launch
+                }
+
+                // Only a real, generation-authorized failed installation can change C02
+                // evidence, and only when verified APK evidence already exists. An aborted
+                // user action is cancellation, not a broken APK or install failure.
+                if (outcome == InstallResultPolicy.Outcome.FAILURE &&
+                    status != PackageInstaller.STATUS_FAILURE_ABORTED
+                ) {
+                    try {
+                        EntryPointAccessors.fromApplication(
+                            context,
+                            InstallerStatusEntryPoint::class.java
+                        ).playVerifiedEvidenceStore().installerFailed(
+                            packageName,
+                            identity.versionCode,
+                            identity.downloadedAt
+                        )
+                    } catch (error: Exception) {
+                        Log.w(TAG, "C02 installer failure evidence unavailable", error)
+                    }
                 }
 
                 when (status) {

@@ -45,8 +45,8 @@ import com.aurora.store.data.AccountRepository
 import com.aurora.store.data.event.InstallerEvent
 import com.aurora.store.data.helper.DownloadHelper
 import com.aurora.store.data.installer.AppInstaller
-import com.aurora.store.data.installer.verification.ApkSetVerifier
 import com.aurora.store.data.installer.verification.ApkVerificationException
+import com.aurora.store.data.installer.verification.R3bVerifiedProof
 import com.aurora.store.data.model.Algorithm
 import com.aurora.store.data.model.DownloadInfo
 import com.aurora.store.data.model.DownloadStatus
@@ -58,6 +58,7 @@ import com.aurora.store.data.providers.GoogleAccountTokenProvider
 import com.aurora.store.data.room.download.Download
 import com.aurora.store.data.room.download.DownloadDao
 import com.aurora.store.data.room.play.PlayDeliveryEvidenceDao
+import com.aurora.store.data.room.play.PlayVerifiedEvidenceStore
 import com.aurora.store.module.NoAuth
 import com.aurora.store.util.BsPatch
 import com.aurora.store.util.CertUtil
@@ -112,6 +113,7 @@ class DownloadWorker @AssistedInject constructor(
     tokenProvider: GoogleAccountTokenProvider,
     private val downloadDao: DownloadDao,
     private val playDeliveryEvidenceDao: PlayDeliveryEvidenceDao,
+    private val verifiedPlayEvidenceStore: PlayVerifiedEvidenceStore,
     private val appInstaller: AppInstaller,
     private val okHttpClient: OkHttpClient,
     private val httpEngine: HttpEngine,
@@ -137,6 +139,7 @@ class DownloadWorker @AssistedInject constructor(
     private lateinit var deliveryClient: PlayClient
     private var playEvidenceKey: PlayExactVersionOutcomePolicy.RequestKey? = null
     private var selectedPlayAccount: String? = null
+    private var mainPlayUrlEvidenceKey: PlayExactVersionOutcomePolicy.RequestKey? = null
 
     /** Never persist Aurora's account IDs, which may equal the user's e-mail address. */
     private fun privateAccountTag(id: String): String {
@@ -181,12 +184,65 @@ class DownloadWorker @AssistedInject constructor(
             )
             if (!accepted) {
                 Log.w(TAG, "Refusing stale or account-mismatched Play evidence")
+            } else if (outcome == "URLS_RESOLVED") {
+                // Shared library resolution may change deliveryClient before verification.
+                mainPlayUrlEvidenceKey = key
             }
         } catch (exception: Exception) {
             // Evidence tracking must fail closed without aborting an otherwise valid download.
             Log.w(TAG, "Play evidence unavailable; leaving availability unknown", exception)
         }
     }
+
+    /** The C01 URL proof must already exist for any C02 stage to be accepted. */
+    private fun currentC02EvidenceKey(): PlayExactVersionOutcomePolicy.RequestKey? {
+        if (r1eFixtureActive || isStopped) return null
+        // Only a Room-accepted real Play URL response can seed C02 evidence.
+        return mainPlayUrlEvidenceKey
+    }
+
+    private suspend fun recordC02Bytes() {
+        val key = currentC02EvidenceKey() ?: return
+        val selected = selectedPlayAccount ?: return
+        try {
+            if (!verifiedPlayEvidenceStore.bytesReceived(key, selected, download.fileList.size)) {
+                Log.i(TAG, "C02 bytes not recorded: no matching URL proof or active attempt")
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.w(TAG, "C02 bytes evidence unavailable; not claiming verification", error)
+        }
+    }
+
+    private suspend fun recordC02Verified(proof: R3bVerifiedProof) {
+        val key = currentC02EvidenceKey() ?: return
+        val selected = selectedPlayAccount ?: return
+        try {
+            if (!verifiedPlayEvidenceStore.verified(key, selected, proof)) {
+                Log.i(TAG, "C02 R3B verification not recorded for absent or stale Play URL proof")
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.w(TAG, "C02 verified evidence unavailable; not claiming APK verification", error)
+        }
+    }
+
+    private suspend fun recordC02SdkIncompatible(proof: R3bVerifiedProof) {
+        val key = currentC02EvidenceKey() ?: return
+        val selected = selectedPlayAccount ?: return
+        try {
+            if (!verifiedPlayEvidenceStore.verifiedSdkIncompatible(key, selected, proof)) {
+                Log.i(TAG, "C02 verified manifest SDK restriction was not persisted")
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.w(TAG, "C02 verified SDK evidence unavailable", error)
+        }
+    }
+
     private val activeHttpCall = AtomicReference<Call?>()
     private val stalledTransfer = AtomicBoolean(false)
     private val stallWatchdog = TransferStallWatchdog(SystemClock::elapsedRealtime)
@@ -215,6 +271,9 @@ class DownloadWorker @AssistedInject constructor(
 
     inner class NoNetworkException : Exception(context.getString(R.string.title_no_network))
     inner class NothingToDownloadException : Exception(context.getString(R.string.purchase_no_file))
+    inner class VerifiedSdkIncompatibleException : Exception(
+        context.getString(R.string.r3c03_c02_verified_sdk_incompatible)
+    )
     inner class DownloadFailedException : Exception(context.getString(R.string.download_failed))
     inner class DownloadCancelledException :
         Exception(context.getString(R.string.download_canceled))
@@ -512,6 +571,8 @@ class DownloadWorker @AssistedInject constructor(
         // Verify downloaded files (skipping any already verified during the download pass)
         try {
             if (!notifyStatus(DownloadStatus.VERIFYING)) return Result.success()
+            // Every transfer completed; this is byte evidence, not a verified APK claim.
+            recordC02Bytes()
             files.forEach { file ->
                 val path = PathUtil.getLocalFile(context, file, download).absolutePath
                 if (path !in verifiedFiles) require(verifyFile(file))
@@ -523,9 +584,18 @@ class DownloadWorker @AssistedInject constructor(
                 Log.i(TAG, "Play frosting of ${download.packageName} @ ${file.name}: $result")
                 require(result != FrostingVerifier.Result.INVALID)
             }
-            withContext(Dispatchers.IO) {
-                ApkSetVerifier.verify(context, download) { isStopped }
+            val proof = withContext(Dispatchers.IO) {
+                R3bVerifiedProof.verify(context, download) { isStopped }
             }
+            if (isStopped) return Result.success()
+            // A private proof can be created only after the complete R3B verifier passes.
+            recordC02Verified(proof)
+            if (proof.verifiedMinSdk != null && proof.verifiedMinSdk > Build.VERSION.SDK_INT) {
+                recordC02SdkIncompatible(proof)
+                return onFailure(VerifiedSdkIncompatibleException())
+            }
+        } catch (exception: CancellationException) {
+            throw exception
         } catch (exception: Exception) {
             Log.e(TAG, "Failed to verify ${download.packageName}", exception)
             // Drop the corrupt files so the next attempt re-downloads them clean instead
