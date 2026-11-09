@@ -181,9 +181,7 @@ jobs:
           disk-size: 3072M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: |
-            bash scripts/ci/r1d2_emulator_ci.sh
-            bash scripts/ci/r3c03_c02_emulator_ci.sh
+          script: bash scripts/ci/r1d2_emulator_ci.sh
       - name: Upload source-bound emulator receipt and offline test logs
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4

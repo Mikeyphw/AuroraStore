@@ -89,3 +89,7 @@ bash scripts/ci/r1f_emulator_ci.sh
 
 # R1G is appended after the complete 36-case legacy gate; never replace its entry point.
 bash scripts/ci/r1g_emulator_ci.sh
+
+# C02: add eight Room evidence tests AFTER all original 40 legacy cases on the same API36 emulator.
+# Keep the existing R1D/R1G entry unchanged for legacy source and receipt contracts.
+bash scripts/ci/r3c03_c02_emulator_ci.sh

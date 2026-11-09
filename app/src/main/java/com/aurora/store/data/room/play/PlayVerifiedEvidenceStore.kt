@@ -20,7 +20,7 @@ import javax.inject.Inject
  * C02's separate transaction boundary; C01's Play-only URL/failed-result DAO remains unchanged.
  * No generic API for callers to assert VERIFIED_SET or EXPLICIT_EXACT_VERSION_DELIVERY_REFUSAL.
  */
-internal class PlayVerifiedEvidenceStore @Inject constructor(
+class PlayVerifiedEvidenceStore @Inject constructor(
     private val database: AuroraDatabase,
     private val evidenceDao: PlayDeliveryEvidenceDao,
     private val downloadDao: DownloadDao,
@@ -29,14 +29,14 @@ internal class PlayVerifiedEvidenceStore @Inject constructor(
     private val policy = PlayExactVersionOutcomePolicy
 
     /** Receiving all declared files is weaker than verifying their APK signatures. */
-    suspend fun bytesReceived(
+    internal suspend fun bytesReceived(
         key: PlayExactVersionOutcomePolicy.RequestKey,
         selectedAccount: String,
         resolvedFileCount: Int
     ): Boolean = advance(key, selectedAccount, resolvedFileCount, proof = null)
 
     /** Requires an unforgeable in-process receipt from R3B's production verifier. */
-    suspend fun verified(
+    internal suspend fun verified(
         key: PlayExactVersionOutcomePolicy.RequestKey,
         selectedAccount: String,
         proof: R3bVerifiedProof
@@ -48,7 +48,7 @@ internal class PlayVerifiedEvidenceStore @Inject constructor(
     }
 
     /** Strictly verified BASE APK minSdk; a missing manifest value is UNKNOWN, never a refusal. */
-    suspend fun verifiedSdkIncompatible(
+    internal suspend fun verifiedSdkIncompatible(
         key: PlayExactVersionOutcomePolicy.RequestKey,
         selectedAccount: String,
         proof: R3bVerifiedProof
