@@ -67,7 +67,9 @@ internal class R3bVerifiedProof private constructor(
             }
             val actual = digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
             if (!actual.equals(expected, ignoreCase = true)) {
-                throw ApkVerificationException("Verified base APK changed during manifest inspection")
+                throw ApkVerificationException(
+                    "Verified base APK changed during manifest inspection"
+                )
             }
             if (interrupted()) {
                 throw ApkVerificationException("APK verification was cancelled")

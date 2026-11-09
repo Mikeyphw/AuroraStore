@@ -193,6 +193,7 @@ class DownloadWorker @AssistedInject constructor(
             Log.w(TAG, "Play evidence unavailable; leaving availability unknown", exception)
         }
     }
+
     /** The C01 URL proof must already exist for any C02 stage to be accepted. */
     private fun currentC02EvidenceKey(): PlayExactVersionOutcomePolicy.RequestKey? {
         if (r1eFixtureActive || isStopped) return null
