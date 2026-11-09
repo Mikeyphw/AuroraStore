@@ -81,7 +81,8 @@ interface PlayDeliveryEvidenceDao {
             PlayExactVersionOutcomePolicy.Event.Failed(key, failure)
         }
         val stored = latest(packageName)
-        if (stored != null && stored.attemptGeneration == attemptGeneration &&
+        if (stored != null &&
+            stored.attemptGeneration == attemptGeneration &&
             stored.key() != key
         ) {
             return false

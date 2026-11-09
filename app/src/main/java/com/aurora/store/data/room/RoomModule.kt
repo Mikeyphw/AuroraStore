@@ -80,9 +80,8 @@ object RoomModule {
         auroraDatabase.downloadDao()
 
     @Provides
-    fun providesPlayDeliveryEvidenceDao(
-        auroraDatabase: AuroraDatabase
-    ): PlayDeliveryEvidenceDao = auroraDatabase.playDeliveryEvidenceDao()
+    fun providesPlayDeliveryEvidenceDao(auroraDatabase: AuroraDatabase): PlayDeliveryEvidenceDao =
+        auroraDatabase.playDeliveryEvidenceDao()
 
     @Provides
     fun providesFavouriteDao(auroraDatabase: AuroraDatabase): FavouriteDao =
