@@ -2,36 +2,6 @@
 name: Aurora R2D — API 36 Real APK Install and Restart
 
 on:
-  push:
-    branches: [master]
-    paths:
-      - '.github/workflows/aurora-r2d-install-emulator.yml'
-      - 'scripts/ci/r2d_*'
-      - 'scripts/ci/r3b_*'
-      - 'scripts/ci/fixture_r2d/**'
-      - 'scripts/ci/fixture_r3b/**'
-      - 'scripts/ci/check_r2c.py'
-      - 'scripts/ci/check_r2d.py'
-      - 'scripts/ci/check_r3b.py'
-      - 'app/src/androidTest/java/com/aurora/store/data/room/download/InstallLifecycleRestartDeviceTest.kt'
-      - 'app/src/androidTest/java/com/aurora/store/data/installer/verification/**'
-      - 'app/src/main/java/com/aurora/store/data/installer/**'
-      - 'app/src/main/java/com/aurora/store/data/helper/DownloadHelper.kt'
-      - 'app/src/main/java/com/aurora/store/data/room/download/**'
-  pull_request:
-    paths:
-      - '.github/workflows/aurora-r2d-install-emulator.yml'
-      - 'scripts/ci/r2d_*'
-      - 'scripts/ci/r3b_*'
-      - 'scripts/ci/fixture_r2d/**'
-      - 'scripts/ci/fixture_r3b/**'
-      - 'scripts/ci/check_r2c.py'
-      - 'scripts/ci/check_r2d.py'
-      - 'scripts/ci/check_r3b.py'
-      - 'app/src/androidTest/java/com/aurora/store/data/room/download/InstallLifecycleRestartDeviceTest.kt'
-      - 'app/src/androidTest/java/com/aurora/store/data/installer/verification/**'
-      - 'app/src/main/java/com/aurora/store/data/installer/**'
-      - 'app/src/main/java/com/aurora/store/data/helper/DownloadHelper.kt'
   workflow_dispatch:
 
 permissions:
