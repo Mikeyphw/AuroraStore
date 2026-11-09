@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Lightweight master-only dispatcher: no full Android work until cadence or high-risk change.
+name: Aurora — Periodic Full Gate Router
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurora-full-gate-router
+  cancel-in-progress: false
+
+jobs:
+  gate-plan:
+    name: Determine whether full gate is due
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      due: ${{ steps.plan.outputs.due }}
+      overlay_units_since_gate: ${{ steps.plan.outputs.overlay_units_since_gate }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Count first-parent merged overlay units and safety-sensitive paths
+        id: plan
+        shell: bash
+        env:
+          CI_GATE_INTERVAL: ${{ vars.AURORA_FULL_GATE_INTERVAL || '5' }}
+          MANUAL_EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [[ "$MANUAL_EVENT" == 'workflow_dispatch' ]]; then args+=(--force); fi
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -B scripts/ci/aurora_ci_policy.py gate-plan \
+            --head "$GITHUB_SHA" --interval "$CI_GATE_INTERVAL" \
+            --github-output "$GITHUB_OUTPUT" "${args[@]}"
+
+  full-gate:
+    permissions:
+      contents: write # create immutable source-bound successful full-gate tags
+      actions: write # dispatch existing heavyweight hosted workflows
+    name: Full gate — all mandatory jobs on exact master SHA
+    needs: gate-plan
+    if: needs.gate-plan.outputs.due == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Dispatch, watch and verify Foundation, R1D and R2D
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI_GATE_INTERVAL: ${{ vars.AURORA_FULL_GATE_INTERVAL || '5' }}
+          MANUAL_EVENT: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          if [[ "$MANUAL_EVENT" == 'workflow_dispatch' ]]; then args+=(--force); fi
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -B scripts/ci/aurora_ci_policy.py gate-dispatch \
+            --head "$GITHUB_SHA" --interval "$CI_GATE_INTERVAL" "${args[@]}"

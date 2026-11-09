@@ -1,0 +1,109 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Temporary, removable fast lane; full qualification is periodic/manual via Aurora full gates.
+name: Aurora — Targeted CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurora-targeted-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scope:
+    name: Source-change classification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      needs_android: ${{ steps.plan.outputs.needs_android }}
+      ci_sensitive: ${{ steps.plan.outputs.ci_sensitive }}
+      group_names: ${{ steps.plan.outputs.group_names }}
+      base_sha: ${{ steps.plan.outputs.base_sha }}
+      head_sha: ${{ steps.plan.outputs.head_sha }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Determine exact commit range and targeted lanes
+        id: plan
+        shell: bash
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          base="${PR_BASE:-${PUSH_BEFORE:-}}"
+          if [[ ! "$base" =~ ^[0-9a-f]{40}$ || "$base" =~ ^0+$ ]]; then
+            base="$(git rev-parse HEAD^)"
+          fi
+          git cat-file -e "$base^{commit}"
+          printf 'base_sha=%s\nhead_sha=%s\n' "$base" "$EXPECTED_SHA" >> "$GITHUB_OUTPUT"
+          python3 -B scripts/ci/aurora_ci_policy.py classify \
+            --base "$base" --head "$EXPECTED_SHA" --github-output "$GITHUB_OUTPUT"
+
+  targeted-source:
+    name: Targeted source and security contracts
+    needs: scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ needs.scope.outputs.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Execute relevant negative and source contracts
+        env:
+          BASE_SHA: ${{ needs.scope.outputs.base_sha }}
+          HEAD_SHA: ${{ needs.scope.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          python3 -B scripts/ci/aurora_ci_policy.py run-targeted --base "$BASE_SHA" --head "$HEAD_SHA"
+
+  targeted-android:
+    name: Targeted Android compilation (no emulator or release)
+    needs: scope
+    if: needs.scope.outputs.needs_android == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ needs.scope.outputs.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+      - name: Compile SDK platform only, not emulator images
+        run: |
+          set -euo pipefail
+          sdkmanager --install 'platforms;android-37.0'
+          test -f "$ANDROID_SDK_ROOT/platforms/android-37.0/android.jar"
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
+      - name: Compile app and instrumentation Kotlin without device execution
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '${{ needs.scope.outputs.head_sha }}'
+          chmod +x gradlew
+          ./gradlew --no-daemon --max-workers=2 \
+            :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest
+      - name: Require checked-in Room schema to match hosted KSP output
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Generated schema changes may be code-facing, even if no Kotlin file changed.
+          git diff --exit-code -- app/schemas/
