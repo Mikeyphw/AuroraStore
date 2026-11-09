@@ -3,6 +3,8 @@
 from pathlib import Path
 import subprocess
 
+from r3a_downgrade_guard import assert_downgrade_guard
+
 ROOT = Path(__file__).resolve().parents[2]
 def source(p):
     return (ROOT / p).read_text(encoding="utf-8")
@@ -28,7 +30,6 @@ unit = require("app/src/test/java/com/aurora/store/data/model/HistoricalVersionP
 ))
 manual = require("app/src/main/java/com/aurora/store/compose/ui/details/ManualDownloadScreen.kt", (
     'HistoricalVersionPolicy.parseVersionCode(versionCode.text)',
-    'HistoricalVersionPolicy.isDowngrade(code, installedNow)',
     'HistoricalVersionPolicy.mayConfirmDowngrade(',
     'metadataReady && !state.inProgress()',
     'remember(currentVersionCode)',
@@ -37,6 +38,11 @@ manual = require("app/src/main/java/com/aurora/store/compose/ui/details/ManualDo
     'fileList = emptyList()', 'dependentLibraries = emptyList()',
     'PackageUtil.getInstalledVersionCode(context, packageName)',
 ))
+try:
+    assert_downgrade_guard(manual)
+except ValueError as error:
+    raise SystemExit(str(error))
+print('R3A_DOWNGRADE_GUARD_PASS: consent and exact-version revalidation')
 if 'versionCode.text.toLong()' in manual or 'lib.copy(versionCode = versionCode)' in manual:
     raise SystemExit('R3A_REFUSED: unsafe unparsed code or fabricated library version')
 picker = require("app/src/main/java/com/aurora/store/compose/ui/sheets/VersionPickerSheet.kt", (
