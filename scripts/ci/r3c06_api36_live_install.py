@@ -132,10 +132,12 @@ def provision_hosted_unknown_sources(adb):
     require(not fixture_present(adb), 'fixture present before app-op provisioning')
     run(adb + ['shell', 'appops', 'set', '--uid', AURORA,
                'REQUEST_INSTALL_PACKAGES', 'allow'], timeout=30)
-    actual = run(adb + ['shell', 'appops', 'get', '--uid', AURORA,
-                        'REQUEST_INSTALL_PACKAGES'], timeout=30)
-    require(re.search(r'(?m)^REQUEST_INSTALL_PACKAGES:\s+allow\b', actual) is not None,
-            'unknown-source app-op did not become allowed on hosted emulator')
+    # `appops get --uid` is human-readable diagnostics and does not have a
+    # stable output format across Android versions. An exact output regexp
+    # cannot prove the target app's effective entitlement. Instead the
+    # Android instrumentation checks PackageManager.canRequestPackageInstalls()
+    # under Aurora's UID and reports a signed-test-scoped status receipt.
+    # If the UID-level write did not take effect, staging fails closed.
     return True
 
 
@@ -208,6 +210,18 @@ def check_single_instrumentation_result(output, method, key, value):
     status_lines = [line for line in lines if line.startswith(prefix)]
     require(status_lines == [prefix + value],
             'exact structured instrumentation status receipt missing or ambiguous')
+    if method == 'seedSignedFixtureIntoPrivateCache':
+        # The app itself must verify the effective Android permission. A shell
+        # app-op write or a formatted `appops get` line cannot substitute.
+        require(lines.count('INSTRUMENTATION_STATUS: '
+                            'r3c06_unknown_sources_effective=ALLOWED') == 1,
+                'Aurora did not prove effective unknown-source permission')
+        require(not any(line.startswith('INSTRUMENTATION_STATUS: '
+                             'r3c06_unknown_sources_effective=') and
+                        line != ('INSTRUMENTATION_STATUS: '
+                                 'r3c06_unknown_sources_effective=ALLOWED')
+                        for line in lines),
+                'contradictory Android unknown-source permission evidence')
     return True
 
 
@@ -372,6 +386,7 @@ def main():
                  'fixture_sha256':fixture_digest,'signed_v2_verified':True,
                  'private_app_uid_staging_verified':True,
                  'emulator_unknown_sources_preprovisioned':True,
+                 'emulator_unknown_sources_effective_verified':True,
                  'instrumentation_status_proof_verified':True,
                  'results':results,'play_evidence_changes_checked':False,
                  'physical_device_qualified':False,'release_qualified':False}

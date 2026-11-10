@@ -35,7 +35,8 @@ class ArtifactActualInstallAcceptanceDeviceTest {
     private fun reportStatus(key: String, value: String) {
         require(key in setOf("r3c06_fixture_stage_sha256",
                              "r3c06_fixture_cleanup_sha256", "r3c06_os_result",
-                             "r3c06_foreground_activity")) {
+                             "r3c06_foreground_activity",
+                             "r3c06_unknown_sources_effective")) {
             "Unexpected instrumentation evidence key"
         }
         val status = Bundle()
@@ -80,6 +81,14 @@ class ArtifactActualInstallAcceptanceDeviceTest {
      */
     @Test fun seedSignedFixtureIntoPrivateCache() {
         assertThat(Build.VERSION.SDK_INT).isEqualTo(36)
+        // The app's effective Android permission, not adb appops text, is
+        // authoritative. Preserve a DENIED status if the host setup was
+        // ineffective, but refuse to stage bytes or request an OS session.
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        val canRequest = target.packageManager.canRequestPackageInstalls()
+        reportStatus("r3c06_unknown_sources_effective",
+            if (canRequest) "ALLOWED" else "DENIED")
+        require(canRequest) { "Aurora cannot request package installs on API36" }
         val expected = requiredFixtureDigest()
         val encoded = requireNotNull(
             InstrumentationRegistry.getArguments().getString("r3c06_fixture_base64")

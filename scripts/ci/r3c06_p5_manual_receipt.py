@@ -44,6 +44,8 @@ def validate_live(doc, expected_sha, run_id):
             'app-private fixture deletion is not verified')
     require(doc.get('emulator_unknown_sources_preprovisioned') is True,
             'hosted emulator permission precondition was not recorded')
+    require(doc.get('emulator_unknown_sources_effective_verified') is True,
+            'Android app did not attest effective unknown-source capability')
     require(doc.get('instrumentation_status_proof_verified') is True,
             'structured Android instrumentation status was not verified')
     require(isinstance(doc.get('fixture_sha256'), str) and

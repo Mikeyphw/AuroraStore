@@ -67,7 +67,7 @@ require('def qualifies_variant(' in bundle and
         "'REFUSED' or" not in bundle,
         'bundletool false acceptance is still present')
 require('test_r3c06_p4_qualification.py' in full and
-        tests.count('def test_') >= 24,
+        tests.count('def test_') >= 26,
         'targeted CI does not reach the new P4 tests')
 require((ROOT/'docs/R3C06_P4_QUALIFICATION.md').is_file(), 'qualification documentation missing')
 check = subprocess.run([sys.executable, '-B', str(CI/'test_r3c06_p4_python.py')],
@@ -75,4 +75,4 @@ check = subprocess.run([sys.executable, '-B', str(CI/'test_r3c06_p4_python.py')]
                        text=True, timeout=30)
 require(check.returncode == 0,
         'offline regression tests failed: ' + (check.stdout+check.stderr)[-5000:])
-print('R3C06_P4_SOURCE_AND_PYTHON_PASS: twenty-four measured host-driver regressions; device qualification still pending')
+print('R3C06_P4_SOURCE_AND_PYTHON_PASS: twenty-six measured host-driver regressions; device qualification still pending')

@@ -53,7 +53,7 @@ assert SCRIPT.is_file() and NEGATIVE.is_file()
 result=subprocess.run([sys.executable,'-B',str(NEGATIVE)],cwd=ROOT,
                       capture_output=True,text=True,timeout=30)
 assert result.returncode==0, 'R3C06_P5_SOURCE_REFUSED negative regression failed: '+(result.stdout+result.stderr)[-2500:]
-assert 'Ran 17 tests' in result.stderr, 'P5 acceptance negative test count stale'
+assert 'Ran 18 tests' in result.stderr, 'P5 acceptance negative test count stale'
 
 # R3C06 P5 HF04: Android test app UID must stage and remove only its exact
 # bounded, hashed synthetic fixture. The ADB shell cannot write app cache.
@@ -85,4 +85,16 @@ for token in ('provision_hosted_unknown_sources(adb)', 'require_foreground_recei
     assert token in _live_hf04, 'HF06 hosted environment/diagnostic guard absent: '+token
 assert "doc.get('emulator_unknown_sources_preprovisioned') is True" in _receipt_hf04
 assert "r.get('foreground_activity_verified') is True" in _receipt_hf04
-print('R3C06_P5_SOURCE_CONTRACT_PASS: manual R1D opt-in, pinned bundletool, foreground OS consent, private signing-key hygiene, 17 receipt regressions')
+# HF07: shell command text cannot substitute for the target app's authoritative
+# canRequestPackageInstalls() check. The same AndroidJUnitRunner test must
+# transmit an exact, uniquely attested ALLOWED status or remain unqualified.
+assert 'packageManager.canRequestPackageInstalls()' in _test_hf04
+assert 'reportStatus("r3c06_unknown_sources_effective"' in _test_hf04
+assert 'require(canRequest)' in _test_hf04
+assert 'r3c06_unknown_sources_effective=ALLOWED' in _live_hf04
+assert 'emulator_unknown_sources_effective_verified' in _live_hf04
+assert "doc.get('emulator_unknown_sources_effective_verified') is True" in _receipt_hf04
+assert 'test_stage_requires_exact_effective_capability_from_target_app' in _p4_hf04
+assert 'test_missing_effective_permission_attestation_refuses_live_pass' in NEGATIVE.read_text()
+assert "['shell', 'appops', 'set', '--uid', AURORA" in _live_hf04, 'hosted opt-in setter absent'
+print('R3C06_P5_SOURCE_CONTRACT_PASS: manual R1D opt-in, pinned bundletool, effective Android permission, foreground OS consent, private signing-key hygiene, 18 receipt regressions')

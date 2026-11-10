@@ -20,6 +20,7 @@ def good_live():
                 private_app_uid_staging_verified=True,private_fixture_cleanup_verified=True,
                 instrumentation_status_proof_verified=True,
                 emulator_unknown_sources_preprovisioned=True,
+                emulator_unknown_sources_effective_verified=True,
                 results=[dict(outcome=o,system_consent_ui_verified=True,android_callback_verified=True,
                               instrumentation_status_verified=True,foreground_activity_verified=True)
                          for o in ('DENY','ACCEPT')],physical_device_qualified=False,
@@ -46,6 +47,16 @@ class P5EvidenceTests(unittest.TestCase):
             doc['emulator_unknown_sources_preprovisioned']=value
             with self.assertRaises(p5.QualificationRefused):
                 p5.validate_live(doc,SHA,RUN)
+
+    def test_missing_effective_permission_attestation_refuses_live_pass(self):
+        for value in (None, False, 'allow', 'ALLOWED'):
+            doc = good_live()
+            if value is None:
+                del doc['emulator_unknown_sources_effective_verified']
+            else:
+                doc['emulator_unknown_sources_effective_verified'] = value
+            with self.subTest(value=value), self.assertRaises(p5.QualificationRefused):
+                p5.validate_live(doc, SHA, RUN)
 
     def test_valid_os_denial_then_acceptance(self):
         self.assertTrue(p5.validate_live(good_live(),SHA,RUN))

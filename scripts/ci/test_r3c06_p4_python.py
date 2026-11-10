@@ -116,8 +116,12 @@ class AcceptanceRegressions(unittest.TestCase):
             self.assertIn('tap', mocked.call_args_list[-1].args[0])
 
     def instrument_output(self, method, key, value):
+        effective = ('INSTRUMENTATION_STATUS: '
+                     'r3c06_unknown_sources_effective=ALLOWED\n'
+                     if method == 'seedSignedFixtureIntoPrivateCache' else '')
         return ('INSTRUMENTATION_STATUS: class=' + live.TEST_CLASS + '\n'
                 'INSTRUMENTATION_STATUS: test=' + method + '\n'
+                + effective +
                 'INSTRUMENTATION_STATUS: ' + key + '=' + value + '\n'
                 'INSTRUMENTATION_STATUS_CODE: 0\nTime: 0.1\n'
                 'OK (1 test)\nINSTRUMENTATION_CODE: -1\n')
@@ -247,6 +251,7 @@ class AcceptanceRegressions(unittest.TestCase):
                       'sendStatus(0, status)',
                       'r3c06_fixture_stage_sha256',
                       'r3c06_fixture_cleanup_sha256',
+                      'r3c06_unknown_sources_effective',
                       'r3c06_os_result'):
             self.assertIn(token,source)
 
@@ -257,20 +262,46 @@ class AcceptanceRegressions(unittest.TestCase):
                 live.require_foreground_receipt(data)
         live.require_foreground_receipt(marker)
 
-    def test_unknown_sources_provision_must_verify_app_op(self):
+    def test_unknown_sources_preparation_does_not_trust_appops_display_format(self):
         with patch.object(live,'fixture_present',return_value=False):
-            with patch.object(live,'run',side_effect=['','REQUEST_INSTALL_PACKAGES: allow']):
+            with patch.object(live,'run',return_value='') as command:
                 self.assertTrue(live.provision_hosted_unknown_sources(['adb']))
-            for output in ('', 'REQUEST_INSTALL_PACKAGES: ignore', 'permission denied',
-                           'REQUEST_INSTALL_PACKAGES: default'):
-                with patch.object(live,'run',side_effect=['',output]):
-                    with self.assertRaises(live.Refused):
-                        live.provision_hosted_unknown_sources(['adb'])
+                self.assertEqual(command.call_count,1)
+                self.assertEqual(command.call_args.args[0],
+                    ['adb','shell','appops','set','--uid',live.AURORA,
+                     'REQUEST_INSTALL_PACKAGES','allow'])
+            # Failure to SET is still fatal; no absent permissions are assumed.
+            with patch.object(live,'run',side_effect=live.Refused('ADB denied')):
+                with self.assertRaises(live.Refused):
+                    live.provision_hosted_unknown_sources(['adb'])
         with patch.object(live,'fixture_present',return_value=True):
             with patch.object(live,'run') as runner:
                 with self.assertRaises(live.Refused):
                     live.provision_hosted_unknown_sources(['adb'])
                 runner.assert_not_called()
+
+    def test_stage_requires_exact_effective_capability_from_target_app(self):
+        method='seedSignedFixtureIntoPrivateCache'
+        key='r3c06_fixture_stage_sha256';digest='a'*64
+        valid=self.instrument_output(method,key,digest)
+        self.assertTrue(live.check_single_instrumentation_result(valid,method,key,digest))
+        for bad in (
+            valid.replace('INSTRUMENTATION_STATUS: r3c06_unknown_sources_effective=ALLOWED\n',''),
+            valid.replace('r3c06_unknown_sources_effective=ALLOWED',
+                          'r3c06_unknown_sources_effective=DENIED'),
+            valid+'INSTRUMENTATION_STATUS: r3c06_unknown_sources_effective=ALLOWED\n',
+            valid+'INSTRUMENTATION_STATUS: r3c06_unknown_sources_effective=DENIED\n',
+        ):
+            with self.subTest(bad=bad[-100:]),self.assertRaises(live.Refused):
+                live.check_single_instrumentation_result(bad,method,key,digest)
+
+    def test_android_source_checks_effective_permission_before_writing_fixture(self):
+        source=(HERE.parent.parent/'app/src/androidTest/java/com/aurora/store/data/artifact/'
+                'ArtifactActualInstallAcceptanceDeviceTest.kt').read_text()
+        self.assertIn('packageManager.canRequestPackageInstalls()',source)
+        self.assertIn('r3c06_unknown_sources_effective',source)
+        self.assertLess(source.index('require(canRequest)'),
+                        source.index('FileOutputStream(file)'))
 
     def test_ui_diagnostics_do_not_copy_secrets_or_unbounded_text(self):
         xml=("<hierarchy><node package='com.google.android.packageinstaller' "
