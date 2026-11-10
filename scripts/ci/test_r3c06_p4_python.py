@@ -326,6 +326,23 @@ class AcceptanceRegressions(unittest.TestCase):
         self.assertIn('stage_fixture(adb, runner, fixture, evidence)',driver)
         self.assertIn('cleanup_fixture(adb,runner,fixture_digest,evidence)',driver)
 
+    def test_real_os_terminal_state_reads_exact_session_not_formatted_receipt(self):
+        source = (HERE.parent.parent / 'app/src/androidTest/java/com/aurora/store/data/artifact/'
+                  'ArtifactActualInstallAcceptanceDeviceTest.kt').read_text()
+        self.assertIn('stateForInstallSession(context, session)', source)
+        self.assertIn('preferences.getInt("last_session", -1) == session', source)
+        self.assertIn('preferences.getString(key + "package", null) == "com.aurora.r3c06.fixture"', source)
+        self.assertIn('preferences.getLong(key + "generation", -1L) > 0L', source)
+        self.assertIn('ArtifactSessionReceiptPolicy.State.entries.firstOrNull', source)
+        self.assertIn('state == ArtifactSessionReceiptPolicy.State.ANDROID_REJECTED', source)
+        self.assertIn('state == ArtifactSessionReceiptPolicy.State.INSTALLED_BY_ANDROID', source)
+        self.assertIn('state == ArtifactSessionReceiptPolicy.State.APPROVAL_UI_UNAVAILABLE', source)
+        self.assertIn('assertThat(state).isEqualTo(ArtifactSessionReceiptPolicy.State.ANDROID_REJECTED)', source)
+        self.assertIn('assertThat(state).isEqualTo(ArtifactSessionReceiptPolicy.State.INSTALLED_BY_ANDROID)', source)
+        self.assertNotIn('if ("INSTALLED_BY_ANDROID" in state || "ANDROID_REJECTED" in state)', source)
+        self.assertNotIn('assertThat(state).contains("ANDROID_REJECTED")', source)
+        self.assertNotIn('assertThat(state).contains("INSTALLED_BY_ANDROID")', source)
+
 if __name__=='__main__':
     suite=unittest.defaultTestLoader.loadTestsFromTestCase(AcceptanceRegressions)
     result=unittest.TextTestRunner(verbosity=2).run(suite)

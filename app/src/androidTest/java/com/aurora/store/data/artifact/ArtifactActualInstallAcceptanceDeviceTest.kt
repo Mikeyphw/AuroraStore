@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 package com.aurora.store.data.artifact
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -74,6 +75,32 @@ class ArtifactActualInstallAcceptanceDeviceTest {
             }
         }
         return md.digest().joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
+    }
+
+    /** Observe the OS callback's exact persisted session, never a UI-formatted string.
+     * A different session, package, invalid generation or unrecognized stored state
+     * cannot be used to qualify the destructive installation test.
+     */
+    private fun stateForInstallSession(
+        context: Context, session: Int
+    ): ArtifactSessionReceiptPolicy.State? {
+        require(session > 0) { "Invalid Android installation session" }
+        val preferences = context.getSharedPreferences(
+            "artifact_import_session_receipts", Context.MODE_PRIVATE
+        )
+        require(preferences.getInt("last_session", -1) == session) {
+            "Another Android session replaced the isolated fixture attempt"
+        }
+        val key = "session_${session}_"
+        require(preferences.getString(key + "package", null) == "com.aurora.r3c06.fixture") {
+            "Stored OS callback is not for the isolated fixture"
+        }
+        require(preferences.getLong(key + "generation", -1L) > 0L) {
+            "Stored OS callback has no valid attempt generation"
+        }
+        val saved = preferences.getString(key + "state", null) ?: return null
+        return ArtifactSessionReceiptPolicy.State.entries.firstOrNull { it.name == saved }
+            ?: throw AssertionError("Unknown stored Android session state: $saved")
     }
 
     /** Only manually dispatched instrumentation can seed the isolated fixture.
@@ -188,21 +215,26 @@ class ArtifactActualInstallAcceptanceDeviceTest {
         ) { false }
         assertThat(session).isGreaterThan(0)
         val timeout = SystemClock.elapsedRealtime() + 180_000L
-        var state: String
+        var state: ArtifactSessionReceiptPolicy.State?
         while (true) {
-            state = ArtifactInstallSession.lastResult(context)
-            if ("INSTALLED_BY_ANDROID" in state || "ANDROID_REJECTED" in state) break
+            state = stateForInstallSession(context, session)
+            if (state == ArtifactSessionReceiptPolicy.State.INSTALLED_BY_ANDROID ||
+                state == ArtifactSessionReceiptPolicy.State.ANDROID_REJECTED) break
+            if (state == ArtifactSessionReceiptPolicy.State.APPROVAL_UI_UNAVAILABLE) {
+                throw AssertionError("Android could not present fixture installer confirmation")
+            }
             if (SystemClock.elapsedRealtime() >= timeout) {
-                throw AssertionError("System installation callback never became terminal: $state")
+                throw AssertionError("System installation callback never became terminal: state=$state; " +
+                    ArtifactInstallSession.lastResult(context))
             }
             SystemClock.sleep(450)
         }
         if (expected == "deny") {
-            assertThat(state).contains("ANDROID_REJECTED")
+            assertThat(state).isEqualTo(ArtifactSessionReceiptPolicy.State.ANDROID_REJECTED)
             assertThat(runCatching { context.packageManager.getPackageInfo(expectedPackage, 0) }
                 .isFailure).isTrue()
         } else {
-            assertThat(state).contains("INSTALLED_BY_ANDROID")
+            assertThat(state).isEqualTo(ArtifactSessionReceiptPolicy.State.INSTALLED_BY_ANDROID)
             val installed = context.packageManager.getPackageInfo(
                 expectedPackage, PackageManager.GET_SIGNING_CERTIFICATES
             )

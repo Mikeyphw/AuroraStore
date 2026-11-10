@@ -97,4 +97,24 @@ assert "doc.get('emulator_unknown_sources_effective_verified') is True" in _rece
 assert 'test_stage_requires_exact_effective_capability_from_target_app' in _p4_hf04
 assert 'test_missing_effective_permission_attestation_refuses_live_pass' in NEGATIVE.read_text()
 assert "['shell', 'appops', 'set', '--uid', AURORA" in _live_hf04, 'hosted opt-in setter absent'
+# HF08: the API36 DENY callback is actually persisted as a typed enum.
+# A human-readable lastResult() is not the enum spelling: checking the latter
+# in display text caused a false 180-second timeout despite OS REJECTED status.
+for token in ('stateForInstallSession(context, session)',
+              'preferences.getInt("last_session", -1) == session',
+              'preferences.getString(key + "package", null)',
+              'preferences.getLong(key + "generation", -1L) > 0L',
+              'ArtifactSessionReceiptPolicy.State.entries.firstOrNull',
+              'state == ArtifactSessionReceiptPolicy.State.ANDROID_REJECTED',
+              'state == ArtifactSessionReceiptPolicy.State.INSTALLED_BY_ANDROID',
+              'state == ArtifactSessionReceiptPolicy.State.APPROVAL_UI_UNAVAILABLE',
+              'assertThat(state).isEqualTo(ArtifactSessionReceiptPolicy.State.ANDROID_REJECTED)',
+              'assertThat(state).isEqualTo(ArtifactSessionReceiptPolicy.State.INSTALLED_BY_ANDROID)'):
+    assert token in _test_hf04, 'HF08 exact session state/OS callback missing: '+token
+for obsolete in ('if ("INSTALLED_BY_ANDROID" in state || "ANDROID_REJECTED" in state)',
+                 'assertThat(state).contains("ANDROID_REJECTED")',
+                 'assertThat(state).contains("INSTALLED_BY_ANDROID")'):
+    assert obsolete not in _test_hf04, 'HF08 stale UI-text state comparison returned'
+assert 'test_real_os_terminal_state_reads_exact_session_not_formatted_receipt' in P4_TEST
+
 print('R3C06_P5_SOURCE_CONTRACT_PASS: manual R1D opt-in, pinned bundletool, effective Android permission, foreground OS consent, private signing-key hygiene, 18 receipt regressions')
