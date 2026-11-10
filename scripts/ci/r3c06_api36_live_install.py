@@ -7,6 +7,7 @@ other than the hard-coded, uniquely named lab fixture (and only if absent at sta
 Requires an actual installer UI; never auto-approves a different dialog.
 """
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -24,6 +25,7 @@ AURORA = 'com.aurora.store.debug'
 TEST_CLASS = 'com.aurora.store.data.artifact.ArtifactActualInstallAcceptanceDeviceTest'
 INSTALLER_PACKAGES = {'com.android.packageinstaller', 'com.google.android.packageinstaller'}
 BUTTON_TEXT = {'accept': {'Install'}, 'deny': {'Cancel'}}
+MAX_FIXTURE_BYTES = 64 * 1024  # bounded Android instrumentation Bundle IPC
 
 class Refused(Exception): pass
 
@@ -121,9 +123,51 @@ def fixture_present(adb):
             'Aurora absent from user-0 inventory: cannot establish fixture state')
     return 'package:' + TARGET in records
 
-def instrument(adb, runner, scenario, work):
+def check_single_instrumentation_result(output, marker):
+    # `adb shell am instrument` can exit 0 after a JUnit test failure: check
+    # the actual one-test completion and the bound app-generated marker.
+    require('FAILURES!!!' not in output and 'INSTRUMENTATION_FAILED' not in output
+            and 'INSTRUMENTATION_ABORTED' not in output,
+            'fixture instrumentation reported failure')
+    require(len(re.findall(r'^OK \(1 test\)$', output, re.M)) == 1,
+            'fixture instrumentation did not complete exactly one test')
+    require(output.count(marker) == 1, 'exact fixture identity marker missing or duplicated')
+
+
+def stage_fixture(adb, runner, fixture, work):
+    data = Path(fixture).read_bytes()
+    require(0 < len(data) <= MAX_FIXTURE_BYTES,
+            'test-signed fixture is too large for bounded instrumentation transfer')
+    digest = hashlib.sha256(data).hexdigest()
+    encoded = base64.b64encode(data).decode('ascii')
+    require(len(encoded) <= (MAX_FIXTURE_BYTES + 2) // 3 * 4,
+            'encoded fixture exceeds instrumentation transfer bound')
+    cmd = (adb + ['shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
+                  TEST_CLASS + '#seedSignedFixtureIntoPrivateCache',
+                  '-e', 'r3c06_fixture_sha256', digest,
+                  '-e', 'r3c06_fixture_base64', encoded, runner])
+    output = run(cmd, timeout=180)
+    (work / 'fixture-private-stage.txt').write_text(output + '\n', encoding='utf-8')
+    check_single_instrumentation_result(
+        output, 'R3C06_FIXTURE_PRIVATE_STAGE_PASS sha256=' + digest)
+    return digest
+
+
+def cleanup_fixture(adb, runner, digest, work):
+    require(re.fullmatch(r'[0-9a-f]{64}', digest) is not None,
+            'cannot clean up fixture without its exact expected digest')
+    cmd = (adb + ['shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
+                  TEST_CLASS + '#removeSignedFixtureFromPrivateCache',
+                  '-e', 'r3c06_fixture_sha256', digest, runner])
+    output = run(cmd, timeout=180)
+    (work / 'fixture-private-cleanup.txt').write_text(output + '\n', encoding='utf-8')
+    check_single_instrumentation_result(
+        output, 'R3C06_FIXTURE_PRIVATE_CLEANUP_PASS sha256=' + digest)
+
+
+def instrument(adb, runner, scenario, work, digest):
     cmd=adb+['shell','am','instrument','-w','-r','-e','class',TEST_CLASS+'#androidInstallerActuallyAcceptsOrRejectsFixture',
-             '-e','r3c06_expected',scenario,runner]
+             '-e','r3c06_expected',scenario, '-e', 'r3c06_fixture_sha256', digest, runner]
     with (work/('instrument-'+scenario+'.txt')).open('wb') as output:
         p=subprocess.Popen(cmd,stdout=output,stderr=subprocess.STDOUT)
         tapped=False
@@ -180,37 +224,51 @@ def main():
     require(runner,'Aurora Hilt instrument runner not installed')
     tmp=Path(os.environ.get('RUNNER_TEMP') or os.environ.get('TMPDIR') or tempfile.gettempdir())
     work=Path(tempfile.mkdtemp(prefix='aurora-r3c06-real-install-',dir=tmp))
-    safe_created=False
     results=[]
+    fixture_digest=None
+    seed_attempted=False
+    receipt=None
     try:
         fixture=build_fixture(work,sdk)
-        remote='cache/r3c06-fixture.apk'
-        # Pipe via non-PTY adb shell; never copy to shared/external device storage.
-        run(adb+['shell','-T','run-as',AURORA,'sh','-c','cat > '+remote],
-            data=fixture.read_bytes(),timeout=90)
-        on_device=run(adb+['shell','run-as',AURORA,'sha256sum',remote]).split()[0]
-        require(on_device==sha(fixture),'fixture bytes changed during device transfer')
+        fixture_digest=sha(fixture)
+        # Android itself owns the cache directory. Stage via the app's bounded
+        # instrumentation entry point; never assume `adb run-as` can write it.
+        seed_attempted=True
+        require(stage_fixture(adb, runner, fixture, work)==fixture_digest,
+                'signed fixture digest changed during Android-private staging')
         for scenario in ('deny','accept'):
             require(not fixture_present(adb),
                     'fixture unexpectedly installed before test')
-            results.append(instrument(adb,runner,scenario,work))
+            results.append(instrument(adb,runner,scenario,work,fixture_digest))
             installed=fixture_present(adb)
             require(installed==(scenario=='accept'), 'package manager state mismatches callback')
-            if installed:safe_created=True
         receipt={'overall':'PASS','source_sha':source_sha,
                  'run_id':os.environ.get('GITHUB_RUN_ID',''),
                  'android_api':36,'fixture_package':TARGET,
-                 'fixture_sha256':sha(fixture),'signed_v2_verified':True,
+                 'fixture_sha256':fixture_digest,'signed_v2_verified':True,
+                 'private_app_uid_staging_verified':True,
                  'results':results,'play_evidence_changes_checked':False,
                  'physical_device_qualified':False,'release_qualified':False}
-        # Write PASS only after cleanup in finally; see below.
+        # Never write PASS until both system uninstallation and private-file
+        # cleanup are independently established in finally.
     finally:
-        if safe_created or fixture_present(adb):
-            run(adb+['uninstall',TARGET],timeout=90)
-        require(not fixture_present(adb),
-                'fixture cleanup failed: NO QUALIFICATION')
-        run(adb+['shell','run-as',AURORA,'rm','-f','cache/r3c06-fixture.apk'],check=False)
-        # Do not delete diagnostics: current ephemeral RUNNER_TEMP can retain them.
+        cleanup_errors=[]
+        try:
+            if fixture_present(adb):
+                run(adb+['uninstall',TARGET],timeout=90)
+            require(not fixture_present(adb),
+                    'fixture package uninstall failed: NO QUALIFICATION')
+        except (Refused, subprocess.TimeoutExpired, OSError) as failure:
+            cleanup_errors.append(str(failure))
+        if seed_attempted and fixture_digest is not None:
+            try:
+                cleanup_fixture(adb,runner,fixture_digest,work)
+            except (Refused, subprocess.TimeoutExpired, OSError) as failure:
+                cleanup_errors.append(str(failure))
+        require(not cleanup_errors,
+                'fixture package/private-file cleanup incomplete: ' + '; '.join(cleanup_errors))
+    require(receipt is not None, 'successful OS receipt absent after cleanup')
+    receipt['private_fixture_cleanup_verified']=True
     path=Path(args.receipt);path.parent.mkdir(parents=True,exist_ok=True)
     path.write_text(json.dumps(receipt,indent=2,sort_keys=True)+'\n')
     print('R3C06_REAL_API36_INSTALL_PASS receipt='+str(path))

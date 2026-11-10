@@ -34,7 +34,7 @@ for token in ('ANDROID_NS','"uses-split"','CodingErrorAction.REPORT',
     assert token in reader, 'R3C06_P3_REFUSED signed manifest reader: '+token
 assert unit.count('@Test') >= 12
 assert signed.count('@Test') == 6
-assert install.count('@Test') == 1
+assert install.count('@Test') == 3
 # Regression gate: Truth assertion does not smart-cast nullable Bundle.getString().
 # Exact API36 test must derive a non-null expected action before uppercasing it.
 assert 'val expected = requireNotNull(' in install, \
@@ -47,6 +47,13 @@ assert 'expected.uppercase(Locale.ROOT)' in install, \
 assert "^OK \\(6 tests\\)" in runner and 'ArtifactRealSignedArchiveDeviceTest' in runner
 assert 'R3C06_ALLOW_LIVE_INSTALL' in runner and 'r3c06_api36_live_install.py' in runner
 assert 'R3C06_ALLOW_LIVE_INSTALL' in script and 'com.aurora.r3c06.fixture' in script
+for token in ('seedSignedFixtureIntoPrivateCache', 'removeSignedFixtureFromPrivateCache',
+              'requiredFixtureDigest()', 'R3C06_FIXTURE_PRIVATE_STAGE_PASS',
+              'R3C06_FIXTURE_PRIVATE_CLEANUP_PASS', 'maxFixtureBytes = 64 * 1024'):
+    assert token in install, 'R3C06_P5_HF04_REFUSED private fixture test: ' + token
+assert 'r3c06_fixture_sha256' in script and 'stage_fixture(' in script and \
+       'cleanup_fixture(' in script, 'R3C06_P5_HF04_REFUSED host fixture transport missing'
+assert "'run-as'" not in script, 'R3C06_P5_HF04_REFUSED run-as cache transport still present' 
 assert 'system_consent_ui_verified' in script and "'android_callback_verified':True" in script
 assert 'R3C06_BUNDLETOOL' in oracle and "'PARTIAL'" in oracle
 assert "'--bundletool-sha256'" in oracle and 'apksigner' in oracle

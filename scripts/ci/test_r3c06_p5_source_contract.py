@@ -51,5 +51,21 @@ assert SCRIPT.is_file() and NEGATIVE.is_file()
 result=subprocess.run([sys.executable,'-B',str(NEGATIVE)],cwd=ROOT,
                       capture_output=True,text=True,timeout=30)
 assert result.returncode==0, 'R3C06_P5_SOURCE_REFUSED negative regression failed: '+(result.stdout+result.stderr)[-2500:]
-assert 'Ran 12 tests' in result.stderr, 'P5 acceptance negative test count stale'
-print('R3C06_P5_SOURCE_CONTRACT_PASS: manual R1D opt-in, pinned bundletool, exact receipt, 12 negatives')
+assert 'Ran 14 tests' in result.stderr, 'P5 acceptance negative test count stale'
+
+# R3C06 P5 HF04: Android test app UID must stage and remove only its exact
+# bounded, hashed synthetic fixture. The ADB shell cannot write app cache.
+_live_hf04 = (ROOT / 'scripts/ci/r3c06_api36_live_install.py').read_text(encoding='utf-8')
+_test_hf04 = (ROOT / 'app/src/androidTest/java/com/aurora/store/data/artifact/ArtifactActualInstallAcceptanceDeviceTest.kt').read_text(encoding='utf-8')
+_p4_hf04 = (ROOT / 'scripts/ci/test_r3c06_p4_python.py').read_text(encoding='utf-8')
+assert 'stage_fixture(adb, runner, fixture, work)' in _live_hf04, 'HF04 stage missing'
+assert 'cleanup_fixture(adb,runner,fixture_digest,work)' in _live_hf04, 'HF04 cleanup missing'
+assert 'private_app_uid_staging_verified' in _live_hf04, 'HF04 private stage receipt missing'
+assert "'run-as'" not in _live_hf04, 'HF04 unsafe run-as cache transfer still present'
+assert _test_hf04.count('@Test') == 3, 'HF04 exact three opted-in methods missing'
+assert 'context.cacheDir.canonicalFile' in _test_hf04 and 'fileDigest(file) == expected' in _test_hf04
+assert _p4_hf04.count('def test_') >= 16, 'HF04 negative source tests missing'
+_receipt_hf04=(ROOT/'scripts/ci/r3c06_p5_manual_receipt.py').read_text(encoding='utf-8')
+assert "doc.get('private_app_uid_staging_verified') is True" in _receipt_hf04, 'HF04 receipt staging proof missing'
+assert "doc.get('private_fixture_cleanup_verified') is True" in _receipt_hf04, 'HF04 receipt cleanup proof missing'
+print('R3C06_P5_SOURCE_CONTRACT_PASS: manual R1D opt-in, pinned bundletool, exact receipt, 14 negatives')

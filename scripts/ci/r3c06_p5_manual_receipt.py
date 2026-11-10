@@ -38,6 +38,10 @@ def validate_live(doc, expected_sha, run_id):
     require(doc.get('android_api') == 36 and doc.get('fixture_package') == PACKAGE,
             'wrong live install SDK or fixture package')
     require(doc.get('signed_v2_verified') is True, 'v2 signature not proved')
+    require(doc.get('private_app_uid_staging_verified') is True,
+            'fixture was not proved staged by Aurora app UID')
+    require(doc.get('private_fixture_cleanup_verified') is True,
+            'app-private fixture deletion is not verified')
     require(isinstance(doc.get('fixture_sha256'), str) and
             SIGNED_RE.fullmatch(doc['fixture_sha256']), 'missing test-signed fixture hash')
     results = doc.get('results')

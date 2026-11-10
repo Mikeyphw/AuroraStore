@@ -115,6 +115,70 @@ class AcceptanceRegressions(unittest.TestCase):
             self.assertEqual(proof['installer_button'],'accept')
             self.assertIn('tap', mocked.call_args_list[-1].args[0])
 
+    def test_app_owned_fixture_stage_verifies_sha_and_exact_one_test(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as td:
+            work = Path(td)
+            fixture = work / 'test-signed.apk'
+            fixture.write_bytes(b'isolated-synthetic-apk-123')
+            digest = hashlib.sha256(fixture.read_bytes()).hexdigest()
+            result = ('Time: 0.1\nR3C06_FIXTURE_PRIVATE_STAGE_PASS sha256='
+                      + digest + '\nOK (1 test)')
+            with patch.object(live, 'run', return_value=result) as command:
+                self.assertEqual(live.stage_fixture(['adb'], 'HiltRunner', fixture, work), digest)
+                args = command.call_args.args[0]
+                self.assertIn('seedSignedFixtureIntoPrivateCache', ' '.join(args))
+                self.assertIn('r3c06_fixture_base64', args)
+                self.assertIn(digest, args)
+                self.assertNotIn('run-as', args)
+                self.assertTrue((work / 'fixture-private-stage.txt').is_file())
+
+    def test_app_owned_fixture_cleanup_verifies_receipt(self):
+        with tempfile.TemporaryDirectory() as td:
+            work=Path(td)
+            digest='f'*64
+            result='R3C06_FIXTURE_PRIVATE_CLEANUP_PASS sha256='+digest+'\nOK (1 test)'
+            with patch.object(live, 'run', return_value=result) as command:
+                live.cleanup_fixture(['adb'],'HiltRunner',digest,work)
+                args=command.call_args.args[0]
+                self.assertIn('removeSignedFixtureFromPrivateCache',' '.join(args))
+                self.assertNotIn('run-as',args)
+                self.assertTrue((work / 'fixture-private-cleanup.txt').is_file())
+
+    def test_missing_or_forged_app_owned_fixture_receipt_fails_closed(self):
+        expected='R3C06_FIXTURE_PRIVATE_STAGE_PASS sha256='+'a'*64
+        for text in ('', 'OK (1 test)', expected,
+                     expected+'\nOK (1 test)\nOK (1 test)',
+                     expected+'\nOK (1 test)\nFAILURES!!!',
+                     expected+'\n'+expected+'\nOK (1 test)',
+                     expected+'\nINSTRUMENTATION_FAILED\nOK (1 test)'):
+            with self.subTest(proof=text):
+                with self.assertRaises(live.Refused):
+                    live.check_single_instrumentation_result(text,expected)
+
+    def test_fixture_ipc_bounded_and_invalid_cleanup_digest_refused(self):
+        with tempfile.TemporaryDirectory() as td:
+            work=Path(td); apk=work/'large.apk'
+            apk.write_bytes(b'x'*(live.MAX_FIXTURE_BYTES+1))
+            with patch.object(live, 'run') as command:
+                with self.assertRaises(live.Refused):
+                    live.stage_fixture(['adb'],'HiltRunner',apk,work)
+                command.assert_not_called()
+                with self.assertRaises(live.Refused):
+                    live.cleanup_fixture(['adb'],'HiltRunner','invalid-sha',work)
+                command.assert_not_called()
+
+    def test_device_fixture_source_has_bounded_hash_and_app_cache(self):
+        source=(HERE.parent.parent / 'app/src/androidTest/java/com/aurora/store/data/artifact/'
+                'ArtifactActualInstallAcceptanceDeviceTest.kt').read_text()
+        for token in ('context.cacheDir', 'requiredFixtureDigest()',
+                      'maxFixtureBytes = 64 * 1024',
+                      'seedSignedFixtureIntoPrivateCache()',
+                      'removeSignedFixtureFromPrivateCache()',
+                      'R3C06_FIXTURE_PRIVATE_STAGE_PASS',
+                      'R3C06_FIXTURE_PRIVATE_CLEANUP_PASS'):
+            self.assertIn(token,source)
+
 if __name__=='__main__':
     suite=unittest.defaultTestLoader.loadTestsFromTestCase(AcceptanceRegressions)
     result=unittest.TextTestRunner(verbosity=2).run(suite)
