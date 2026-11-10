@@ -123,15 +123,69 @@ def fixture_present(adb):
             'Aurora absent from user-0 inventory: cannot establish fixture state')
     return 'package:' + TARGET in records
 
-def check_single_instrumentation_result(output, marker):
-    # `adb shell am instrument` can exit 0 after a JUnit test failure: check
-    # the actual one-test completion and the bound app-generated marker.
-    require('FAILURES!!!' not in output and 'INSTRUMENTATION_FAILED' not in output
-            and 'INSTRUMENTATION_ABORTED' not in output,
-            'fixture instrumentation reported failure')
-    require(len(re.findall(r'^OK \(1 test\)$', output, re.M)) == 1,
-            'fixture instrumentation did not complete exactly one test')
-    require(output.count(marker) == 1, 'exact fixture identity marker missing or duplicated')
+def check_single_instrumentation_result(output, method, key, value):
+    """Require one real successful AndroidJUnitRunner execution and one exact
+    instrumentation *status* receipt, never logcat/println/string substring.
+    A fake line in JUnit's result stream cannot satisfy the status requirement.
+    """
+    require(method in {'seedSignedFixtureIntoPrivateCache',
+                       'removeSignedFixtureFromPrivateCache',
+                       'androidInstallerActuallyAcceptsOrRejectsFixture'},
+            'unknown fixture test method')
+    require((key, method) in {
+        ('r3c06_fixture_stage_sha256', 'seedSignedFixtureIntoPrivateCache'),
+        ('r3c06_fixture_cleanup_sha256', 'removeSignedFixtureFromPrivateCache'),
+        ('r3c06_os_result', 'androidInstallerActuallyAcceptsOrRejectsFixture')},
+        'fixture status field does not match test method')
+    require(re.fullmatch(r'[0-9a-f]{64}', value) is not None if key != 'r3c06_os_result'
+            else value in ('DENY', 'ACCEPT'), 'invalid fixture status value')
+    lines = output.splitlines()
+    require(not any(token in output for token in (
+        'FAILURES!!!', 'INSTRUMENTATION_FAILED', 'INSTRUMENTATION_ABORTED',
+        'INSTRUMENTATION_STATUS_CODE: -1', 'INSTRUMENTATION_STATUS_CODE: -2',
+    )), 'instrumentation reported failure or crash')
+    require(lines.count('INSTRUMENTATION_CODE: -1') == 1 and
+            lines.count('OK (1 test)') == 1,
+            'instrumentation did not complete exactly one successful JUnit test')
+    require('INSTRUMENTATION_STATUS: class=' + TEST_CLASS in lines and
+            'INSTRUMENTATION_STATUS: test=' + method in lines,
+            'instrumentation class or executed test identity missing')
+    prefix = 'INSTRUMENTATION_STATUS: ' + key + '='
+    status_lines = [line for line in lines if line.startswith(prefix)]
+    require(status_lines == [prefix + value],
+            'exact structured instrumentation status receipt missing or ambiguous')
+    return True
+
+
+def run_fixture_instrumentation(cmd, log_path, method, key, value, *, redact=()):
+    """Always retain sanitized instrumentation diagnostics in the uploaded R1D
+    artifact, including on nonzero adb return or missing proof. Never log argv
+    because staging passes an ephemeral signed fixture as a bounded argument.
+    """
+    log_path = Path(log_path)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              timeout=180, check=False)
+    except subprocess.TimeoutExpired as failure:
+        partial = failure.stdout or b''
+        output = partial.decode(errors='replace') if isinstance(partial, bytes) else str(partial)
+        for secret in redact:
+            output = output.replace(secret, '[REDACTED_FIXTURE_BYTES]')
+        log_path.write_text(output[-65536:]+'\nTIMEOUT\n',encoding='utf-8')
+        raise Refused('fixture instrumentation timed out; see '+str(log_path)) from failure
+    output = proc.stdout.decode(errors='replace')
+    for secret in redact:
+        output = output.replace(secret, '[REDACTED_FIXTURE_BYTES]')
+    log_path.write_text(output[-65536:]+'\n',encoding='utf-8')
+    require(proc.returncode == 0,
+            'fixture instrumentation command failed rc='+str(proc.returncode)+
+            '; see '+str(log_path)+'; tail='+output[-800:])
+    try:
+        check_single_instrumentation_result(output, method, key, value)
+    except Refused as failure:
+        raise Refused(str(failure)+'; see '+str(log_path)+'; tail='+output[-900:]) from failure
+    return True
 
 
 def stage_fixture(adb, runner, fixture, work):
@@ -146,10 +200,10 @@ def stage_fixture(adb, runner, fixture, work):
                   TEST_CLASS + '#seedSignedFixtureIntoPrivateCache',
                   '-e', 'r3c06_fixture_sha256', digest,
                   '-e', 'r3c06_fixture_base64', encoded, runner])
-    output = run(cmd, timeout=180)
-    (work / 'fixture-private-stage.txt').write_text(output + '\n', encoding='utf-8')
-    check_single_instrumentation_result(
-        output, 'R3C06_FIXTURE_PRIVATE_STAGE_PASS sha256=' + digest)
+    run_fixture_instrumentation(
+        cmd, work / 'fixture-private-stage.txt',
+        'seedSignedFixtureIntoPrivateCache', 'r3c06_fixture_stage_sha256', digest,
+        redact=(encoded,))
     return digest
 
 
@@ -159,10 +213,9 @@ def cleanup_fixture(adb, runner, digest, work):
     cmd = (adb + ['shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
                   TEST_CLASS + '#removeSignedFixtureFromPrivateCache',
                   '-e', 'r3c06_fixture_sha256', digest, runner])
-    output = run(cmd, timeout=180)
-    (work / 'fixture-private-cleanup.txt').write_text(output + '\n', encoding='utf-8')
-    check_single_instrumentation_result(
-        output, 'R3C06_FIXTURE_PRIVATE_CLEANUP_PASS sha256=' + digest)
+    run_fixture_instrumentation(
+        cmd, work / 'fixture-private-cleanup.txt',
+        'removeSignedFixtureFromPrivateCache', 'r3c06_fixture_cleanup_sha256', digest)
 
 
 def instrument(adb, runner, scenario, work, digest):
@@ -191,12 +244,15 @@ def instrument(adb, runner, scenario, work, digest):
                 try:p.wait(timeout=10)
                 except subprocess.TimeoutExpired:p.kill()
     output=(work/('instrument-'+scenario+'.txt')).read_text(errors='replace')
-    require('FAILURES!!!' not in output and 'INSTRUMENTATION_FAILED' not in output,
-            'Android instrumentation failure')
-    require(re.search(r'^OK \(1 test\)',output,re.M), '1 actual OS session test not reported')
-    require('R3C06_API36_OS_RESULT='+scenario.upper() in output,
-            'matching terminal OS result missing from instrumentation')
-    return {'outcome':scenario.upper(),'system_consent_ui_verified':True,'android_callback_verified':True}
+    try:
+        check_single_instrumentation_result(
+            output, 'androidInstallerActuallyAcceptsOrRejectsFixture',
+            'r3c06_os_result', scenario.upper())
+    except Refused as failure:
+        raise Refused(str(failure)+'; see '+str(work/('instrument-'+scenario+'.txt'))+
+                      '; tail='+output[-900:]) from failure
+    return {'outcome':scenario.upper(),'system_consent_ui_verified':True,
+            'android_callback_verified':True, 'instrumentation_status_verified':True}
 
 def main():
     parser=argparse.ArgumentParser()
@@ -223,11 +279,17 @@ def main():
     runner=next((x for x in matches if 'HiltInstrumentationTestRunner' in x),None)
     require(runner,'Aurora Hilt instrument runner not installed')
     tmp=Path(os.environ.get('RUNNER_TEMP') or os.environ.get('TMPDIR') or tempfile.gettempdir())
-    work=Path(tempfile.mkdtemp(prefix='aurora-r3c06-real-install-',dir=tmp))
+    # Existing R1D upload-artifact includes aurora-r3c03-c02. Save all
+    # sanitized stage/OS/cleanup outputs there even when a test fails.
+    logs_parent = tmp / 'aurora-r3c03-c02' / 'r3c06-live-install'
+    logs_parent.mkdir(parents=True, exist_ok=True)
+    work=Path(tempfile.mkdtemp(prefix='attempt-',dir=logs_parent))
     results=[]
     fixture_digest=None
     seed_attempted=False
     receipt=None
+    primary_error=None
+    cleanup_errors=[]
     try:
         fixture=build_fixture(work,sdk)
         fixture_digest=sha(fixture)
@@ -247,12 +309,14 @@ def main():
                  'android_api':36,'fixture_package':TARGET,
                  'fixture_sha256':fixture_digest,'signed_v2_verified':True,
                  'private_app_uid_staging_verified':True,
+                 'instrumentation_status_proof_verified':True,
                  'results':results,'play_evidence_changes_checked':False,
                  'physical_device_qualified':False,'release_qualified':False}
         # Never write PASS until both system uninstallation and private-file
         # cleanup are independently established in finally.
+    except Exception as failure:
+        primary_error=failure
     finally:
-        cleanup_errors=[]
         try:
             if fixture_present(adb):
                 run(adb+['uninstall',TARGET],timeout=90)
@@ -265,8 +329,14 @@ def main():
                 cleanup_fixture(adb,runner,fixture_digest,work)
             except (Refused, subprocess.TimeoutExpired, OSError) as failure:
                 cleanup_errors.append(str(failure))
-        require(not cleanup_errors,
-                'fixture package/private-file cleanup incomplete: ' + '; '.join(cleanup_errors))
+    if primary_error is not None or cleanup_errors:
+        problems=[]
+        if primary_error is not None:
+            problems.append('original acceptance failure: '+str(primary_error))
+        if cleanup_errors:
+            problems.append('fixture package/private-file cleanup incomplete: '+
+                            '; '.join(cleanup_errors))
+        raise Refused(' | '.join(problems)) from primary_error
     require(receipt is not None, 'successful OS receipt absent after cleanup')
     receipt['private_fixture_cleanup_verified']=True
     path=Path(args.receipt);path.parent.mkdir(parents=True,exist_ok=True)

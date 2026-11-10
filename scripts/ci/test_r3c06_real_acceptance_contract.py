@@ -48,9 +48,12 @@ assert "^OK \\(6 tests\\)" in runner and 'ArtifactRealSignedArchiveDeviceTest' i
 assert 'R3C06_ALLOW_LIVE_INSTALL' in runner and 'r3c06_api36_live_install.py' in runner
 assert 'R3C06_ALLOW_LIVE_INSTALL' in script and 'com.aurora.r3c06.fixture' in script
 for token in ('seedSignedFixtureIntoPrivateCache', 'removeSignedFixtureFromPrivateCache',
-              'requiredFixtureDigest()', 'R3C06_FIXTURE_PRIVATE_STAGE_PASS',
-              'R3C06_FIXTURE_PRIVATE_CLEANUP_PASS', 'maxFixtureBytes = 64 * 1024'):
+              'requiredFixtureDigest()', 'r3c06_fixture_stage_sha256',
+              'r3c06_fixture_cleanup_sha256', 'maxFixtureBytes = 64 * 1024'):
     assert token in install, 'R3C06_P5_HF04_REFUSED private fixture test: ' + token
+assert 'sendStatus(0, status)' in install, 'P3 HF05 missing platform instrumentation statuses'
+assert 'r3c06_os_result' in install and 'r3c06_os_result' in script, \
+    'P3 HF05 real OS status marker not bound'
 assert 'r3c06_fixture_sha256' in script and 'stage_fixture(' in script and \
        'cleanup_fixture(' in script, 'R3C06_P5_HF04_REFUSED host fixture transport missing'
 assert "'run-as'" not in script, 'R3C06_P5_HF04_REFUSED run-as cache transport still present' 

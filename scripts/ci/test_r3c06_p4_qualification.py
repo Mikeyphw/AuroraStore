@@ -53,13 +53,21 @@ require('stage_fixture(adb, runner, fixture, work)' in live and
         "'run-as'" not in live and
         'private_app_uid_staging_verified' in live,
         'R3C06 HF04 private app-owned fixture handoff/cleanup missing')
+require('run_fixture_instrumentation(' in live and
+        'check_single_instrumentation_result(' in live and
+        'INSTRUMENTATION_STATUS: ' in live and
+        'INSTRUMENTATION_CODE: -1' in live and
+        'r3c06-live-install' in live and
+        'original acceptance failure:' in live and
+        'instrumentation_status_proof_verified' in live,
+        'R3C06 HF05 structured evidence or failed-run diagnostics missing')
 require('def qualifies_variant(' in bundle and
         'qualifies_variant(results' in bundle and
         "candidate.get('status') == 'SIGNED'" in bundle and
         "'REFUSED' or" not in bundle,
         'bundletool false acceptance is still present')
 require('test_r3c06_p4_qualification.py' in full and
-        tests.count('def test_') >= 16,
+        tests.count('def test_') >= 20,
         'targeted CI does not reach the new P4 tests')
 require((ROOT/'docs/R3C06_P4_QUALIFICATION.md').is_file(), 'qualification documentation missing')
 check = subprocess.run([sys.executable, '-B', str(CI/'test_r3c06_p4_python.py')],
@@ -67,4 +75,4 @@ check = subprocess.run([sys.executable, '-B', str(CI/'test_r3c06_p4_python.py')]
                        text=True, timeout=30)
 require(check.returncode == 0,
         'offline regression tests failed: ' + (check.stdout+check.stderr)[-5000:])
-print('R3C06_P4_SOURCE_AND_PYTHON_PASS: sixteen measured host-driver regressions; device qualification still pending')
+print('R3C06_P4_SOURCE_AND_PYTHON_PASS: twenty measured host-driver regressions; device qualification still pending')

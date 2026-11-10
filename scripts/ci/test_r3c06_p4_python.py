@@ -115,52 +115,121 @@ class AcceptanceRegressions(unittest.TestCase):
             self.assertEqual(proof['installer_button'],'accept')
             self.assertIn('tap', mocked.call_args_list[-1].args[0])
 
+    def instrument_output(self, method, key, value):
+        return ('INSTRUMENTATION_STATUS: class=' + live.TEST_CLASS + '\n'
+                'INSTRUMENTATION_STATUS: test=' + method + '\n'
+                'INSTRUMENTATION_STATUS: ' + key + '=' + value + '\n'
+                'INSTRUMENTATION_STATUS_CODE: 0\nTime: 0.1\n'
+                'OK (1 test)\nINSTRUMENTATION_CODE: -1\n')
+
     def test_app_owned_fixture_stage_verifies_sha_and_exact_one_test(self):
-        import hashlib
+        import hashlib, subprocess
         with tempfile.TemporaryDirectory() as td:
-            work = Path(td)
-            fixture = work / 'test-signed.apk'
+            work=Path(td);fixture=work/'test-signed.apk'
             fixture.write_bytes(b'isolated-synthetic-apk-123')
-            digest = hashlib.sha256(fixture.read_bytes()).hexdigest()
-            result = ('Time: 0.1\nR3C06_FIXTURE_PRIVATE_STAGE_PASS sha256='
-                      + digest + '\nOK (1 test)')
-            with patch.object(live, 'run', return_value=result) as command:
-                self.assertEqual(live.stage_fixture(['adb'], 'HiltRunner', fixture, work), digest)
-                args = command.call_args.args[0]
-                self.assertIn('seedSignedFixtureIntoPrivateCache', ' '.join(args))
-                self.assertIn('r3c06_fixture_base64', args)
-                self.assertIn(digest, args)
-                self.assertNotIn('run-as', args)
-                self.assertTrue((work / 'fixture-private-stage.txt').is_file())
+            digest=hashlib.sha256(fixture.read_bytes()).hexdigest()
+            result=self.instrument_output('seedSignedFixtureIntoPrivateCache',
+                                          'r3c06_fixture_stage_sha256',digest)
+            with patch.object(live.subprocess,'run',return_value=subprocess.CompletedProcess([],0,result.encode())) as command:
+                self.assertEqual(live.stage_fixture(['adb'],'HiltRunner',fixture,work),digest)
+                argv=command.call_args.args[0]
+                self.assertIn('seedSignedFixtureIntoPrivateCache',' '.join(argv))
+                self.assertIn('r3c06_fixture_base64',argv)
+                self.assertIn(digest,argv)
+                self.assertNotIn('run-as',argv)
+                self.assertIn('r3c06_fixture_stage_sha256='+digest,(work/'fixture-private-stage.txt').read_text())
 
     def test_app_owned_fixture_cleanup_verifies_receipt(self):
+        import subprocess
         with tempfile.TemporaryDirectory() as td:
-            work=Path(td)
-            digest='f'*64
-            result='R3C06_FIXTURE_PRIVATE_CLEANUP_PASS sha256='+digest+'\nOK (1 test)'
-            with patch.object(live, 'run', return_value=result) as command:
+            work=Path(td);digest='f'*64
+            result=self.instrument_output('removeSignedFixtureFromPrivateCache',
+                                          'r3c06_fixture_cleanup_sha256',digest)
+            with patch.object(live.subprocess,'run',return_value=subprocess.CompletedProcess([],0,result.encode())) as command:
                 live.cleanup_fixture(['adb'],'HiltRunner',digest,work)
-                args=command.call_args.args[0]
-                self.assertIn('removeSignedFixtureFromPrivateCache',' '.join(args))
-                self.assertNotIn('run-as',args)
-                self.assertTrue((work / 'fixture-private-cleanup.txt').is_file())
+                argv=command.call_args.args[0]
+                self.assertIn('removeSignedFixtureFromPrivateCache',' '.join(argv))
+                self.assertNotIn('run-as',argv)
+                self.assertTrue((work/'fixture-private-cleanup.txt').is_file())
 
     def test_missing_or_forged_app_owned_fixture_receipt_fails_closed(self):
-        expected='R3C06_FIXTURE_PRIVATE_STAGE_PASS sha256='+'a'*64
-        for text in ('', 'OK (1 test)', expected,
-                     expected+'\nOK (1 test)\nOK (1 test)',
-                     expected+'\nOK (1 test)\nFAILURES!!!',
-                     expected+'\n'+expected+'\nOK (1 test)',
-                     expected+'\nINSTRUMENTATION_FAILED\nOK (1 test)'):
-            with self.subTest(proof=text):
+        method='seedSignedFixtureIntoPrivateCache';key='r3c06_fixture_stage_sha256'
+        digest='a'*64
+        valid=self.instrument_output(method,key,digest)
+        self.assertTrue(live.check_single_instrumentation_result(valid,method,key,digest))
+        for output in ('', 'OK (1 test)',
+                       'R3C06_FIXTURE_PRIVATE_STAGE_PASS sha256='+digest+'\nOK (1 test)',
+                       valid.replace('INSTRUMENTATION_CODE: -1',''),
+                       valid.replace('INSTRUMENTATION_STATUS: '+key+'='+digest+'\n',''),
+                       valid.replace(key+'='+digest,key+'='+'b'*64),
+                       valid.replace('OK (1 test)','OK (2 tests)'),
+                       valid.replace('INSTRUMENTATION_STATUS: test='+method,
+                                     'INSTRUMENTATION_STATUS: test=unrelated'),
+                       valid+'INSTRUMENTATION_STATUS: '+key+'='+digest+'\n',
+                       valid+'INSTRUMENTATION_CODE: -1\n',
+                       valid+'FAILURES!!!\n',
+                       valid+'INSTRUMENTATION_STATUS_CODE: -2\n',
+                       valid.replace('INSTRUMENTATION_STATUS: class='+live.TEST_CLASS,
+                                     'INSTRUMENTATION_STATUS: class=evil.Test')):
+            with self.subTest(output=output[-100:]):
                 with self.assertRaises(live.Refused):
-                    live.check_single_instrumentation_result(text,expected)
+                    live.check_single_instrumentation_result(output,method,key,digest)
+
+    def test_structured_status_cannot_cross_test_scope(self):
+        output=self.instrument_output('seedSignedFixtureIntoPrivateCache',
+                                      'r3c06_fixture_stage_sha256','a'*64)
+        with self.assertRaises(live.Refused):
+            live.check_single_instrumentation_result(output,
+                'removeSignedFixtureFromPrivateCache','r3c06_fixture_stage_sha256','a'*64)
+        os_output=self.instrument_output('androidInstallerActuallyAcceptsOrRejectsFixture',
+                                         'r3c06_os_result','ACCEPT')
+        self.assertTrue(live.check_single_instrumentation_result(
+            os_output,'androidInstallerActuallyAcceptsOrRejectsFixture','r3c06_os_result','ACCEPT'))
+        with self.assertRaises(live.Refused):
+            live.check_single_instrumentation_result(
+                os_output,'androidInstallerActuallyAcceptsOrRejectsFixture','r3c06_os_result','DENY')
+
+    def test_instrumentation_nonzero_retains_failure_log(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as td:
+            log=Path(td)/'aurora-r3c03-c02'/'r3c06-live-install'/'test.txt'
+            secret='sensitivebase64'
+            with patch.object(live.subprocess,'run',return_value=subprocess.CompletedProcess([],2,
+                    ('Android instrumentation failed '+secret).encode())):
+                with self.assertRaisesRegex(live.Refused,'command failed rc=2'):
+                    live.run_fixture_instrumentation(
+                        ['adb','shell','am','instrument'],log,'seedSignedFixtureIntoPrivateCache',
+                        'r3c06_fixture_stage_sha256','a'*64,redact=(secret,))
+            self.assertIn('Android instrumentation failed',log.read_text())
+            self.assertIn('[REDACTED_FIXTURE_BYTES]',log.read_text())
+            self.assertNotIn(secret,log.read_text())
+
+    def test_instrumentation_timeout_retains_failure_log(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as td:
+            log=Path(td)/'diagnostic.txt'
+            timeout=subprocess.TimeoutExpired(['adb'],180,output=b'instrumentation timed out')
+            with patch.object(live.subprocess,'run',side_effect=timeout):
+                with self.assertRaisesRegex(live.Refused,'timed out'):
+                    live.run_fixture_instrumentation(
+                        ['adb'],log,'seedSignedFixtureIntoPrivateCache',
+                        'r3c06_fixture_stage_sha256','a'*64)
+            self.assertIn('instrumentation timed out',log.read_text())
+
+    def test_no_fixture_ipc_arguments_in_diagnostic_artifact(self):
+        code=(HERE/'r3c06_api36_live_install.py').read_text()
+        self.assertIn('r3c06-live-install',code)
+        self.assertIn('redact=(encoded,)',code)
+        self.assertIn('run_fixture_instrumentation(',code)
+        self.assertIn('primary_error',code)
+        self.assertIn('cleanup_errors',code)
+        self.assertIn('original acceptance failure:',code)
 
     def test_fixture_ipc_bounded_and_invalid_cleanup_digest_refused(self):
         with tempfile.TemporaryDirectory() as td:
             work=Path(td); apk=work/'large.apk'
             apk.write_bytes(b'x'*(live.MAX_FIXTURE_BYTES+1))
-            with patch.object(live, 'run') as command:
+            with patch.object(live.subprocess,'run') as command:
                 with self.assertRaises(live.Refused):
                     live.stage_fixture(['adb'],'HiltRunner',apk,work)
                 command.assert_not_called()
@@ -175,8 +244,10 @@ class AcceptanceRegressions(unittest.TestCase):
                       'maxFixtureBytes = 64 * 1024',
                       'seedSignedFixtureIntoPrivateCache()',
                       'removeSignedFixtureFromPrivateCache()',
-                      'R3C06_FIXTURE_PRIVATE_STAGE_PASS',
-                      'R3C06_FIXTURE_PRIVATE_CLEANUP_PASS'):
+                      'sendStatus(0, status)',
+                      'r3c06_fixture_stage_sha256',
+                      'r3c06_fixture_cleanup_sha256',
+                      'r3c06_os_result'):
             self.assertIn(token,source)
 
 if __name__=='__main__':

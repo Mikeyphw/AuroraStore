@@ -42,6 +42,8 @@ def validate_live(doc, expected_sha, run_id):
             'fixture was not proved staged by Aurora app UID')
     require(doc.get('private_fixture_cleanup_verified') is True,
             'app-private fixture deletion is not verified')
+    require(doc.get('instrumentation_status_proof_verified') is True,
+            'structured Android instrumentation status was not verified')
     require(isinstance(doc.get('fixture_sha256'), str) and
             SIGNED_RE.fullmatch(doc['fixture_sha256']), 'missing test-signed fixture hash')
     results = doc.get('results')
@@ -50,7 +52,8 @@ def validate_live(doc, expected_sha, run_id):
     require([r.get('outcome') for r in results if isinstance(r, dict)] ==
             ['DENY', 'ACCEPT'], 'required denial THEN installation is missing')
     require(all(r.get('system_consent_ui_verified') is True and
-                r.get('android_callback_verified') is True for r in results),
+                r.get('android_callback_verified') is True and
+                r.get('instrumentation_status_verified') is True for r in results),
             'system confirmation or actual callback not proved')
     require(doc.get('physical_device_qualified') is False and
             doc.get('release_qualified') is False,

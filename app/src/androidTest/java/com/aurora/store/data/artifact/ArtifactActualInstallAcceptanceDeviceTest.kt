@@ -4,6 +4,7 @@ package com.aurora.store.data.artifact
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.SystemClock
 import android.util.Base64
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -25,6 +26,20 @@ class ArtifactActualInstallAcceptanceDeviceTest {
     private val maxFixtureBytes = 64 * 1024
     private val fixtureName = "r3c06-fixture.apk"
     private val hexSha256 = Regex("[0-9a-f]{64}")
+
+    /** Explicit, structured Android instrumentation evidence. println() writes to
+     * logcat and is NOT an am-instrument status receipt. Report only after the
+     * real verification, stage or cleanup operation has succeeded.
+     */
+    private fun reportStatus(key: String, value: String) {
+        require(key in setOf("r3c06_fixture_stage_sha256",
+                             "r3c06_fixture_cleanup_sha256", "r3c06_os_result")) {
+            "Unexpected instrumentation evidence key"
+        }
+        val status = Bundle()
+        status.putString(key, value)
+        InstrumentationRegistry.getInstrumentation().sendStatus(0, status)
+    }
 
     private fun fixtureFile(): File {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -86,7 +101,7 @@ class ArtifactActualInstallAcceptanceDeviceTest {
             file.delete()
             throw failure
         }
-        println("R3C06_FIXTURE_PRIVATE_STAGE_PASS sha256=$expected")
+        reportStatus("r3c06_fixture_stage_sha256", expected)
     }
 
     /** Delete only the exact expected synthetic file, never another app's bytes. */
@@ -102,7 +117,7 @@ class ArtifactActualInstallAcceptanceDeviceTest {
             require(file.delete()) { "Private fixture cleanup failed" }
         }
         require(!file.exists()) { "Private fixture remains after cleanup" }
-        println("R3C06_FIXTURE_PRIVATE_CLEANUP_PASS sha256=$expected")
+        reportStatus("r3c06_fixture_cleanup_sha256", expected)
     }
     @Test fun androidInstallerActuallyAcceptsOrRejectsFixture() {
         val inst = InstrumentationRegistry.getInstrumentation()
@@ -163,6 +178,6 @@ class ArtifactActualInstallAcceptanceDeviceTest {
             assertThat(installedCerts).isEqualTo(verifiedCerts)
         }
         // Hosted gate owns fixture uninstall/cleanup and must prove it completed.
-        println("R3C06_API36_OS_RESULT=${expected.uppercase(Locale.ROOT)} session=$session")
+        reportStatus("r3c06_os_result", expected.uppercase(Locale.ROOT))
     }
 }

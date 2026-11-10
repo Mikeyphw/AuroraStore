@@ -45,13 +45,15 @@ for token in ("'pm', 'list', 'packages', '--user', '0'",
     assert token in LIVE, 'R3C06_P5_HF03_REFUSED weak package-state check: '+token
 assert "'pm','path',TARGET" not in LIVE, 'stale Android 36 package-state check'
 assert 'test_unexpected_absent_inventory_is_not_evidence_of_package_absence' in P4_TEST
+assert 'test_instrumentation_nonzero_retains_failure_log' in P4_TEST
+assert 'test_instrumentation_timeout_retains_failure_log' in P4_TEST
 assert 'test_prefix_collision_does_not_qualify_fixture_as_installed' in P4_TEST
 assert "'pm', 'list', 'packages', '--user', '0'" in P4_SOURCE
 assert SCRIPT.is_file() and NEGATIVE.is_file()
 result=subprocess.run([sys.executable,'-B',str(NEGATIVE)],cwd=ROOT,
                       capture_output=True,text=True,timeout=30)
 assert result.returncode==0, 'R3C06_P5_SOURCE_REFUSED negative regression failed: '+(result.stdout+result.stderr)[-2500:]
-assert 'Ran 14 tests' in result.stderr, 'P5 acceptance negative test count stale'
+assert 'Ran 16 tests' in result.stderr, 'P5 acceptance negative test count stale'
 
 # R3C06 P5 HF04: Android test app UID must stage and remove only its exact
 # bounded, hashed synthetic fixture. The ADB shell cannot write app cache.
@@ -64,8 +66,15 @@ assert 'private_app_uid_staging_verified' in _live_hf04, 'HF04 private stage rec
 assert "'run-as'" not in _live_hf04, 'HF04 unsafe run-as cache transfer still present'
 assert _test_hf04.count('@Test') == 3, 'HF04 exact three opted-in methods missing'
 assert 'context.cacheDir.canonicalFile' in _test_hf04 and 'fileDigest(file) == expected' in _test_hf04
-assert _p4_hf04.count('def test_') >= 16, 'HF04 negative source tests missing'
+assert _p4_hf04.count('def test_') >= 20, 'HF04 negative source tests missing'
 _receipt_hf04=(ROOT/'scripts/ci/r3c06_p5_manual_receipt.py').read_text(encoding='utf-8')
 assert "doc.get('private_app_uid_staging_verified') is True" in _receipt_hf04, 'HF04 receipt staging proof missing'
 assert "doc.get('private_fixture_cleanup_verified') is True" in _receipt_hf04, 'HF04 receipt cleanup proof missing'
-print('R3C06_P5_SOURCE_CONTRACT_PASS: manual R1D opt-in, pinned bundletool, exact receipt, 14 negatives')
+# R3C06 P5 HF05: app-side println is NOT admissible identity evidence.
+assert 'sendStatus(0, status)' in _test_hf04, 'HF05 app instrumentation status missing'
+for name in ('r3c06_fixture_stage_sha256','r3c06_fixture_cleanup_sha256','r3c06_os_result'):
+    assert name in _test_hf04 and name in _live_hf04, 'HF05 structured proof missing '+name
+assert 'run_fixture_instrumentation(' in _live_hf04 and 'r3c06-live-install' in _live_hf04
+assert 'original acceptance failure:' in _live_hf04, 'HF05 primary error masking still present'
+assert "doc.get('instrumentation_status_proof_verified') is True" in _receipt_hf04
+print('R3C06_P5_SOURCE_CONTRACT_PASS: manual R1D opt-in, pinned bundletool, exact receipt, 16 negatives')

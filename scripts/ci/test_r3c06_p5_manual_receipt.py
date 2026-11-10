@@ -18,7 +18,9 @@ def good_live():
     return dict(overall='PASS',source_sha=SHA,run_id=RUN,android_api=36,
                 fixture_package=p5.PACKAGE,signed_v2_verified=True,fixture_sha256='b'*64,
                 private_app_uid_staging_verified=True,private_fixture_cleanup_verified=True,
-                results=[dict(outcome=o,system_consent_ui_verified=True,android_callback_verified=True)
+                instrumentation_status_proof_verified=True,
+                results=[dict(outcome=o,system_consent_ui_verified=True,android_callback_verified=True,
+                              instrumentation_status_verified=True)
                          for o in ('DENY','ACCEPT')],physical_device_qualified=False,
                 release_qualified=False)
 
@@ -39,6 +41,12 @@ class P5EvidenceTests(unittest.TestCase):
         with self.assertRaises(p5.QualificationRefused):p5.validate_live(doc,SHA,RUN)
     def test_missing_private_cleanup_proof_refused(self):
         doc=good_live();doc['private_fixture_cleanup_verified']=False
+        with self.assertRaises(p5.QualificationRefused):p5.validate_live(doc,SHA,RUN)
+    def test_missing_structured_instrumentation_receipt_refused(self):
+        doc=good_live();doc['instrumentation_status_proof_verified']=False
+        with self.assertRaises(p5.QualificationRefused):p5.validate_live(doc,SHA,RUN)
+    def test_missing_os_case_instrumentation_status_refused(self):
+        doc=good_live();doc['results'][0]['instrumentation_status_verified']=False
         with self.assertRaises(p5.QualificationRefused):p5.validate_live(doc,SHA,RUN)
     def test_missing_os_denial_refused(self):
         doc=good_live();doc['results']=doc['results'][1:]
