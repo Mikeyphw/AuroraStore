@@ -7,6 +7,10 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.View
+import android.widget.AdapterView
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -25,6 +29,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 class ArtifactImportActivity : AppCompatActivity() {
     private val worker = Executors.newSingleThreadExecutor()
     private var cancelled = AtomicBoolean(false)
+    // UI-thread request serial: a cancelled/older worker may never publish its result.
+    private var requestSerial = 0L
     private var active: ArtifactApkVerifier.VerifiedImport? = null
     private lateinit var status: TextView
     private lateinit var review: TextView
@@ -36,7 +42,9 @@ class ArtifactImportActivity : AppCompatActivity() {
     private lateinit var downgradeConsent: CheckBox
     private lateinit var installButton: Button
     private lateinit var selectButton: Button
-    private var provenanceHost: String? = null
+    // A source claim is valid only for the exact successful browser launch and selection.
+    // Never persist raw URLs or use a browser navigation as publisher authentication.
+    private var lastBrowserLaunch: ArtifactHandoffClaimPolicy.BrowserLaunch? = null
     private val options = listOf(
         "Local document", "Official developer website (claimed)",
         "GitHub Releases (claimed)", "APKMirror web handoff",
@@ -52,7 +60,10 @@ class ArtifactImportActivity : AppCompatActivity() {
     )
     private val picker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) handlePickedFile(uri)
-        else showStatus("No file selected; nothing installed")
+        else {
+            lastBrowserLaunch = null
+            showStatus("No file selected; nothing installed")
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,6 +87,16 @@ class ArtifactImportActivity : AppCompatActivity() {
         )
         sources = Spinner(this).apply {
             adapter = ArrayAdapter(this@ArtifactImportActivity, android.R.layout.simple_spinner_dropdown_item, options)
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    // Switching away and back cannot reuse an old browser handoff.
+                    lastBrowserLaunch = null
+                }
+
+                override fun onNothingSelected(parent: AdapterView<*>?) {
+                    lastBrowserLaunch = null
+                }
+            }
         }
         column.addView(sources)
         sourceUrl = EditText(this).apply {
@@ -83,6 +104,16 @@ class ArtifactImportActivity : AppCompatActivity() {
             inputType = android.text.InputType.TYPE_CLASS_TEXT or
                 android.text.InputType.TYPE_TEXT_VARIATION_URI
             setSingleLine(true)
+            addTextChangedListener(object : TextWatcher {
+                override fun afterTextChanged(s: Editable?) {
+                    if (lastBrowserLaunch?.exactInput != s?.toString()) {
+                        lastBrowserLaunch = null
+                    }
+                }
+
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            })
         }
         column.addView(sourceUrl)
         apkPureEnabled = CheckBox(this).apply {
@@ -90,6 +121,7 @@ class ArtifactImportActivity : AppCompatActivity() {
             isChecked = getSharedPreferences("artifact_source_preferences", MODE_PRIVATE)
                 .getBoolean("apkpure_opt_in", false)
             setOnCheckedChangeListener { _, checked ->
+                if (!checked) lastBrowserLaunch = null
                 getSharedPreferences("artifact_source_preferences", MODE_PRIVATE).edit()
                     .putBoolean("apkpure_opt_in", checked).apply()
             }
@@ -107,6 +139,7 @@ class ArtifactImportActivity : AppCompatActivity() {
         selectButton = Button(this).apply {
             text = "Choose downloaded file"
             setOnClickListener {
+                requestSerial += 1
                 cancelled.set(true)
                 active?.discard()
                 active = null
@@ -118,11 +151,14 @@ class ArtifactImportActivity : AppCompatActivity() {
         column.addView(Button(this).apply {
             text = "Cancel current import"
             setOnClickListener {
+                requestSerial += 1
+                lastBrowserLaunch = null
                 cancelled.set(true)
                 active?.discard()
                 active = null
                 installButton.isEnabled = false
-                showStatus("Import cancelled; no installation requested")
+                selectButton.isEnabled = true
+                showStatus("Import cancelled. An already committed Android install session may continue.")
             }
         })
         status = label("Select a local file to begin; ${ArtifactInstallSession.lastResult(this)}")
@@ -162,19 +198,26 @@ class ArtifactImportActivity : AppCompatActivity() {
 
     private fun openSourceInBrowser() {
         val source = selectedSource()
+        // A failed link check invalidates any earlier browser claim.
+        lastBrowserLaunch = null
+        val enteredUrl = sourceUrl.text.toString()
         val handoff = ArtifactSourceHandoff.parse(
-            sourceUrl.text.toString(), source, apkPureEnabled.isChecked
+            enteredUrl, source, apkPureEnabled.isChecked
         )
         if (handoff == null) {
             showStatus("Enter an allowed HTTPS provider page. APKPure requires explicit opt-in.")
             return
         }
-        provenanceHost = handoff.host
         runCatching {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(handoff.uri.toASCIIString())).apply {
                 addCategory(Intent.CATEGORY_BROWSABLE)
             })
-        }.onFailure { showStatus("No browser can open the provider page") }
+            lastBrowserLaunch = ArtifactHandoffClaimPolicy.afterSuccessfulLaunch(enteredUrl, handoff)
+            showStatus("Browser opened. A later file selection is still untrusted and independently verified.")
+        }.onFailure {
+            lastBrowserLaunch = null
+            showStatus("No browser can open the provider page")
+        }
     }
 
     private fun selectedFilename(uri: Uri): String {
@@ -187,11 +230,18 @@ class ArtifactImportActivity : AppCompatActivity() {
 
     private fun handlePickedFile(uri: Uri) {
         val name = runCatching { selectedFilename(uri) }.getOrDefault("unknown")
-        val source = selectedSource()
-        val host = provenanceHost?.takeIf { source != ArtifactSource.LOCAL_DOCUMENT }
-        provenanceHost = null
-        val sourceLabel = host ?: name.substringAfterLast('/').take(150)
-        val provenance = ArtifactProvenance(source, sourceLabel)
+        val provenance = ArtifactHandoffClaimPolicy.selection(
+            selected = selectedSource(),
+            enteredUrl = sourceUrl.text.toString(),
+            apkPureOptIn = apkPureEnabled.isChecked,
+            launched = lastBrowserLaunch,
+            untrustedFilename = ArtifactPickerPolicy.safeDisplayLabel(name)
+        )
+        lastBrowserLaunch = null
+        // Picker grants are independent of browser browsing. No claim of actual
+        // download origin can be inferred from a successful external navigation.
+        requestSerial += 1
+        val serial = requestSerial
         cancelled = AtomicBoolean(false)
         val thisCancel = cancelled
         active?.discard()
@@ -210,7 +260,7 @@ class ArtifactImportActivity : AppCompatActivity() {
                 val result = ArtifactApkVerifier.verify(this, staged, provenance) { thisCancel.get() }
                 if (thisCancel.get()) throw IllegalStateException("Cancelled")
                 runOnUiThread {
-                    if (thisCancel.get() || isFinishing || isDestroyed) {
+                    if (serial != requestSerial || thisCancel.get() || isFinishing || isDestroyed) {
                         result.discard()
                     } else {
                         active?.discard()
@@ -235,7 +285,7 @@ class ArtifactImportActivity : AppCompatActivity() {
             } catch (error: Exception) {
                 staged?.discard()
                 runOnUiThread {
-                    if (!isDestroyed) {
+                    if (serial == requestSerial && !isDestroyed && !thisCancel.get()) {
                         selectButton.isEnabled = true
                         showStatus("Import refused: ${error.message ?: "unsupported file"}")
                     }
@@ -269,25 +319,30 @@ class ArtifactImportActivity : AppCompatActivity() {
         installButton.isEnabled = false
         selectButton.isEnabled = false
         val thisCancel = cancelled
+        val serial = requestSerial
         showStatus("Sending verified APK bytes to Android PackageInstaller")
         worker.execute {
             runCatching {
-                ArtifactInstallSession.install(this, receipt, unknown, downgrade) { thisCancel.get() }
+                ArtifactInstallSession.install(this, receipt, approved, unknown, downgrade) { thisCancel.get() }
             }.onSuccess { session ->
                 runOnUiThread {
-                    active = null
-                    if (!isDestroyed) {
-                        selectButton.isEnabled = true
-                        showStatus("Android session $session created; system approval may be required")
+                    if (serial == requestSerial) {
+                        active = null
+                        if (!isDestroyed) {
+                            selectButton.isEnabled = true
+                            showStatus("Android session $session created; system approval may be required")
+                        }
                     }
                 }
             }.onFailure { error ->
                 receipt.discard()
                 runOnUiThread {
-                    active = null
-                    if (!isDestroyed) {
-                        selectButton.isEnabled = true
-                        showStatus("Install refused: ${error.message ?: "system error"}")
+                    if (serial == requestSerial) {
+                        active = null
+                        if (!isDestroyed) {
+                            selectButton.isEnabled = true
+                            showStatus("Install refused: ${error.message ?: "system error"}")
+                        }
                     }
                 }
             }
@@ -305,6 +360,8 @@ class ArtifactImportActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        lastBrowserLaunch = null
+        requestSerial += 1
         cancelled.set(true)
         active?.discard()
         active = null

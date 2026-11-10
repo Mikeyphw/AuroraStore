@@ -42,7 +42,11 @@ internal object ArtifactArchivePolicy {
             return false
         }
         if (size > 0L && compressed == 0L) return false
-        if (compressed > 0L && size / compressed > MAX_RATIO) return false
+        // Exact ratio comparison, without overflow from compressed * MAX_RATIO.
+        if (compressed > 0L &&
+            (size / compressed > MAX_RATIO ||
+                (size / compressed == MAX_RATIO && size % compressed != 0L))
+        ) return false
         return true
     }
 }

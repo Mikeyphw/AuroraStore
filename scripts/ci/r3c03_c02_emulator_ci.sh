@@ -105,3 +105,35 @@ grep -Eq '^OK \(6 tests\)' "$OUT/c04_private_import.txt" || {
   exit 1
 }
 echo 'R3C04_API36_STAGING_PASS: six bounded archive and cancellation tests'
+
+# C04-03 HF01: real APK signer verification on the same periodic API36 gate.
+SIGNER_CLASS='com.aurora.store.data.artifact.ArtifactApkVerifierDeviceTest'
+timeout 300 adb shell am instrument -w -r -e class "$SIGNER_CLASS" "$RUNNER" |
+  tee "$OUT/c04_real_apk_signer.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/c04_real_apk_signer.txt"; then
+  echo 'R3C04_HF01_SIGNER_REFUSED: real APK verification tests failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(3 tests\)' "$OUT/c04_real_apk_signer.txt" || {
+  echo 'R3C04_HF01_SIGNER_REFUSED: expected three real signed/corrupt APK device cases' >&2
+  exit 1
+}
+echo 'R3C04_HF01_API36_SIGNER_PASS: signed APK, corruption and mutation cases'
+
+
+# C04-04 HF02: verify *real* signed APK session revalidation and consent refusal.
+# Additive API36 tests; never run full gate on each PR.
+SESSION_CLASS='com.aurora.store.data.artifact.ArtifactInstallSessionDeviceTest'
+timeout 300 adb shell am instrument -w -r -e class "$SESSION_CLASS" "$RUNNER" |
+  tee "$OUT/c04_real_session_consent.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/c04_real_session_consent.txt"; then
+  echo 'R3C04_HF02_SESSION_REFUSED: real API36 consent/recheck tests failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(5 tests\)' "$OUT/c04_real_session_consent.txt" || {
+  echo 'R3C04_HF02_SESSION_REFUSED: five real non-installing API36 tests missing' >&2
+  exit 1
+}
+echo 'R3C04_HF02_SESSION_PASS: fresh signer, consent and staged-byte mutation'

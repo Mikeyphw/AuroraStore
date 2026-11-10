@@ -98,3 +98,65 @@ privileged access to Play, and are never auto-fetched. Do not weaken source
 identity or signature checks to expand supported formats. Keep native Devtool
 schema-v2 overlay commits, `gh` push/PR watching, targeted CI per overlay, and
 the five-overlay/manual high-risk full gate policy.
+
+## C04-02/03 HF01 security audit corrections
+
+- **SAF names are untrusted.** Provider-returned filenames are sanitized before
+  display/provenance construction. Invalid labels are discarded without crashing.
+- **Stale cancellation callbacks are refused.** Every UI job carries a request
+  serial and its cancellation token; old work cannot overwrite newer review UI.
+- **Archive bounds are enforced while enumerating** ZIP entries, not after
+  materializing the entire directory listing. Compression ratios are checked
+  without integer rounding gaps or multiplication overflow.
+- **Independent signing verification is API-36-only for now.** On API 23–35,
+  `PackageManager.getPackageArchiveInfo()` by itself is not a sufficiently
+  strong v2+ signing-block verifier for arbitrary standalone APK/split sets.
+  These imports now fail closed until an audited `apksig` validation adapter is
+  available. This is an explicit compatibility limit, not silent "verification".
+- **Exact-session-byte integrity:** the same stream written to Android's
+  PackageInstaller is hashed while writing and must match the digest attested
+  by the private staging verifier before the OS session can commit.
+- Static and JVM tests do not independently prove full archive/signer safety.
+  The periodic hosted API36 gate additionally exercises real signed APKs and
+  invalid/corrupt bytes; full physical-device acceptance is still separate.
+
+
+## C04 HF02 audit (C04-02/03/04)
+
+The consolidated pre-merge hotfix incorporates C04-02/03 HF01 safeguards and C04-04
+independent OS-session checks. Explicit installation consent is passed into
+`ArtifactInstallSession` (never hardcoded). A currently installed package needs
+positive installed signer continuity; missing proof cannot be overridden by the
+unknown-publisher checkbox. After consent, staged APK manifests, signing blocks,
+byte digests, and the installed package/version/signing state are rechecked before
+creating an OS session. Android still decides whether an installation/downgrade
+is allowed. Receipts are keyed by system session ID and generation, with terminal
+callback replay rejected; the OS-supplied session identifier must match.
+
+The existing periodic API36 lane now runs five further non-installing cases for
+revalidation, consent failure and post-verification private-byte mutation. This
+is NOT a demonstrated complete install or downgrade on physical devices.
+
+
+## C04-05 HF03: browser handoffs and opt-in provenance audit
+
+GitHub Releases accepts canonical release listings, latest and tagged release **pages**; it
+does not pass a direct asset URL to an embedded downloader. APKMirror and F-Droid
+accept only official page hosts, including the F-Droid language-prefixed package
+path. The developer URL is always a user-typed HTTPS browser destination, **not**
+independently authenticated publisher identity. APKPure remains disabled by default
+in the UI and requires a checked opt-in before its browser page is opened. Revoking
+that opt-in also clears prior handoff context.
+
+Only a successful external browser launch establishes temporary, untrusted display
+attribution to the chosen provider host. The picker selection must match both the
+originally opened URL and selected provider; any edit, switch, missing launch or
+revoked APKPure opt-in falls back to **LOCAL_DOCUMENT**. No URI, redirect URL or
+authentication token is stored in artifact provenance. Source attribution never
+changes signer verification, publisher trust, PackageInstaller consent, Play-only
+evidence or staging requirements.
+
+`test_r3c04_c05_handoff.py` and the two JVM suites cover wrong hosts, lookalikes,
+unsafe URL syntax, altered selection, revoked opt-in and failed attribution. These
+are *not* browser UI automation nor proof of downloaded file origin. Hosted targeted
+CI must compile the changed Android code.

@@ -16,7 +16,8 @@ class ArtifactInstallStatusReceiver : BroadcastReceiver() {
         val session = intent.getIntExtra(ArtifactInstallSession.EXTRA_SESSION, -1)
         val generation = intent.getLongExtra(ArtifactInstallSession.EXTRA_GENERATION, -1)
         val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, Int.MIN_VALUE)
-        if (!ArtifactInstallSession.recordStatus(context, session, generation, status)) {
+        val osSession = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
+        if (!ArtifactInstallSession.recordStatus(context, session, generation, osSession, status)) {
             Log.w("AuroraArtifactImport", "Ignoring stale installation callback")
             return
         }
@@ -28,6 +29,7 @@ class ArtifactInstallStatusReceiver : BroadcastReceiver() {
             intent.getParcelableExtra(Intent.EXTRA_INTENT)
         }
         if (confirmation == null) {
+            ArtifactInstallSession.recordPresentationFailure(context, session, generation)
             Log.e("AuroraArtifactImport", "Android confirmation intent missing")
             return
         }
@@ -36,6 +38,7 @@ class ArtifactInstallStatusReceiver : BroadcastReceiver() {
             confirmation.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(confirmation)
         }.onFailure {
+            ArtifactInstallSession.recordPresentationFailure(context, session, generation)
             Log.e("AuroraArtifactImport", "Unable to present system confirmation", it)
         }
     }

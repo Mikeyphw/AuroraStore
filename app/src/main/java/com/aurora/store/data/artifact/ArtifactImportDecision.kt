@@ -31,7 +31,13 @@ internal object ArtifactImportDecision {
                 .matches(review.packageName) || review.versionCode <= 0L
         ) add(Blocker.INVALID_IDENTITY)
         if (!review.signerVerified) add(Blocker.UNVERIFIED_SIGNATURE)
-        if (review.installedSignerMatches == false) add(Blocker.SIGNER_MISMATCH)
+        // Installed identity must be positively verified at the exact selection time.
+        // "unknown" is not equivalent to "no installed app" and user consent cannot
+        // override missing or mismatched installed signing evidence.
+        if ((review.installedVersion != null && review.installedSignerMatches != true) ||
+            (review.installedVersion == null && review.installedSignerMatches != null) ||
+            (review.installedVersion != null && review.installedVersion <= 0L)
+        ) add(Blocker.SIGNER_MISMATCH)
         if (!review.userApprovedInstall) add(Blocker.EXPLICIT_INSTALL_CONSENT_REQUIRED)
         if (review.installedSignerMatches == null && !review.trustedPublisherAnchor &&
             !review.userAcceptedUnknownPublisher

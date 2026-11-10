@@ -101,11 +101,16 @@ internal object ArtifactPrivateStager {
             val usedNames = mutableSetOf<String>()
             var total = 0L
             ZipFile(copied.file).use { archive ->
-                val items = archive.entries().toList()
-                if (items.isEmpty() || items.size > ArtifactArchivePolicy.MAX_ITEMS) {
-                    throw ApkVerificationException("Archive has too many entries")
-                }
-                for (entry in items) {
+                // Bound enumeration itself; toList() could allocate for an arbitrary
+                // number of central-directory entries before the limit was enforced.
+                val items = archive.entries()
+                var entryCount = 0
+                while (items.hasMoreElements()) {
+                    checkActive(cancelled)
+                    if (++entryCount > ArtifactArchivePolicy.MAX_ITEMS) {
+                        throw ApkVerificationException("Archive has too many entries")
+                    }
+                    val entry = items.nextElement()
                     checkActive(cancelled)
                     val safeName = entry.name.removeSuffix("/")
                     val kind = ArtifactArchivePolicy.classify(safeName, entry.isDirectory)

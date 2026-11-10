@@ -51,7 +51,7 @@ for label, src, needles in (
     ('Android final install authority', install, ['PackageInstaller.SessionParams',
                                     'USER_ACTION_REQUIRED', 'PACKAGE_SOURCE_LOCAL_FILE',
                                     'session.openWrite(', 'session.fsync(',
-                                    'ArtifactPrivateStager.sha256(', 'PendingIntent.getBroadcast(',
+                                    'ArtifactApkVerifier.revalidateForInstall(', 'PendingIntent.getBroadcast(',
                                     'PackageInstaller.SessionParams.MODE_FULL_INSTALL']),
     ('source-bound receipt', receiver, ['recordStatus(', 'STATUS_PENDING_USER_ACTION',
                                         'startActivity(', 'Intent.EXTRA_INTENT']),
@@ -80,3 +80,30 @@ for name in ('ArtifactImportDecisionTest.kt', 'ArtifactArchivePolicyTest.kt',
     p = unit_dir / name
     require(p.is_file() and p.read_text().count('@Test') >= 5, 'JVM negative tests missing: ' + name)
 print('R3C04_TARGETED_SOURCE_PASS: picker, bounded ZIP, exact signer, installed identity, consent, OS session, source handoff, negatives')
+
+# HF01 regression: exact-APK session stream, bounded central-directory enumeration,
+# pre-36 fail-closed signing, untrusted provider names and stale UI callbacks.
+for label, condition in (
+    ('bounded archive entries before allocation', 'val items = archive.entries()' in stage and 'archive.entries().toList()' not in stage and 'entryCount > ArtifactArchivePolicy.MAX_ITEMS' in stage),
+    ('API 36 verified signing only', 'Build.VERSION.SDK_INT < 36' in verify and 'getVerifiedSigningInfo(' in verify and 'Independent APK signature verification requires Android API 36' in verify),
+    ('repeat content digest after signature check', 'Verified APK bytes changed during inspection' in verify),
+    ('session write hashes exact bytes', 'writtenHash.update(buffer, 0, n)' in install and 'APK changed while writing Android session' in install and 'written != file.byteCount' in install),
+    ('SAF display filename sanitized', 'ArtifactPickerPolicy.safeDisplayLabel(name)' in activity),
+    ('stale background callbacks refused', 'serial != requestSerial' in activity and 'serial == requestSerial' in activity),
+    ('unbounded ZIP metadata is not materialized', '.entries().toList()' not in stage),
+):
+    require(condition, 'HF01 ' + label)
+
+picker_policy = read('ArtifactPickerPolicy.kt')
+require('safeDisplayLabel' in picker_policy and 'Char::isISOControl' in picker_policy,
+        'HF01 safe display-name policy missing')
+require((unit_dir / 'ArtifactPickerPolicyTest.kt').is_file(),
+        'HF01 picker negative tests missing')
+print('R3C04_HF01_SOURCE_SECURITY_PASS')
+
+# C04-04: installation layer is independently gated by security negatives.
+exec(compile((ROOT / "scripts/ci/test_r3c04_c04_install.py").read_text(), "test_r3c04_c04_install.py", "exec"))
+
+# C04-05: provider handoffs are display-only claims and cannot survive source/opt-in changes.
+exec(compile((ROOT / "scripts/ci/test_r3c04_c05_handoff.py").read_text(),
+             "test_r3c04_c05_handoff.py", "exec"))

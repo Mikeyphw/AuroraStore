@@ -33,7 +33,6 @@ class ArtifactPrivateStagerDeviceTest {
     }
 
     @Test
-
     fun safeArchivePrivatelyExtractsExactApkBytes() {
         val input = archive("base.apk" to ByteArray(2048) { 1 })
         try {
@@ -49,7 +48,6 @@ class ArtifactPrivateStagerDeviceTest {
     }
 
     @Test
-
     fun zipTraversalNeverEscapesPrivateStaging() {
         val input = archive("../../outside.apk" to byteArrayOf(1, 2))
         try {
@@ -60,7 +58,6 @@ class ArtifactPrivateStagerDeviceTest {
     }
 
     @Test
-
     fun duplicateNamesAreRefused() {
         val input = archive(
             "base.apk" to byteArrayOf(1, 2, 3),
@@ -74,7 +71,6 @@ class ArtifactPrivateStagerDeviceTest {
     }
 
     @Test
-
     fun archiveWithExpansionAssetsFailsClosed() {
         val input = archive("base.apk" to ByteArray(256) { 1 }, "Android/obb/test/main.obb" to byteArrayOf(7))
         try {
@@ -85,7 +81,6 @@ class ArtifactPrivateStagerDeviceTest {
     }
 
     @Test
-
     fun compressedBombIsRejected() {
         val input = archive("base.apk" to ByteArray(3_000_000))
         try {
@@ -96,7 +91,18 @@ class ArtifactPrivateStagerDeviceTest {
     }
 
     @Test
+    fun manyArchiveEntriesRefusedBeforeStagingAnyApks() {
+        val input = archive(*Array(129) { i ->
+            "assets/part-$i.txt" to byteArrayOf(1)
+        })
+        try {
+            assertThat(runCatching {
+                ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
+            }.isFailure).isTrue()
+        } finally { input.delete() }
+    }
 
+    @Test
     fun cancelledImportNeverLeavesVerifiedReceipt() {
         val input = archive("base.apk" to ByteArray(128) { 1 })
         try {

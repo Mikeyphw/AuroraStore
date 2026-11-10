@@ -66,7 +66,25 @@ class ArtifactImportDecisionTest {
     }
 
     @Test
+    fun installedUnknownSignerCannotBeAuthorizedByPublisherConsent() {
+        val decision = ArtifactImportDecision.blockers(review().copy(
+            installedVersion = 43L, installedSignerMatches = null,
+            userApprovedDowngrade = true, userAcceptedUnknownPublisher = true
+        ))
+        assertThat(decision).contains(ArtifactImportDecision.Blocker.SIGNER_MISMATCH)
+    }
 
+    @Test
+    fun contradictoryInstalledStateIsRejected() {
+        assertThat(ArtifactImportDecision.blockers(review().copy(
+            installedVersion = null, installedSignerMatches = true
+        ))).contains(ArtifactImportDecision.Blocker.SIGNER_MISMATCH)
+        assertThat(ArtifactImportDecision.blockers(review().copy(
+            installedVersion = -5L, installedSignerMatches = true
+        ))).contains(ArtifactImportDecision.Blocker.SIGNER_MISMATCH)
+    }
+
+    @Test
     fun claimedDeveloperAnchorIsNotAutomaticallyEstablished() {
         assertThat(ArtifactImportDecision.blockers(review().copy(
             installedSignerMatches = null, trustedPublisherAnchor = false,
