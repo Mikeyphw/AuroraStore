@@ -38,18 +38,21 @@ for token in ('read-only', 'real_android_installation_qualified',
     require(token in receipt.lower() if token == 'read-only' else token in receipt,
             'read-only measured receipt missing: ' + token)
 require('fixture_present(adb)' in live and
-        "return bool(run(adb+['shell','pm','path',TARGET]))" in live and
+        "'pm', 'list', 'packages', '--user', '0'" in live and
+        "'package:' + AURORA in records" in live and
+        "return 'package:' + TARGET in records" in live and
+        "'pm','path',TARGET" not in live and
         "n.get('package') in INSTALLER_PACKAGES" in live and
         'R3C06_ALLOW_LIVE_INSTALL' in live and
         "run(['git','rev-parse','HEAD'])==source_sha" in live,
-        'live install checks were weakened')
+        'live install inventory/OS consent checks were weakened')
 require('def qualifies_variant(' in bundle and
         'qualifies_variant(results' in bundle and
         "candidate.get('status') == 'SIGNED'" in bundle and
         "'REFUSED' or" not in bundle,
         'bundletool false acceptance is still present')
 require('test_r3c06_p4_qualification.py' in full and
-        tests.count('def test_') >= 8,
+        tests.count('def test_') >= 11,
         'targeted CI does not reach the new P4 tests')
 require((ROOT/'docs/R3C06_P4_QUALIFICATION.md').is_file(), 'qualification documentation missing')
 check = subprocess.run([sys.executable, '-B', str(CI/'test_r3c06_p4_python.py')],
@@ -57,4 +60,4 @@ check = subprocess.run([sys.executable, '-B', str(CI/'test_r3c06_p4_python.py')]
                        text=True, timeout=30)
 require(check.returncode == 0,
         'offline regression tests failed: ' + (check.stdout+check.stderr)[-5000:])
-print('R3C06_P4_SOURCE_AND_PYTHON_PASS: eight measured host-driver regressions; device qualification still pending')
+print('R3C06_P4_SOURCE_AND_PYTHON_PASS: eleven measured host-driver regressions; device qualification still pending')

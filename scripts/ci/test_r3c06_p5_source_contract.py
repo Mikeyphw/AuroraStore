@@ -31,6 +31,22 @@ assert R1D.count("name: Execute 40 R1D through R1G Android device tests and scre
 assert R1D.count('name: Upload source-bound emulator receipt and offline test logs') == 1
 assert R1D.count('uses: ReactiveCircus/android-emulator-runner@') == 1, 'duplicate emulator graph'
 assert 'R3C06_ALLOW_LIVE_INSTALL' not in R1D.split('name: Build vanillaDebug application and instrumentation APKs')[0], 'non-opted default must be non-destructive'
+# P5 HF03: Android 36 'pm path' returns rc=1 for absent package on the
+# hosted emulator. A successful, populated user-0 package inventory (including
+# Aurora) is required before concluding the fixture is absent. Existing P4
+# host-test assertions are updated alongside the driver, not removed.
+LIVE = (ROOT/'scripts/ci/r3c06_api36_live_install.py').read_text(encoding='utf-8')
+P4_SOURCE = (ROOT/'scripts/ci/test_r3c06_p4_qualification.py').read_text(encoding='utf-8')
+P4_TEST = (ROOT/'scripts/ci/test_r3c06_p4_python.py').read_text(encoding='utf-8')
+for token in ("'pm', 'list', 'packages', '--user', '0'",
+              "'package:' + AURORA in records",
+              "return 'package:' + TARGET in records",
+              'len(records) == len(set(records))'):
+    assert token in LIVE, 'R3C06_P5_HF03_REFUSED weak package-state check: '+token
+assert "'pm','path',TARGET" not in LIVE, 'stale Android 36 package-state check'
+assert 'test_unexpected_absent_inventory_is_not_evidence_of_package_absence' in P4_TEST
+assert 'test_prefix_collision_does_not_qualify_fixture_as_installed' in P4_TEST
+assert "'pm', 'list', 'packages', '--user', '0'" in P4_SOURCE
 assert SCRIPT.is_file() and NEGATIVE.is_file()
 result=subprocess.run([sys.executable,'-B',str(NEGATIVE)],cwd=ROOT,
                       capture_output=True,text=True,timeout=30)

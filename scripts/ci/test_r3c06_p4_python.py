@@ -69,10 +69,31 @@ class AcceptanceRegressions(unittest.TestCase):
     def test_adb_package_query_failure_not_misread_as_absence(self):
         with patch.object(live, 'run', side_effect=live.Refused('adb failed')):
             with self.assertRaises(live.Refused): live.fixture_present(['adb'])
-        with patch.object(live, 'run', return_value=''):
+        with patch.object(live, 'run', return_value='package:com.aurora.store.debug\npackage:android') as call:
             self.assertFalse(live.fixture_present(['adb']))
-        with patch.object(live, 'run', return_value='package:/data/app/test/base.apk'):
+            self.assertEqual(call.call_args.args[0],
+                             ['adb','shell','pm','list','packages','--user','0'])
+        with patch.object(live, 'run', return_value='package:com.aurora.store.debug\npackage:com.aurora.r3c06.fixture'):
             self.assertTrue(live.fixture_present(['adb']))
+
+    def test_unexpected_absent_inventory_is_not_evidence_of_package_absence(self):
+        for listing in ('', 'package:android', 'Error: command failed',
+                        'package:com.aurora.store.debug\npermission denied',
+                        'package:com.aurora.store.debug\npackage:com.aurora.store.debug'):
+            with self.subTest(listing=listing), patch.object(live, 'run', return_value=listing):
+                with self.assertRaises(live.Refused): live.fixture_present(['adb'])
+
+    def test_prefix_collision_does_not_qualify_fixture_as_installed(self):
+        listed = 'package:com.aurora.store.debug\npackage:com.aurora.r3c06.fixture.other'
+        with patch.object(live, 'run', return_value=listed):
+            self.assertFalse(live.fixture_present(['adb']))
+
+    def test_adb_failure_during_cleanup_is_not_interpreted_as_absence(self):
+        # Both preflight and finally call this guard. Neither can return False
+        # for a failed ADB query, which would silently skip test APK cleanup.
+        with patch.object(live, 'run', side_effect=live.Refused('transport offline')):
+            for _ in range(2):
+                with self.assertRaises(live.Refused): live.fixture_present(['adb'])
 
     def test_foreign_app_cannot_supply_installer_identity(self):
         xml = ("<hierarchy><node package='evil.app' text='Aurora R3C06 Fixture' />"

@@ -159,3 +159,11 @@ exec(compile((ROOT / "scripts/ci/test_r3c06_p4_qualification.py").read_text(),
 # Targeted CI never dispatches the emulator, live installer or bundletool matrix.
 exec(compile((ROOT / "scripts/ci/test_r3c06_p5_source_contract.py").read_text(),
              "test_r3c06_p5_source_contract.py", "exec"))
+
+# R3C06 P5 HF03 — source contract must reject stale Android 36 absent-package
+# assumptions even when the targeted CI route selects this aggregate contract.
+_live_hf03 = (ROOT / 'scripts/ci/r3c06_api36_live_install.py').read_text(encoding='utf-8')
+assert "'pm', 'list', 'packages', '--user', '0'" in _live_hf03, 'R3C06_P5_HF03: user-0 inventory missing'
+assert "'package:' + AURORA in records" in _live_hf03, 'R3C06_P5_HF03: Aurora anchor missing'
+assert "return 'package:' + TARGET in records" in _live_hf03, 'R3C06_P5_HF03: exact fixture identity missing'
+assert "'pm','path',TARGET" not in _live_hf03, 'R3C06_P5_HF03: stale pm path assumption'

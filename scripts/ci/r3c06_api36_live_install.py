@@ -106,9 +106,20 @@ def ui_action(adb, scenario):
     return {'scenario':scenario,'verified_label':True,'installer_button':scenario,'tap_coordinates_redacted':True}
 
 def fixture_present(adb):
-    # pm path reports an absent package with an empty success result. A command
-    # failure is NOT evidence of absence and must stop cleanup/install.
-    return bool(run(adb+['shell','pm','path',TARGET]))
+    # API36 may return exit 1 (with empty stderr) for `pm path` on a package
+    # that is *not installed*.  Do not turn a nonzero exit status into an
+    # absence claim. Instead query the complete user-0 package inventory:
+    # success, correctly shaped records and Aurora's own installed package
+    # must ALL be observed before an absent fixture can be established.
+    inventory = run(adb + ['shell', 'pm', 'list', 'packages', '--user', '0'], timeout=45)
+    records = [line.strip() for line in inventory.splitlines() if line.strip()]
+    require(records and all(re.fullmatch(r'package:[A-Za-z0-9_.]+', line)
+                            for line in records),
+            'Android package inventory is empty, malformed or contains diagnostics')
+    require(len(records) == len(set(records)), 'Android package inventory has duplicates')
+    require('package:' + AURORA in records,
+            'Aurora absent from user-0 inventory: cannot establish fixture state')
+    return 'package:' + TARGET in records
 
 def instrument(adb, runner, scenario, work):
     cmd=adb+['shell','am','instrument','-w','-r','-e','class',TEST_CLASS+'#androidInstallerActuallyAcceptsOrRejectsFixture',
