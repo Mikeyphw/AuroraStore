@@ -149,3 +149,8 @@ exec(compile((ROOT / "scripts/ci/test_r3c06_archive_descriptors.py").read_text()
 # Runtime gates remain deliberate hosted API36 jobs, never silently certified here.
 exec(compile((ROOT / "scripts/ci/test_r3c06_real_acceptance_contract.py").read_text(),
              "test_r3c06_real_acceptance_contract.py", "exec"))
+
+# R3C06 P4: the trusted targeted CI source gate runs eight offline negatives.
+# API36 runtime, live install, and bundletool remain separate manual evidence.
+exec(compile((ROOT / "scripts/ci/test_r3c06_p4_qualification.py").read_text(),
+             "test_r3c06_p4_qualification.py", "exec"))

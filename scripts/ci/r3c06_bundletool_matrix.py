@@ -27,6 +27,18 @@ def cmd(*args,timeout=300,allow_fail=False):
 
 def filehash(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
+def qualifies_variant(reference, candidate):
+    """A failed bundletool selection is NOT compatibility coverage.
+
+    We only measure changed, successfully extracted, cryptographically signed APK
+    outputs from the same trusted bundletool invocation. Refusal is uncovered.
+    """
+    return (reference.get('status') == 'SIGNED' and
+            candidate.get('status') == 'SIGNED' and
+            bool(candidate.get('apks')) and bool(candidate.get('sha256')) and
+            (reference.get('apks'), reference.get('sha256')) !=
+            (candidate.get('apks'), candidate.get('sha256')))
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument('--bundle',required=True)
@@ -95,9 +107,7 @@ def main():
         for key,modified in scenarios.items():
             candidate=extract(key,modified)
             results[key]=candidate
-            coverage[key]=(candidate['status']=='REFUSED' or
-                (candidate['apks'],candidate.get('sha256')) !=
-                (results['device']['apks'],results['device'].get('sha256')))
+            coverage[key]=qualifies_variant(results['device'],candidate)
         for feature in args.feature:
             check(bool(feature) and feature.replace('_','').isalnum(), 'invalid feature name')
             result=extract('feature-'+feature,spec,[feature])
@@ -110,6 +120,7 @@ def main():
         if args.strict_dimensions:check(all_covered,'fixture does not cover every requested targeting/feature dimension')
         receipt={'overall':'PASS' if all_covered else 'PARTIAL',
                  'bundle_sha256':filehash(bundle),'bundletool_sha256':filehash(jar),
+                 'refused_targeting_does_not_count_as_coverage':True,
                  'source_sha':os.environ.get('GITHUB_SHA',''),
                  'android_api':36,'device_spec':spec,'coverage':coverage,
                  'results':results,'publisher_authenticated':False,

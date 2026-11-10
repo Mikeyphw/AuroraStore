@@ -218,6 +218,12 @@ grep -Eq '^OK \(6 tests\)' "$OUT/r3c06_real_signed_archives.txt" || {
 }
 echo 'R3C06_P3_SIGNED_ARCHIVES_PASS: six API36 signed APKM/XAPK import tests'
 
+# R3C06 P4: exact-SHA, measured, READ-ONLY API36 instrumentation receipt.
+# Never claim a live install or bundletool qualification from these logs.
+python3 -B scripts/ci/r3c06_readonly_receipt.py \
+  --logs "$OUT" --receipt "$OUT/R3C06_P4_API36_READONLY_RECEIPT.json"
+echo 'R3C06_P4_API36_READONLY_EVIDENCE_PASS: 51 actually executed tests'
+
 # REAL OS installation is explicitly opt-in: this never runs on ordinary PR CI.
 # It creates and deletes ONLY an isolated synthetic fixture package on API36 emulator.
 if [[ "${R3C06_ALLOW_LIVE_INSTALL:-no}" == yes ]]; then

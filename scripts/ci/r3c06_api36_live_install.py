@@ -81,7 +81,10 @@ def ui_action(adb, scenario):
     text=run(adb+['shell','cat','/sdcard/r3c06-install.xml'],timeout=20)
     root=ET.fromstring(text)
     nodes=list(root.iter('node'))
-    labels=' '.join(n.get('text','')+' '+n.get('content-desc','') for n in nodes)
+    # Label must belong to the same trusted Android installer package as the
+    # action button. An unrelated overlay/app cannot supply fixture identity.
+    labels=' '.join(n.get('text','')+' '+n.get('content-desc','') for n in nodes
+                    if n.get('package') in INSTALLER_PACKAGES)
     if 'Aurora R3C06 Fixture' not in labels:
         return None
     candidates=[]
@@ -101,6 +104,11 @@ def ui_action(adb, scenario):
     x,y=candidates[0]
     run(adb+['shell','input','tap',str(x),str(y)],timeout=15)
     return {'scenario':scenario,'verified_label':True,'installer_button':scenario,'tap_coordinates_redacted':True}
+
+def fixture_present(adb):
+    # pm path reports an absent package with an empty success result. A command
+    # failure is NOT evidence of absence and must stop cleanup/install.
+    return bool(run(adb+['shell','pm','path',TARGET]))
 
 def instrument(adb, runner, scenario, work):
     cmd=adb+['shell','am','instrument','-w','-r','-e','class',TEST_CLASS+'#androidInstallerActuallyAcceptsOrRejectsFixture',
@@ -142,13 +150,18 @@ def main():
     args=parser.parse_args()
     require(os.environ.get('R3C06_ALLOW_LIVE_INSTALL')=='yes',
             'explicit R3C06_ALLOW_LIVE_INSTALL=yes authorization required')
+    source_sha=os.environ.get('GITHUB_SHA','')
+    require(re.fullmatch(r'[0-9a-f]{40}',source_sha) is not None,
+            'exact GITHUB_SHA required for qualified installation receipt')
+    require(run(['git','rev-parse','HEAD'])==source_sha,
+            'live-install checkout differs from exact Actions commit')
     sdk=Path(os.environ.get('ANDROID_HOME') or os.environ.get('ANDROID_SDK_ROOT') or '')
     require(sdk.is_dir(), 'ANDROID_HOME/ANDROID_SDK_ROOT missing')
     adb=['adb']+(['-s',args.serial] if args.serial else [])
     require(run(adb+['shell','getprop','ro.build.version.sdk'])=='36','API36 only')
     require(run(adb+['shell','getprop','ro.kernel.qemu'])=='1',
             'not an Android emulator (physical devices forbidden)')
-    require(not run(adb+['shell','pm','path',TARGET],check=False),
+    require(not fixture_present(adb),
             'fixture package already installed: refuse to touch existing install')
     instruments=run(adb+['shell','pm','list','instrumentation'])
     matches=re.findall(r'instrumentation:([^ ]+).*target='+re.escape(AURORA)+r'\)',instruments)
@@ -167,13 +180,13 @@ def main():
         on_device=run(adb+['shell','run-as',AURORA,'sha256sum',remote]).split()[0]
         require(on_device==sha(fixture),'fixture bytes changed during device transfer')
         for scenario in ('deny','accept'):
-            require(not run(adb+['shell','pm','path',TARGET],check=False),
+            require(not fixture_present(adb),
                     'fixture unexpectedly installed before test')
             results.append(instrument(adb,runner,scenario,work))
-            installed=bool(run(adb+['shell','pm','path',TARGET],check=False))
+            installed=fixture_present(adb)
             require(installed==(scenario=='accept'), 'package manager state mismatches callback')
             if installed:safe_created=True
-        receipt={'overall':'PASS','source_sha':os.environ.get('GITHUB_SHA',''),
+        receipt={'overall':'PASS','source_sha':source_sha,
                  'run_id':os.environ.get('GITHUB_RUN_ID',''),
                  'android_api':36,'fixture_package':TARGET,
                  'fixture_sha256':sha(fixture),'signed_v2_verified':True,
@@ -181,9 +194,9 @@ def main():
                  'physical_device_qualified':False,'release_qualified':False}
         # Write PASS only after cleanup in finally; see below.
     finally:
-        if safe_created or bool(run(adb+['shell','pm','path',TARGET],check=False)):
+        if safe_created or fixture_present(adb):
             run(adb+['uninstall',TARGET],timeout=90)
-        require(not run(adb+['shell','pm','path',TARGET],check=False),
+        require(not fixture_present(adb),
                 'fixture cleanup failed: NO QUALIFICATION')
         run(adb+['shell','run-as',AURORA,'rm','-f','cache/r3c06-fixture.apk'],check=False)
         # Do not delete diagnostics: current ephemeral RUNNER_TEMP can retain them.
