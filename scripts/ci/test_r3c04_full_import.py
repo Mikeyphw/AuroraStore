@@ -154,3 +154,8 @@ exec(compile((ROOT / "scripts/ci/test_r3c06_real_acceptance_contract.py").read_t
 # API36 runtime, live install, and bundletool remain separate manual evidence.
 exec(compile((ROOT / "scripts/ci/test_r3c06_p4_qualification.py").read_text(),
              "test_r3c06_p4_qualification.py", "exec"))
+
+# R3C06 P5: manual-only R1D opt-in/receipt source contract with 11 negatives.
+# Targeted CI never dispatches the emulator, live installer or bundletool matrix.
+exec(compile((ROOT / "scripts/ci/test_r3c06_p5_source_contract.py").read_text(),
+             "test_r3c06_p5_source_contract.py", "exec"))

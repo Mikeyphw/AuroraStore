@@ -3,6 +3,17 @@ name: Aurora R1D — API 36 Emulator Download Recovery
 
 on:
   workflow_dispatch:
+    inputs:
+      r3c06_live_install:
+        description: 'R3C06 opt-in: real synthetic fixture installation, system denial and cleanup'
+        type: boolean
+        required: true
+        default: false
+      r3c06_bundletool_matrix:
+        description: 'R3C06 opt-in: source-pinned official bundletool + real Aurora AAB targeting matrix'
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
@@ -100,6 +111,31 @@ jobs:
           set -euo pipefail
           chmod +x gradlew
           ./gradlew --no-daemon --max-workers=2 :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest
+      - name: Provision Android 36 platform for opt-in signed fixture (manual only)
+        if: ${{ inputs.r3c06_live_install == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install 'platforms;android-36'
+          test -s "$ANDROID_SDK_ROOT/platforms/android-36/android.jar"
+      - name: Prepare optional real AAB + SHA256-pinned official bundletool (manual only)
+        if: ${{ inputs.r3c06_bundletool_matrix == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          chmod +x gradlew
+          ./gradlew --no-daemon --max-workers=2 :app:bundleVanillaDebug
+          mapfile -d '' bundles < <(find app/build/outputs/bundle/vanillaDebug -maxdepth 1 -type f -name '*.aab' -print0)
+          [[ "${#bundles[@]}" -eq 1 ]] || { echo R3C06_P5_AAB_AMBIGUOUS >&2; exit 1; }
+          jar="$RUNNER_TEMP/r3c06-bundletool-all-1.18.3.jar"
+          curl --fail --location --show-error --silent --retry 3 \
+            'https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar' -o "$jar"
+          echo "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  $jar" | sha256sum --check --status
+          echo "R3C06_AAB_FIXTURE=$(realpath -- "${bundles[0]}")" >> "$GITHUB_ENV"
+          echo "R3C06_BUNDLETOOL_JAR=$jar" >> "$GITHUB_ENV"
+          echo 'R3C06_BUNDLETOOL_SHA256=a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29' >> "$GITHUB_ENV"
+          echo 'R3C06_P5_OFFICIAL_BUNDLETOOL_PIN_VERIFIED'
       - name: Require KVM-enabled ephemeral Linux runner
         shell: bash
         run: |
@@ -109,6 +145,10 @@ jobs:
           test -r /dev/kvm && test -w /dev/kvm
       - name: Execute 40 R1D through R1G Android device tests and screenshots (KVM/API 36)
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        env:
+          # The same old workflow defaults to non-destructive, read-only behavior.
+          # Never infer consent from a branch push or periodic router dispatch.
+          R3C06_ALLOW_LIVE_INSTALL: ${{ github.event_name == 'workflow_dispatch' && inputs.r3c06_live_install == true && 'yes' || 'no' }}
         with:
           api-level: 36
           target: google_apis
@@ -120,6 +160,21 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: bash scripts/ci/r1d2_emulator_ci.sh
+      - name: Verify explicitly opted-in R3C06 P5 evidence (no auto-qualification)
+        if: ${{ inputs.r3c06_live_install == true || inputs.r3c06_bundletool_matrix == true }}
+        shell: bash
+        env:
+          R3C06_P5_EXPECT_LIVE: ${{ inputs.r3c06_live_install == true && 'yes' || 'no' }}
+          R3C06_P5_EXPECT_MATRIX: ${{ inputs.r3c06_bundletool_matrix == true && 'yes' || 'no' }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -B scripts/ci/r3c06_p5_manual_receipt.py \
+            --logs "$RUNNER_TEMP/aurora-r3c03-c02" \
+            --receipt "$RUNNER_TEMP/aurora-r3c03-c02/R3C06_P5_MANUAL_RECEIPT.json" \
+            --sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" \
+            --expect-live "$R3C06_P5_EXPECT_LIVE" \
+            --expect-bundletool "$R3C06_P5_EXPECT_MATRIX"
       - name: Upload source-bound emulator receipt and offline test logs
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
