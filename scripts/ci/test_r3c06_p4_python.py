@@ -60,11 +60,46 @@ class AcceptanceRegressions(unittest.TestCase):
         with self.assertRaises(readonly.Refused): self.proof(run_id='')
 
     def test_refused_bundletool_variant_does_not_count(self):
-        baseline = {'status': 'SIGNED', 'apks': ['base.apk'], 'sha256': ['aa']}
-        self.assertFalse(bundle.qualifies_variant(baseline, {'status': 'REFUSED', 'apks': []}))
+        # HF09 HF03: a status label plus names/digests is no longer sufficient.
+        # A covered variant must include a verified v2/API36 proof for EACH APK,
+        # with the same actual signer certificate as the baseline selection.
+        cert = 'a' * 64
+        digest_a = '1' * 64
+        digest_b = '2' * 64
+        def proof(name, digest, signer=cert, *, v2=True, api36=True):
+            return {'name': name, 'sha256': digest, 'signer_sha256': signer,
+                    'v2_api24_27_verified': v2, 'api36_verified': api36}
+        baseline = {'status': 'SIGNED', 'signer_sha256': cert,
+                    'apks': ['base.apk'], 'sha256': [digest_a],
+                    'verified_apks': [proof('base.apk', digest_a)]}
+        candidate = {'status': 'SIGNED', 'signer_sha256': cert,
+                     'apks': ['base.apk', 'config.apk'],
+                     'sha256': [digest_a, digest_b],
+                     'verified_apks': [proof('base.apk', digest_a),
+                                       proof('config.apk', digest_b)]}
+        # Positive coverage: two distinct sets, both signed by one verified key.
+        self.assertTrue(bundle.qualifies_variant(baseline, candidate))
+        # Unchanged/refused targeting is NOT coverage.
         self.assertFalse(bundle.qualifies_variant(baseline, baseline))
-        self.assertTrue(bundle.qualifies_variant(
-            baseline, {'status': 'SIGNED', 'apks': ['base.apk','config.apk'], 'sha256': ['aa','bb']}))
+        self.assertFalse(bundle.qualifies_variant(baseline,
+            {'status': 'REFUSED', 'apks': [], 'sha256': []}))
+        # A forged SIGNED label and split filenames cannot replace proof.
+        missing = dict(candidate); missing.pop('verified_apks')
+        self.assertFalse(bundle.qualifies_variant(baseline, missing))
+        short = dict(candidate); short['verified_apks'] = candidate['verified_apks'][:1]
+        self.assertFalse(bundle.qualifies_variant(baseline, short))
+        for field in ('v2_api24_27_verified', 'api36_verified'):
+            broken = dict(candidate)
+            broken['verified_apks'] = [dict(p) for p in candidate['verified_apks']]
+            broken['verified_apks'][1][field] = False
+            with self.subTest(missing_proof=field):
+                self.assertFalse(bundle.qualifies_variant(baseline, broken))
+        wrong_signer = dict(candidate)
+        wrong_signer['verified_apks'] = [dict(p) for p in candidate['verified_apks']]
+        wrong_signer['verified_apks'][1]['signer_sha256'] = 'b' * 64
+        self.assertFalse(bundle.qualifies_variant(baseline, wrong_signer))
+        mismatched_selection = dict(candidate, signer_sha256='b' * 64)
+        self.assertFalse(bundle.qualifies_variant(baseline, mismatched_selection))
 
     def test_adb_package_query_failure_not_misread_as_absence(self):
         with patch.object(live, 'run', side_effect=live.Refused('adb failed')):

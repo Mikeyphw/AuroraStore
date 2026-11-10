@@ -67,9 +67,14 @@ def validate_live(doc, expected_sha, run_id):
 
 
 def validate_bundletool(doc, expected_sha, run_id):
-    require(doc.get('source_sha') == expected_sha, 'bundletool source SHA mismatch')
-    if 'run_id' in doc:
-        require(doc['run_id'] == run_id, 'bundletool run ID mismatch')
+    """Independently bind the host matrix receipt to measured split proofs.
+
+    Host JSON alone is not proof of genuine cryptography; the paired, pinned
+    bundletool runner must have executed its apksigner checks on exact bytes.
+    This validator refuses inconsistent or incomplete *claims* in that receipt.
+    """
+    require(doc.get('source_sha') == expected_sha and doc.get('run_id') == run_id,
+            'bundletool source/run must match this dispatch')
     require(doc.get('android_api') == 36, 'bundletool device API mismatch')
     require(doc.get('bundletool_sha256') == OFFICIAL_BUNDLETOOL_SHA256,
             'bundletool SHA differs from pinned official binary')
@@ -80,18 +85,86 @@ def validate_bundletool(doc, expected_sha, run_id):
     require(doc.get('refused_targeting_does_not_count_as_coverage') is True,
             'refused selections must not count as coverage')
     require(doc.get('overall') in {'PASS', 'PARTIAL'}, 'bundletool report did not execute')
-    require(isinstance(doc.get('bundle_sha256'), str) and
-            SIGNED_RE.fullmatch(doc['bundle_sha256']), 'invalid AAB SHA256')
+    for label in ('bundle_sha256','signed_archive_sha256'):
+        require(isinstance(doc.get(label), str) and
+                SIGNED_RE.fullmatch(doc[label]), 'missing digest: '+label)
+    spec = doc.get('device_spec')
+    require(isinstance(spec,dict) and spec.get('sdkVersion') == 36 and
+            isinstance(spec.get('supportedAbis'),list) and
+            isinstance(spec.get('supportedLocales'),list) and
+            isinstance(spec.get('screenDensity'),int),
+            'bundletool real API36 device spec missing')
     cov = doc.get('coverage')
-    require(isinstance(cov, dict) and
-            all(isinstance(cov.get(dim), bool) for dim in ('abi', 'density', 'locale', 'sdk')),
-            'missing positive/negative coverage dimensions')
-    feature_keys = [k for k in cov if k.startswith('feature-')]
-    fully_covered = (all(cov[k] for k in ('abi','density','locale','sdk')) and
-                     bool(feature_keys) and all(cov[k] is True for k in feature_keys))
-    require((doc['overall'] == 'PASS') == fully_covered,
+    results = doc.get('results')
+    require(isinstance(cov, dict) and isinstance(results,dict) and
+            all(isinstance(cov.get(dim), bool) for dim in ('abi','density','locale','sdk')),
+            'bundletool dimensions/results missing')
+    require(set(results) == {'device', *cov.keys()}, 'results/coverage inventory mismatch')
+
+    def inspect(label):
+        result=results[label]
+        require(isinstance(result,dict) and result.get('status') in {'SIGNED','REFUSED'},
+                'unsigned or unrecognized matrix result: '+label)
+        if result['status']=='REFUSED':
+            require(result.get('apks')==[] and result.get('sha256')==[] and
+                    result.get('error_type')=='bundletool refused targeting',
+                    'refused target misrepresented APK bytes: '+label)
+            return False
+        signer=result.get('signer_sha256')
+        names=result.get('apks');hashes=result.get('sha256')
+        proof=result.get('verified_apks')
+        require(isinstance(signer,str) and SIGNED_RE.fullmatch(signer) and
+                isinstance(names,list) and names and
+                len(names)==len(set(names)) and
+                isinstance(hashes,list) and len(hashes)==len(names) and
+                isinstance(proof,list) and len(proof)==len(names),
+                'selected APK signatures/inventory incomplete: '+label)
+        for name,digest,part in zip(names,hashes,proof):
+            require(isinstance(name,str) and name.endswith('.apk') and '/' not in name and
+                    isinstance(digest,str) and SIGNED_RE.fullmatch(digest) and
+                    isinstance(part,dict) and part.get('name')==name and
+                    part.get('sha256')==digest and
+                    part.get('signer_sha256')==signer and
+                    part.get('v2_api24_27_verified') is True and
+                    part.get('api36_verified') is True and
+                    part.get('declared_sdk_range_verified') is True and
+                    isinstance(part.get('archive_member'),str) and
+                    Path(part['archive_member']).name == name and
+                    isinstance(part.get('api36_reported_schemes'),dict),
+                    'invalid exact split signing proof: '+label)
+            # Reported API36 v2/v3 must be genuine; v2 is separately attested.
+            require(part.get('api36_reported_schemes',{}).get('2') is True or
+                    part.get('api36_reported_schemes',{}).get('3') is True,
+                    'split has no API36 v2/v3 proof: '+label)
+        return True
+
+    require(inspect('device'), 'device selection is not cryptographically signed')
+    baseline=results['device']
+    require(isinstance(doc.get('fixture_certificate_sha256'),str) and
+            SIGNED_RE.fullmatch(doc['fixture_certificate_sha256']) and
+            doc['fixture_certificate_sha256']==baseline['signer_sha256'],
+            'signed split signer does not match generated fixture keystore')
+    derived={}
+    for label in cov:
+        signed=inspect(label)
+        candidate=results[label]
+        if signed:
+            require(candidate['signer_sha256']==baseline['signer_sha256'],
+                    'matrix split signer differs from device selection: '+label)
+        if label.startswith('feature-'):
+            dimension=signed and any(label[len('feature-'):] in n for n in candidate['apks'])
+        else:
+            dimension=(signed and
+                       (candidate['apks'],candidate['sha256']) !=
+                       (baseline['apks'],baseline['sha256']))
+        derived[label]=bool(dimension)
+        require(cov[label] is derived[label], 'forged or stale matrix coverage: '+label)
+    full=all(derived[k] for k in ('abi','density','locale','sdk')) and any(
+        k.startswith('feature-') for k in derived) and all(
+        value for key,value in derived.items() if key.startswith('feature-'))
+    require((doc['overall']=='PASS') == full,
             'bundletool claimed PASS with absent/partial coverage or vice versa')
-    return fully_covered, cov
+    return full,cov
 
 
 def attest(base, expected_sha, run_id, live, matrix):

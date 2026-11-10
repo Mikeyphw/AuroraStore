@@ -28,11 +28,34 @@ def good_live():
 
 
 def good_matrix():
+    def selected(name, digest):
+        return dict(status='SIGNED', signer_sha256='d'*64,
+                    apks=[name],sha256=[digest],verified_apks=[dict(
+                        name=name,sha256=digest,archive_member='splits/'+name,
+                        signer_sha256='d'*64,v2_api24_27_verified=True,
+                        api36_verified=True,declared_sdk_range_verified=True,
+                        default_reported_schemes={'2':True},
+                        api36_reported_schemes={'2':True})])
     return dict(overall='PASS',source_sha=SHA,run_id=RUN,android_api=36,
-                bundletool_sha256=p5.OFFICIAL_BUNDLETOOL_SHA256,bundle_sha256='c'*64,
+                bundletool_sha256=p5.OFFICIAL_BUNDLETOOL_SHA256,
+                bundle_sha256='c'*64,signed_archive_sha256='e'*64,
+                fixture_certificate_sha256='d'*64,
+                device_spec={'sdkVersion':36,'supportedAbis':['x86_64'],
+                             'screenDensity':420,'supportedLocales':['en-US']},
                 publisher_authenticated=False,aurora_install_qualified=False,
                 physical_qualified=False,refused_targeting_does_not_count_as_coverage=True,
-                coverage={'abi':True,'density':True,'locale':True,'sdk':True,'feature-camera':True})
+                coverage={'abi':True,'density':True,'locale':True,'sdk':True,
+                          'feature-camera':True},
+                results={'device':selected('base-master.apk','1'*64),
+                         'abi':selected('base-arm64.apk','2'*64),
+                         'density':selected('base-hdpi.apk','3'*64),
+                         'locale':selected('base-fr.apk','4'*64),
+                         'sdk':selected('base-sdk28.apk','5'*64),
+                         'feature-camera':selected('camera-master.apk','6'*64)})
+
+def refused():
+    return dict(status='REFUSED',apks=[],sha256=[],
+                error_type='bundletool refused targeting')
 
 
 class P5EvidenceTests(unittest.TestCase):
@@ -86,10 +109,10 @@ class P5EvidenceTests(unittest.TestCase):
         doc=good_matrix();doc['coverage']['abi']=False
         with self.assertRaises(p5.QualificationRefused):p5.validate_bundletool(doc,SHA,RUN)
     def test_honest_partial_matrix(self):
-        doc=good_matrix();doc['coverage']['abi']=False;doc['overall']='PARTIAL'
+        doc=good_matrix();doc['coverage']['abi']=False;doc['results']['abi']=refused();doc['overall']='PARTIAL'
         self.assertFalse(p5.validate_bundletool(doc,SHA,RUN)[0])
     def test_no_dynamic_feature_never_counts_as_full_matrix(self):
-        doc=good_matrix();del doc['coverage']['feature-camera'];doc['overall']='PARTIAL'
+        doc=good_matrix();del doc['coverage']['feature-camera'];del doc['results']['feature-camera'];doc['overall']='PARTIAL'
         self.assertFalse(p5.validate_bundletool(doc,SHA,RUN)[0])
     def test_wrong_bundletool_digest_refused(self):
         doc=good_matrix();doc['bundletool_sha256']='0'*64
@@ -105,12 +128,59 @@ class P5EvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             a=Path(td)
             (a/'R3C06_P3_LIVE_OS_INSTALL_RECEIPT.json').write_text(json.dumps(good_live()))
-            m=good_matrix();m['coverage']['locale']=False;m['overall']='PARTIAL'
+            m=good_matrix();m['coverage']['locale']=False;m['results']['locale']=refused();m['overall']='PARTIAL'
             (a/'R3C06_P3_BUNDLETOOL_MATRIX_RECEIPT.json').write_text(json.dumps(m))
             d=p5.attest(a,SHA,RUN,True,True)
             self.assertEqual(d['overall'],'PARTIAL')
             self.assertTrue(d['live_install_qualified'])
             self.assertFalse(d['bundletool_full_matrix_qualified'])
+
+    def test_missing_matrix_run_id_is_refused(self):
+        doc=good_matrix();del doc['run_id']
+        with self.assertRaises(p5.QualificationRefused): p5.validate_bundletool(doc,SHA,RUN)
+
+    def test_wrong_matrix_run_id_is_refused(self):
+        doc=good_matrix();doc['run_id']='321'
+        with self.assertRaises(p5.QualificationRefused): p5.validate_bundletool(doc,SHA,RUN)
+
+    def test_unverified_apk_cannot_supply_split_proof(self):
+        doc=good_matrix();doc['results']['device']['verified_apks']=[]
+        with self.assertRaises(p5.QualificationRefused): p5.validate_bundletool(doc,SHA,RUN)
+
+    def test_modified_blob_digest_refused(self):
+        doc=good_matrix();doc['results']['device']['sha256']=['0'*64]
+        with self.assertRaises(p5.QualificationRefused): p5.validate_bundletool(doc,SHA,RUN)
+
+    def test_wrong_signer_across_target_variants_refused(self):
+        doc=good_matrix();doc['results']['abi']['signer_sha256']='f'*64
+        doc['results']['abi']['verified_apks'][0]['signer_sha256']='f'*64
+        with self.assertRaises(p5.QualificationRefused): p5.validate_bundletool(doc,SHA,RUN)
+
+    def test_unsigned_or_refused_target_cannot_claim_coverage(self):
+        doc=good_matrix();doc['results']['abi']=refused()
+        with self.assertRaises(p5.QualificationRefused): p5.validate_bundletool(doc,SHA,RUN)
+
+    def test_v3_only_without_v2_proof_refused(self):
+        doc=good_matrix();doc['results']['device']['verified_apks'][0]['v2_api24_27_verified']=False
+        with self.assertRaises(p5.QualificationRefused): p5.validate_bundletool(doc,SHA,RUN)
+
+    def test_default_v2_false_when_explicit_v2_positive_is_accepted(self):
+        doc=good_matrix()
+        doc['results']['device']['verified_apks'][0]['default_reported_schemes']['2']=False
+        self.assertTrue(p5.validate_bundletool(doc,SHA,RUN)[0])
+
+    def test_missing_real_archive_digest_refused(self):
+        doc=good_matrix();del doc['signed_archive_sha256']
+        with self.assertRaises(p5.QualificationRefused): p5.validate_bundletool(doc,SHA,RUN)
+
+    def test_wrong_synthetic_keystore_certificate_refused(self):
+        doc=good_matrix();doc['fixture_certificate_sha256']='f'*64
+        with self.assertRaises(p5.QualificationRefused): p5.validate_bundletool(doc,SHA,RUN)
+
+    def test_refused_target_with_fake_apk_bytes_refused(self):
+        doc=good_matrix();doc['results']['abi']=refused()
+        doc['results']['abi']['apks']=['forged.apk']
+        with self.assertRaises(p5.QualificationRefused): p5.validate_bundletool(doc,SHA,RUN)
 
 if __name__=='__main__':
     unittest.main(verbosity=2)

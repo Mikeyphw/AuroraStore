@@ -53,7 +53,7 @@ assert SCRIPT.is_file() and NEGATIVE.is_file()
 result=subprocess.run([sys.executable,'-B',str(NEGATIVE)],cwd=ROOT,
                       capture_output=True,text=True,timeout=30)
 assert result.returncode==0, 'R3C06_P5_SOURCE_REFUSED negative regression failed: '+(result.stdout+result.stderr)[-2500:]
-assert 'Ran 18 tests' in result.stderr, 'P5 acceptance negative test count stale'
+assert 'Ran 29 tests' in result.stderr, 'P5 acceptance negative test count stale'
 
 # R3C06 P5 HF04: Android test app UID must stage and remove only its exact
 # bounded, hashed synthetic fixture. The ADB shell cannot write app cache.
@@ -117,4 +117,30 @@ for obsolete in ('if ("INSTALLED_BY_ANDROID" in state || "ANDROID_REJECTED" in s
     assert obsolete not in _test_hf04, 'HF08 stale UI-text state comparison returned'
 assert 'test_real_os_terminal_state_reads_exact_session_not_formatted_receipt' in P4_TEST
 
-print('R3C06_P5_SOURCE_CONTRACT_PASS: manual R1D opt-in, pinned bundletool, effective Android permission, foreground OS consent, private signing-key hygiene, 18 receipt regressions')
+
+# HF09: the prior apksigner v2-only *default output string* was not an
+# independent cryptographic proof. Enforce SDK-scoped v2 + real API36 +
+# immutable .apks origin + one signer, with a 20-case negative suite. Never
+# remove this gate because bundletool (or a matrix fixture) cannot certify
+# publisher identity or a device install.
+MATRIX = ROOT / 'scripts/ci/r3c06_bundletool_matrix.py'
+MATRIX_NEGATIVE = ROOT / 'scripts/ci/test_r3c06_bundletool_security.py'
+matrix_src = MATRIX.read_text(encoding='utf-8')
+manual_src = SCRIPT.read_text(encoding='utf-8')
+for needle in ('def verify_extracted_apk(', 'def archive_apk_index(',
+               'minimum=24,maximum=27', 'minimum=36,maximum=36',
+               'v2_api24_27_verified', 'api36_verified', 'signed_archive_sha256',
+               'signer_sha256', 'fixture_certificate_sha256', 'archive_member', 'filehash(apk)==digest_before',
+               'refused_targeting_does_not_count_as_coverage'):
+    assert needle in matrix_src, 'HF09 signed matrix evidence missing '+needle
+for needle in ("doc.get('run_id') == run_id", 'signed_archive_sha256',
+               "require(cov[label] is derived[label]", 'v2_api24_27_verified',
+               'results/coverage inventory mismatch'):
+    assert needle in manual_src, 'HF09 receipt validator missing '+needle
+assert MATRIX_NEGATIVE.is_file(), 'HF09 20 negative tests missing'
+security = subprocess.run([sys.executable, '-B', str(MATRIX_NEGATIVE)],
+                          cwd=ROOT, capture_output=True,text=True,timeout=30)
+assert security.returncode == 0 and 'Ran 20 tests' in security.stderr,     'HF09 bundletool negative suite failed: '+(security.stdout+security.stderr)[-3000:]
+assert 'OFFICIAL_SHA' in matrix_src and 'CERT_RE' in matrix_src
+assert 'test_r3c06_p5_source_contract.py' in CI
+print('R3C06_P5_SOURCE_CONTRACT_PASS: manual R1D opt-in, pinned bundletool, effective Android permission, foreground OS consent, private signing-key hygiene, 29 receipt regressions and 20 bundletool negatives')
