@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 package com.aurora.store.data.artifact
 
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -33,7 +34,8 @@ class ArtifactActualInstallAcceptanceDeviceTest {
      */
     private fun reportStatus(key: String, value: String) {
         require(key in setOf("r3c06_fixture_stage_sha256",
-                             "r3c06_fixture_cleanup_sha256", "r3c06_os_result")) {
+                             "r3c06_fixture_cleanup_sha256", "r3c06_os_result",
+                             "r3c06_foreground_activity")) {
             "Unexpected instrumentation evidence key"
         }
         val status = Bundle()
@@ -119,6 +121,30 @@ class ArtifactActualInstallAcceptanceDeviceTest {
         require(!file.exists()) { "Private fixture remains after cleanup" }
         reportStatus("r3c06_fixture_cleanup_sha256", expected)
     }
+    /** Android 14+ restricts background starts from a broadcast receiver.
+     * The real import screen must be visible before the OS confirmation is
+     * requested. This is a runtime precondition, not fake approval.
+     */
+    private fun showForegroundImport(inst: android.app.Instrumentation) {
+        val context = inst.targetContext
+        val activity = inst.startActivitySync(
+            Intent(context, ArtifactImportActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+        require(activity is ArtifactImportActivity && !activity.isFinishing) {
+            "Actual Aurora import activity did not launch"
+        }
+        inst.waitForIdleSync()
+        val deadline = SystemClock.elapsedRealtime() + 10_000L
+        while (!activity.hasWindowFocus() && SystemClock.elapsedRealtime() < deadline) {
+            SystemClock.sleep(200)
+        }
+        require(activity.hasWindowFocus()) {
+            "Aurora import activity is not visible; refuse background installer launch"
+        }
+        reportStatus("r3c06_foreground_activity", "VISIBLE")
+    }
+
     @Test fun androidInstallerActuallyAcceptsOrRejectsFixture() {
         val inst = InstrumentationRegistry.getInstrumentation()
         val context = inst.targetContext
@@ -144,6 +170,7 @@ class ArtifactActualInstallAcceptanceDeviceTest {
         assertThat(verified.signerMatchesInstalled).isNull()
         assertThat(verified.signerSha256).isNotEmpty()
         val verifiedCerts = verified.signerSha256
+        showForegroundImport(inst)
         // User-app consent is explicit. Android system consent still must be
         // separately exercised by a human or a tightly verified host UI driver.
         val session = ArtifactInstallSession.install(

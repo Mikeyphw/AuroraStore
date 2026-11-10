@@ -250,6 +250,51 @@ class AcceptanceRegressions(unittest.TestCase):
                       'r3c06_os_result'):
             self.assertIn(token,source)
 
+    def test_foreground_receipt_is_required_once(self):
+        marker='INSTRUMENTATION_STATUS: r3c06_foreground_activity=VISIBLE'
+        for data in ('',marker+'\n'+marker,marker.replace('VISIBLE','NOT_VISIBLE')):
+            with self.subTest(data=data),self.assertRaises(live.Refused):
+                live.require_foreground_receipt(data)
+        live.require_foreground_receipt(marker)
+
+    def test_unknown_sources_provision_must_verify_app_op(self):
+        with patch.object(live,'fixture_present',return_value=False):
+            with patch.object(live,'run',side_effect=['','REQUEST_INSTALL_PACKAGES: allow']):
+                self.assertTrue(live.provision_hosted_unknown_sources(['adb']))
+            for output in ('', 'REQUEST_INSTALL_PACKAGES: ignore', 'permission denied',
+                           'REQUEST_INSTALL_PACKAGES: default'):
+                with patch.object(live,'run',side_effect=['',output]):
+                    with self.assertRaises(live.Refused):
+                        live.provision_hosted_unknown_sources(['adb'])
+        with patch.object(live,'fixture_present',return_value=True):
+            with patch.object(live,'run') as runner:
+                with self.assertRaises(live.Refused):
+                    live.provision_hosted_unknown_sources(['adb'])
+                runner.assert_not_called()
+
+    def test_ui_diagnostics_do_not_copy_secrets_or_unbounded_text(self):
+        xml=("<hierarchy><node package='com.google.android.packageinstaller' "
+             "class='android.widget.TextView' text='Aurora R3C06 Fixture' />"
+             "<node package='unrelated.app' class='android.view.View' "
+             "text='private token do not publish' /></hierarchy>")
+        import subprocess
+        with tempfile.TemporaryDirectory() as td:
+            work=Path(td)
+            with patch.object(live,'run',side_effect=['',xml]):
+                with patch.object(live.subprocess,'run',return_value=subprocess.CompletedProcess([],1,b'')):
+                    live.capture_ui_failure_diagnostics(['adb'],work,'deny')
+            content=(work/'ui-deny.txt').read_text()
+            self.assertIn('Aurora R3C06 Fixture',content)
+            self.assertNotIn('private token',content)
+
+    def test_signing_key_not_saved_inside_uploaded_evidence_tree(self):
+        driver=(HERE/'r3c06_api36_live_install.py').read_text()
+        self.assertIn("work=Path(tempfile.mkdtemp(prefix='aurora-r3c06-private-',dir=tmp))",driver)
+        self.assertIn("evidence=Path(tempfile.mkdtemp(prefix='attempt-',dir=logs_parent))",driver)
+        self.assertIn('shutil.rmtree(work)',driver)
+        self.assertIn('stage_fixture(adb, runner, fixture, evidence)',driver)
+        self.assertIn('cleanup_fixture(adb,runner,fixture_digest,evidence)',driver)
+
 if __name__=='__main__':
     suite=unittest.defaultTestLoader.loadTestsFromTestCase(AcceptanceRegressions)
     result=unittest.TextTestRunner(verbosity=2).run(suite)

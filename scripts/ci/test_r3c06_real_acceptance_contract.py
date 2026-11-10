@@ -47,6 +47,7 @@ assert 'expected.uppercase(Locale.ROOT)' in install, \
 assert "^OK \\(6 tests\\)" in runner and 'ArtifactRealSignedArchiveDeviceTest' in runner
 assert 'R3C06_ALLOW_LIVE_INSTALL' in runner and 'r3c06_api36_live_install.py' in runner
 assert 'R3C06_ALLOW_LIVE_INSTALL' in script and 'com.aurora.r3c06.fixture' in script
+assert 'showForegroundImport(inst)' in install and 'r3c06_foreground_activity' in install
 for token in ('seedSignedFixtureIntoPrivateCache', 'removeSignedFixtureFromPrivateCache',
               'requiredFixtureDigest()', 'r3c06_fixture_stage_sha256',
               'r3c06_fixture_cleanup_sha256', 'maxFixtureBytes = 64 * 1024'):

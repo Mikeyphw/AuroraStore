@@ -53,20 +53,20 @@ assert SCRIPT.is_file() and NEGATIVE.is_file()
 result=subprocess.run([sys.executable,'-B',str(NEGATIVE)],cwd=ROOT,
                       capture_output=True,text=True,timeout=30)
 assert result.returncode==0, 'R3C06_P5_SOURCE_REFUSED negative regression failed: '+(result.stdout+result.stderr)[-2500:]
-assert 'Ran 16 tests' in result.stderr, 'P5 acceptance negative test count stale'
+assert 'Ran 17 tests' in result.stderr, 'P5 acceptance negative test count stale'
 
 # R3C06 P5 HF04: Android test app UID must stage and remove only its exact
 # bounded, hashed synthetic fixture. The ADB shell cannot write app cache.
 _live_hf04 = (ROOT / 'scripts/ci/r3c06_api36_live_install.py').read_text(encoding='utf-8')
 _test_hf04 = (ROOT / 'app/src/androidTest/java/com/aurora/store/data/artifact/ArtifactActualInstallAcceptanceDeviceTest.kt').read_text(encoding='utf-8')
 _p4_hf04 = (ROOT / 'scripts/ci/test_r3c06_p4_python.py').read_text(encoding='utf-8')
-assert 'stage_fixture(adb, runner, fixture, work)' in _live_hf04, 'HF04 stage missing'
-assert 'cleanup_fixture(adb,runner,fixture_digest,work)' in _live_hf04, 'HF04 cleanup missing'
+assert 'stage_fixture(adb, runner, fixture, evidence)' in _live_hf04, 'HF04 stage missing'
+assert 'cleanup_fixture(adb,runner,fixture_digest,evidence)' in _live_hf04, 'HF04 cleanup missing'
 assert 'private_app_uid_staging_verified' in _live_hf04, 'HF04 private stage receipt missing'
 assert "'run-as'" not in _live_hf04, 'HF04 unsafe run-as cache transfer still present'
 assert _test_hf04.count('@Test') == 3, 'HF04 exact three opted-in methods missing'
 assert 'context.cacheDir.canonicalFile' in _test_hf04 and 'fileDigest(file) == expected' in _test_hf04
-assert _p4_hf04.count('def test_') >= 20, 'HF04 negative source tests missing'
+assert _p4_hf04.count('def test_') >= 24, 'HF04 negative source tests missing'
 _receipt_hf04=(ROOT/'scripts/ci/r3c06_p5_manual_receipt.py').read_text(encoding='utf-8')
 assert "doc.get('private_app_uid_staging_verified') is True" in _receipt_hf04, 'HF04 receipt staging proof missing'
 assert "doc.get('private_fixture_cleanup_verified') is True" in _receipt_hf04, 'HF04 receipt cleanup proof missing'
@@ -77,4 +77,12 @@ for name in ('r3c06_fixture_stage_sha256','r3c06_fixture_cleanup_sha256','r3c06_
 assert 'run_fixture_instrumentation(' in _live_hf04 and 'r3c06-live-install' in _live_hf04
 assert 'original acceptance failure:' in _live_hf04, 'HF05 primary error masking still present'
 assert "doc.get('instrumentation_status_proof_verified') is True" in _receipt_hf04
-print('R3C06_P5_SOURCE_CONTRACT_PASS: manual R1D opt-in, pinned bundletool, exact receipt, 16 negatives')
+for token in ('showForegroundImport(inst)', 'r3c06_foreground_activity', 'hasWindowFocus()'):
+    assert token in _test_hf04, 'HF06 background activity guard absent: '+token
+for token in ('provision_hosted_unknown_sources(adb)', 'require_foreground_receipt(output)',
+              'shutil.rmtree(work)', 'capture_ui_failure_diagnostics(adb, work, scenario)',
+              'emulator_unknown_sources_preprovisioned'):
+    assert token in _live_hf04, 'HF06 hosted environment/diagnostic guard absent: '+token
+assert "doc.get('emulator_unknown_sources_preprovisioned') is True" in _receipt_hf04
+assert "r.get('foreground_activity_verified') is True" in _receipt_hf04
+print('R3C06_P5_SOURCE_CONTRACT_PASS: manual R1D opt-in, pinned bundletool, foreground OS consent, private signing-key hygiene, 17 receipt regressions')

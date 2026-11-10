@@ -19,8 +19,9 @@ def good_live():
                 fixture_package=p5.PACKAGE,signed_v2_verified=True,fixture_sha256='b'*64,
                 private_app_uid_staging_verified=True,private_fixture_cleanup_verified=True,
                 instrumentation_status_proof_verified=True,
+                emulator_unknown_sources_preprovisioned=True,
                 results=[dict(outcome=o,system_consent_ui_verified=True,android_callback_verified=True,
-                              instrumentation_status_verified=True)
+                              instrumentation_status_verified=True,foreground_activity_verified=True)
                          for o in ('DENY','ACCEPT')],physical_device_qualified=False,
                 release_qualified=False)
 
@@ -34,6 +35,18 @@ def good_matrix():
 
 
 class P5EvidenceTests(unittest.TestCase):
+    def test_missing_foreground_or_emulator_pregrant_cannot_claim_live_success(self):
+        for field in ('foreground_activity_verified',):
+            doc=good_live()
+            doc['results'][0].pop(field)
+            with self.assertRaises(p5.QualificationRefused):
+                p5.validate_live(doc,SHA,RUN)
+        for value in (None,False):
+            doc=good_live()
+            doc['emulator_unknown_sources_preprovisioned']=value
+            with self.assertRaises(p5.QualificationRefused):
+                p5.validate_live(doc,SHA,RUN)
+
     def test_valid_os_denial_then_acceptance(self):
         self.assertTrue(p5.validate_live(good_live(),SHA,RUN))
     def test_missing_app_uid_stage_receipt_refused(self):

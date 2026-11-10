@@ -123,6 +123,60 @@ def fixture_present(adb):
             'Aurora absent from user-0 inventory: cannot establish fixture state')
     return 'package:' + TARGET in records
 
+def provision_hosted_unknown_sources(adb):
+    """Prepare only this explicitly opted-in, ephemeral API36 emulator.
+
+    This is environment setup, NOT evidence of user consent. The separate
+    PackageInstaller confirmation is still required and verified on-screen.
+    """
+    require(not fixture_present(adb), 'fixture present before app-op provisioning')
+    run(adb + ['shell', 'appops', 'set', '--uid', AURORA,
+               'REQUEST_INSTALL_PACKAGES', 'allow'], timeout=30)
+    actual = run(adb + ['shell', 'appops', 'get', '--uid', AURORA,
+                        'REQUEST_INSTALL_PACKAGES'], timeout=30)
+    require(re.search(r'(?m)^REQUEST_INSTALL_PACKAGES:\s+allow\b', actual) is not None,
+            'unknown-source app-op did not become allowed on hosted emulator')
+    return True
+
+
+def require_foreground_receipt(output):
+    lines = output.splitlines()
+    require(lines.count('INSTRUMENTATION_STATUS: r3c06_foreground_activity=VISIBLE') == 1,
+            'real Aurora import activity was not proved foreground for OS consent')
+
+
+def capture_ui_failure_diagnostics(adb, logdir, scenario):
+    """Bounded failure-only evidence. No signing key, APK or raw secret argv."""
+    logdir = Path(logdir)
+    logdir.mkdir(parents=True, exist_ok=True)
+    try:
+        raw = run(adb + ['shell', 'uiautomator', 'dump', '/sdcard/r3c06-final.xml'], timeout=25)
+        xml = run(adb + ['shell', 'cat', '/sdcard/r3c06-final.xml'], timeout=20)
+        root = ET.fromstring(xml)
+        lines = []
+        for item in list(root.iter('node'))[:128]:
+            # Avoid recording arbitrary text from the device. Only structural
+            # metadata and short installer-relevant labels are captured.
+            pkg = item.get('package', '')[:100]
+            label = item.get('text', '').strip()
+            if label not in {'Install', 'Cancel', 'Allow', 'Not now',
+                             'Aurora R3C06 Fixture', 'Allow from this source'}:
+                label = '[OTHER]' if label else ''
+            lines.append(f"package={pkg} class={item.get('class', '')[:120]} label={label} enabled={item.get('enabled', '')} clickable={item.get('clickable', '')}")
+        (logdir / ('ui-'+scenario+'.txt')).write_text('\n'.join(lines)+'\n', encoding='utf-8')
+    except (Refused, subprocess.TimeoutExpired, ET.ParseError, OSError) as error:
+        (logdir / ('ui-'+scenario+'.txt')).write_text('UI_CAPTURE_FAILED '+str(type(error).__name__)+'\n')
+    try:
+        p = subprocess.run(adb + ['logcat','-d','-t','250',
+                            'AuroraArtifactImport:W','ActivityTaskManager:W',
+                            'PackageInstaller:W','*:S'],capture_output=True,timeout=30)
+        if p.returncode == 0:
+            lines = p.stdout.decode(errors='replace').splitlines()[-150:]
+            (logdir / ('android-'+scenario+'.txt')).write_text('\n'.join(lines)+'\n',encoding='utf-8')
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
 def check_single_instrumentation_result(output, method, key, value):
     """Require one real successful AndroidJUnitRunner execution and one exact
     instrumentation *status* receipt, never logcat/println/string substring.
@@ -236,7 +290,9 @@ def instrument(adb, runner, scenario, work, digest):
                 except (subprocess.TimeoutExpired,ET.ParseError):
                     pass
                 time.sleep(2)
-            require(tapped, 'expected Android fixture confirmation UI never appeared (no blind tap)')
+            if not tapped:
+                capture_ui_failure_diagnostics(adb, work, scenario)
+                require(False, 'expected Android fixture confirmation UI never appeared (no blind tap); inspect sanitized UI/logcat evidence')
             require(p.wait(timeout=220)==0, 'instrumentation command failed')
         finally:
             if p.poll() is None:
@@ -251,8 +307,10 @@ def instrument(adb, runner, scenario, work, digest):
     except Refused as failure:
         raise Refused(str(failure)+'; see '+str(work/('instrument-'+scenario+'.txt'))+
                       '; tail='+output[-900:]) from failure
+    require_foreground_receipt(output)
     return {'outcome':scenario.upper(),'system_consent_ui_verified':True,
-            'android_callback_verified':True, 'instrumentation_status_verified':True}
+            'android_callback_verified':True, 'instrumentation_status_verified':True,
+            'foreground_activity_verified':True}
 
 def main():
     parser=argparse.ArgumentParser()
@@ -278,12 +336,16 @@ def main():
     matches=re.findall(r'instrumentation:([^ ]+).*target='+re.escape(AURORA)+r'\)',instruments)
     runner=next((x for x in matches if 'HiltInstrumentationTestRunner' in x),None)
     require(runner,'Aurora Hilt instrument runner not installed')
+    provision_hosted_unknown_sources(adb)
     tmp=Path(os.environ.get('RUNNER_TEMP') or os.environ.get('TMPDIR') or tempfile.gettempdir())
     # Existing R1D upload-artifact includes aurora-r3c03-c02. Save all
     # sanitized stage/OS/cleanup outputs there even when a test fails.
     logs_parent = tmp / 'aurora-r3c03-c02' / 'r3c06-live-install'
     logs_parent.mkdir(parents=True, exist_ok=True)
-    work=Path(tempfile.mkdtemp(prefix='attempt-',dir=logs_parent))
+    # Keep the ephemeral signing key and generated APK OUTSIDE uploaded artifacts.
+    # Only short sanitized Android diagnostics go into aurora-r3c03-c02.
+    work=Path(tempfile.mkdtemp(prefix='aurora-r3c06-private-',dir=tmp))
+    evidence=Path(tempfile.mkdtemp(prefix='attempt-',dir=logs_parent))
     results=[]
     fixture_digest=None
     seed_attempted=False
@@ -296,12 +358,12 @@ def main():
         # Android itself owns the cache directory. Stage via the app's bounded
         # instrumentation entry point; never assume `adb run-as` can write it.
         seed_attempted=True
-        require(stage_fixture(adb, runner, fixture, work)==fixture_digest,
+        require(stage_fixture(adb, runner, fixture, evidence)==fixture_digest,
                 'signed fixture digest changed during Android-private staging')
         for scenario in ('deny','accept'):
             require(not fixture_present(adb),
                     'fixture unexpectedly installed before test')
-            results.append(instrument(adb,runner,scenario,work,fixture_digest))
+            results.append(instrument(adb,runner,scenario,evidence,fixture_digest))
             installed=fixture_present(adb)
             require(installed==(scenario=='accept'), 'package manager state mismatches callback')
         receipt={'overall':'PASS','source_sha':source_sha,
@@ -309,6 +371,7 @@ def main():
                  'android_api':36,'fixture_package':TARGET,
                  'fixture_sha256':fixture_digest,'signed_v2_verified':True,
                  'private_app_uid_staging_verified':True,
+                 'emulator_unknown_sources_preprovisioned':True,
                  'instrumentation_status_proof_verified':True,
                  'results':results,'play_evidence_changes_checked':False,
                  'physical_device_qualified':False,'release_qualified':False}
@@ -326,9 +389,16 @@ def main():
             cleanup_errors.append(str(failure))
         if seed_attempted and fixture_digest is not None:
             try:
-                cleanup_fixture(adb,runner,fixture_digest,work)
+                cleanup_fixture(adb,runner,fixture_digest,evidence)
             except (Refused, subprocess.TimeoutExpired, OSError) as failure:
                 cleanup_errors.append(str(failure))
+    # A private test-only signing key must never become a downloadable CI artifact
+    # and must not persist in the ephemeral runner after the attempt.
+    try:
+        shutil.rmtree(work)
+        require(not work.exists(), 'private fixture signing material persists')
+    except (OSError, Refused) as failure:
+        cleanup_errors.append('test signing material cleanup failed: '+str(failure))
     if primary_error is not None or cleanup_errors:
         problems=[]
         if primary_error is not None:
