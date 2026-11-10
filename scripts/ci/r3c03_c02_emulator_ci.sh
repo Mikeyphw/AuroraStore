@@ -169,4 +169,21 @@ grep -Eq '^OK \(3 tests\)' "$OUT/r3c05_provider_discovery_ui.txt" || {
 }
 echo 'R3C05_API36_PROVIDER_UI_PASS: three manual provider tests'
 
+# R3C06: four read-only split-targeting tests on the periodic API36 gate.
+# Complements, never replaces, earlier C04 signing/session/zip tests.
+SPLIT_TARGET_CLASS='com.aurora.store.data.artifact.ArtifactSplitCompatibilityDeviceTest'
+timeout 300 adb shell am instrument -w -r -e class "$SPLIT_TARGET_CLASS" "$RUNNER" |
+  tee "$OUT/r3c06_split_targeting.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/r3c06_split_targeting.txt"; then
+  echo 'R3C06_SPLIT_API36_REFUSED: targeted splits failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(4 tests\)' "$OUT/r3c06_split_targeting.txt" || {
+  echo 'R3C06_SPLIT_API36_REFUSED: four actual Android tests missing' >&2
+  exit 1
+}
+echo 'R3C06_API36_SPLIT_TARGETING_PASS: four read-only compatibility tests'
+
+
 

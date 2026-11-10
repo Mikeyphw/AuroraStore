@@ -153,6 +153,9 @@ internal object ArtifactApkVerifier {
         val attempt = imported.attempt
         ApkSetPolicy.check(attempt.packageName, attempt.versionCode, pieces.map { it.first })
         ArtifactApkIdentityPolicy.requireUniqueSplitNames(pieces.map { it.second })
+        ArtifactSplitCompatibilityPolicy.check(
+            imported.staged.format, pieces.map { it.second }, Build.SUPPORTED_ABIS.toList()
+        )
         if (pieces.map { it.second } != imported.splitNames ||
             pieces.first { it.first.isBase }.first.signerDigests != imported.signerSha256
         ) {
@@ -219,17 +222,11 @@ internal object ArtifactApkVerifier {
         // Reject duplicate split identities even when archive entry filenames differ.
         val splitNames = ids.map { it.second }
         ArtifactApkIdentityPolicy.requireUniqueSplitNames(splitNames)
-        val abiSplits = splitNames.filterNotNull().filter { name ->
-            listOf("arm64_v8a", "armeabi_v7a", "x86_64", "x86", "mips").any { tag ->
-                name.contains(tag)
-            }
-        }
-        if (abiSplits.isNotEmpty()) {
-            val device = Build.SUPPORTED_ABIS.map { it.replace('-', '_') }.toSet()
-            if (abiSplits.none { split -> device.any { abi -> split.contains(abi) } }) {
-                throw ApkVerificationException("Archive lacks a supported ABI split")
-            }
-        }
+        // No implicit selection of competing ABI/density variants from untrusted
+        // APKS/APKM/XAPK metadata. The same check runs again before installation.
+        ArtifactSplitCompatibilityPolicy.check(
+            staged.format, splitNames, Build.SUPPORTED_ABIS.toList()
+        )
         val installed = installed(manager, base.packageName)
         val installedSigners = installed?.let(::signed)
         val history = if (Build.VERSION.SDK_INT >= 28) {
