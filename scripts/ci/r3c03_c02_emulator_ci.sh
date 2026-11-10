@@ -185,5 +185,60 @@ grep -Eq '^OK \(4 tests\)' "$OUT/r3c06_split_targeting.txt" || {
 }
 echo 'R3C06_API36_SPLIT_TARGETING_PASS: four read-only compatibility tests'
 
+# R3C06 phase 2: six read-only APKM/XAPK metadata and staging tests on API36.
+# Additive: no Play evidence, publisher trust, privileged install, or source fallback.
+ARCHIVE_DESCRIPTOR_CLASS='com.aurora.store.data.artifact.ArtifactArchiveDescriptorDeviceTest'
+timeout 300 adb shell am instrument -w -r -e class "$ARCHIVE_DESCRIPTOR_CLASS" "$RUNNER" |
+  tee "$OUT/r3c06_archive_descriptors.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/r3c06_archive_descriptors.txt"; then
+  echo 'R3C06_P2_API36_REFUSED: APKM/XAPK tests failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(6 tests\)' "$OUT/r3c06_archive_descriptors.txt" || {
+  echo 'R3C06_P2_API36_REFUSED: six actual archive-format tests missing' >&2
+  exit 1
+}
+echo 'R3C06_P2_API36_ARCHIVE_DESCRIPTOR_PASS: six bounded archive-format tests'
+
+
+# R3C06 phase 3: actual signed debug APK bytes in APKM/XAPK wrappers.
+# These cases are READ-ONLY; no installer session is submitted by this suite.
+REAL_SIGNED_CLASS='com.aurora.store.data.artifact.ArtifactRealSignedArchiveDeviceTest'
+timeout 360 adb shell am instrument -w -r -e class "$REAL_SIGNED_CLASS" "$RUNNER" |
+  tee "$OUT/r3c06_real_signed_archives.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/r3c06_real_signed_archives.txt"; then
+  echo 'R3C06_P3_SIGNED_ARCHIVES_REFUSED: actual signed APKM/XAPK tests failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(6 tests\)' "$OUT/r3c06_real_signed_archives.txt" || {
+  echo 'R3C06_P3_SIGNED_ARCHIVES_REFUSED: six actual signed-APK tests missing' >&2
+  exit 1
+}
+echo 'R3C06_P3_SIGNED_ARCHIVES_PASS: six API36 signed APKM/XAPK import tests'
+
+# REAL OS installation is explicitly opt-in: this never runs on ordinary PR CI.
+# It creates and deletes ONLY an isolated synthetic fixture package on API36 emulator.
+if [[ "${R3C06_ALLOW_LIVE_INSTALL:-no}" == yes ]]; then
+  python3 -B scripts/ci/r3c06_api36_live_install.py \
+    --receipt "$OUT/R3C06_P3_LIVE_OS_INSTALL_RECEIPT.json"
+else
+  echo 'R3C06_P3_LIVE_OS_INSTALL_NOT_QUALIFIED: explicit opt-in required'
+fi
+
+# A SHA256-pinned official bundletool binary AND a real fixture AAB are required.
+# Never silently certify a dimension or use untrusted toc.pb as publisher proof.
+if [[ -n "${R3C06_BUNDLETOOL_JAR:-}" && -n "${R3C06_BUNDLETOOL_SHA256:-}" && -n "${R3C06_AAB_FIXTURE:-}" ]]; then
+  python3 -B scripts/ci/r3c06_bundletool_matrix.py \
+    --bundle "$R3C06_AAB_FIXTURE" \
+    --bundletool-jar "$R3C06_BUNDLETOOL_JAR" \
+    --bundletool-sha256 "$R3C06_BUNDLETOOL_SHA256" \
+    --receipt "$OUT/R3C06_P3_BUNDLETOOL_MATRIX_RECEIPT.json"
+else
+  echo 'R3C06_P3_BUNDLETOOL_NOT_QUALIFIED: signed AAB and pinned bundletool required'
+fi
+
+
 
 

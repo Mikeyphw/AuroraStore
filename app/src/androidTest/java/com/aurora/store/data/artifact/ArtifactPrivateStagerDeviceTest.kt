@@ -171,7 +171,7 @@ class ArtifactPrivateStagerDeviceTest {
             out.write(ByteArray(64) { 1 })
             out.closeEntry()
             val crc = java.util.zip.CRC32().apply { update(payload) }
-            val meta = ZipEntry("manifest.json")
+            val meta = ZipEntry("metadata/manifest.json")
             meta.method = ZipEntry.STORED
             meta.size = payload.size.toLong()
             meta.compressedSize = payload.size.toLong()
@@ -230,17 +230,27 @@ class ArtifactPrivateStagerDeviceTest {
         try {
             // Same strict extraction for synthetically ZIP-backed APKS/APKM/XAPK,
             // without asserting real-world dialect completeness or device targeting.
-            for (suffix in listOf("apks", "apkm", "xapk")) {
-                val candidate = File(context.cacheDir, "synthetic-${UUID.randomUUID()}.$suffix")
-                input.copyTo(candidate)
+            // toc.pb is a bundletool/APKS-specific index. Re-labeling it as
+            // APKM or XAPK must not silently grant a compatible container format.
+            val candidate = File(context.cacheDir, "synthetic-${UUID.randomUUID()}.apks")
+            input.copyTo(candidate)
+            try {
+                val stage = ArtifactPrivateStager.stage(context,
+                    Uri.fromFile(candidate), candidate.name) { false }
                 try {
-                    val stage = ArtifactPrivateStager.stage(context,
-                        Uri.fromFile(candidate), candidate.name) { false }
-                    try {
-                        assertThat(stage.apks).hasSize(1)
-                        assertThat(stage.apks.single().byteCount).isEqualTo(128)
-                    } finally { stage.discard() }
-                } finally { candidate.delete() }
+                    assertThat(stage.apks).hasSize(1)
+                    assertThat(stage.apks.single().byteCount).isEqualTo(128)
+                } finally { stage.discard() }
+            } finally { candidate.delete() }
+            for (suffix in listOf("apkm", "xapk")) {
+                val wrong = File(context.cacheDir, "relabel-${UUID.randomUUID()}.$suffix")
+                input.copyTo(wrong)
+                try {
+                    assertThat(runCatching {
+                        ArtifactPrivateStager.stage(context,
+                            Uri.fromFile(wrong), wrong.name) { false }
+                    }.isFailure).isTrue()
+                } finally { wrong.delete() }
             }
         } finally { input.delete() }
     }

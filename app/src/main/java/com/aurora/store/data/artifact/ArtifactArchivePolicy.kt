@@ -36,7 +36,13 @@ internal object ArtifactArchivePolicy {
             // Bundletool APK sets carry toc.pb. Treat it as opaque checked bytes,
             // NEVER a trusted split selector or provenance claim.
             "pb" -> if (name == "toc.pb") Entry.METADATA else null
-            else -> null // includes OBB, DEX, EXE, symlinks disguised as scripts
+            // APKMirror APKM includes optional *untrusted* JAR signature files.
+            // Never present these as independently authenticated publisher evidence.
+            "mf" -> if (name == "META-INF/MANIFEST.MF") Entry.METADATA else null
+            "sf" -> if (name == "META-INF/APKMIRRO.SF") Entry.METADATA else null
+            "rsa" -> if (name == "META-INF/APKMIRRO.RSA") Entry.METADATA else null
+            "url" -> if (name == "APKM_installer.url") Entry.METADATA else null
+            else -> null // includes OBB, DEX, EXE, arbitrary URLs and scripts
         }
     }
 

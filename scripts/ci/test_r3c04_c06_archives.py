@@ -25,7 +25,7 @@ for token in ('end of central directory', 'count > ArtifactArchivePolicy.MAX_ITE
     assert token in preflight, f"C04_06_HF04_REFUSED: preflight {token}"
 assert stage.index('ArtifactZipPreflight.inspect(copied.file)') < stage.index('ZipFile(copied.file)')
 for token in ('entry.crc != expected.crc', 'crc.update(buffer, 0, n)',
-              'verifyMetadata(stream, entry.size, entry.crc, cancelled)',
+              'verifyMetadata(stream, entry.size, entry.crc, cancelled, index)',
               'copied.file.delete()', 'directory.deleteRecursively()',
               'Archive entry checksum mismatch', 'entryCount != inspected.size'):
     assert token in stage, f"C04_06_HF04_REFUSED: stage {token}"
@@ -35,5 +35,6 @@ assert unit.count('@Test') >= 8
 assert device.count('@Test') == 17, f"C04_06_HF04_REFUSED: got {device.count('@Test')} Android tests"
 assert "^OK \\(17 tests\\)" in runner, 'C04_06_HF04_REFUSED: emulator test count mismatch'
 assert 'ArtifactPrivateStagerDeviceTest' in runner
+assert 'captureIndex: Boolean = false' in stage and 'Archive metadata checksum or size mismatch' in stage
 assert 'PlayVerifiedEvidenceStore' not in (stage + preflight)
 print('R3C04_C06_HF04_ARCHIVE_CONTRACT_PASS: pre-index central bounds, symlinks, CRC, metadata, API36 17-case staging lane including C04-02')

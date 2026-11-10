@@ -32,7 +32,8 @@ internal object ArtifactApkVerifier {
         val installedVersion: Long?,
         val signerMatchesInstalled: Boolean?,
         val splitNames: List<String?>,
-        val totalApkBytes: Long
+        val totalApkBytes: Long,
+        val signedFeatureDependencies: List<String?>
     ) {
         val files: List<ArtifactPrivateStager.CopiedApk> get() = staged.apks
         val isPlayEvidence: Boolean get() = false
@@ -153,9 +154,21 @@ internal object ArtifactApkVerifier {
         val attempt = imported.attempt
         ApkSetPolicy.check(attempt.packageName, attempt.versionCode, pieces.map { it.first })
         ArtifactApkIdentityPolicy.requireUniqueSplitNames(pieces.map { it.second })
+        // Untrusted container metadata may only veto a contradictory signed set.
+        ArtifactArchiveDescriptorPolicy.checkAgainstSignedApks(
+            imported.staged.descriptor, imported.staged.format, attempt.packageName,
+            attempt.versionCode, imported.staged.archiveApkEntryNames, pieces.map { it.second }
+        )
         ArtifactSplitCompatibilityPolicy.check(
             imported.staged.format, pieces.map { it.second }, Build.SUPPORTED_ABIS.toList()
         )
+        val freshFeatureDependencies = imported.files.map { part ->
+            ArtifactSignedManifestDependencies.read(part.file)
+        }
+        ArtifactFeatureDependencyPolicy.check(pieces.map { it.second }, freshFeatureDependencies)
+        if (freshFeatureDependencies != imported.signedFeatureDependencies) {
+            throw ApkVerificationException("Signed feature dependencies changed after review")
+        }
         if (pieces.map { it.second } != imported.splitNames ||
             pieces.first { it.first.isBase }.first.signerDigests != imported.signerSha256
         ) {
@@ -198,6 +211,7 @@ internal object ArtifactApkVerifier {
         cancelled: () -> Boolean
     ): VerifiedImport {
         val manager = context.packageManager
+        val signedFeatureDependencies = mutableListOf<String?>()
         val ids = staged.apks.map { part ->
             if (cancelled()) throw ApkVerificationException("Import was cancelled")
             if (!part.file.isFile || part.file.length() != part.byteCount ||
@@ -205,6 +219,7 @@ internal object ArtifactApkVerifier {
             ) throw ApkVerificationException("Staged file changed since copying")
             val manifest = signedManifest(part.file)
             val names = signerFor(manager, part.file, manifest)
+            signedFeatureDependencies.add(ArtifactSignedManifestDependencies.read(part.file))
             Pair(
                 ApkIdentity(
                     part.file.name,
@@ -222,11 +237,16 @@ internal object ArtifactApkVerifier {
         // Reject duplicate split identities even when archive entry filenames differ.
         val splitNames = ids.map { it.second }
         ArtifactApkIdentityPolicy.requireUniqueSplitNames(splitNames)
+        ArtifactArchiveDescriptorPolicy.checkAgainstSignedApks(
+            staged.descriptor, staged.format, base.packageName, base.versionCode,
+            staged.archiveApkEntryNames, splitNames
+        )
         // No implicit selection of competing ABI/density variants from untrusted
         // APKS/APKM/XAPK metadata. The same check runs again before installation.
         ArtifactSplitCompatibilityPolicy.check(
             staged.format, splitNames, Build.SUPPORTED_ABIS.toList()
         )
+        ArtifactFeatureDependencyPolicy.check(splitNames, signedFeatureDependencies)
         val installed = installed(manager, base.packageName)
         val installedSigners = installed?.let(::signed)
         val history = if (Build.VERSION.SDK_INT >= 28) {
@@ -270,7 +290,8 @@ internal object ArtifactApkVerifier {
         }
         return VerifiedImport(
             staged, attempt, base.signerDigests, tier, installedVersion,
-            compatible, splitNames, staged.apks.sumOf { it.byteCount }
+            compatible, splitNames, staged.apks.sumOf { it.byteCount },
+            signedFeatureDependencies.toList()
         )
     }
 }

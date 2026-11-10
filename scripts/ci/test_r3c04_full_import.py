@@ -138,3 +138,14 @@ exec(compile((ROOT / "scripts/ci/test_r3c05_source_handoff.py").read_text(),
 # R3C06: fail-closed split-variant targeting; API36 runtime is a separate gate.
 exec(compile((ROOT / "scripts/ci/test_r3c06_split_compatibility.py").read_text(),
              "test_r3c06_split_compatibility.py", "exec"))
+
+
+# R3C06 phase 2: descriptor-consistency and real APKM/XAPK metadata acceptance.
+# This source contract cannot substitute for hosted signed-format instrumentation.
+exec(compile((ROOT / "scripts/ci/test_r3c06_archive_descriptors.py").read_text(),
+             "test_r3c06_archive_descriptors.py", "exec"))
+
+# R3C06 P3: signed APKM/XAPK and OS-consent test wiring. Source only in targeted CI.
+# Runtime gates remain deliberate hosted API36 jobs, never silently certified here.
+exec(compile((ROOT / "scripts/ci/test_r3c06_real_acceptance_contract.py").read_text(),
+             "test_r3c06_real_acceptance_contract.py", "exec"))

@@ -6,6 +6,7 @@ package com.aurora.store.data.artifact
 import android.content.Context
 import android.net.Uri
 import com.aurora.store.data.installer.verification.ApkVerificationException
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -27,7 +28,9 @@ internal object ArtifactPrivateStager {
         val format: ArtifactArchivePolicy.Format,
         val apks: List<CopiedApk>,
         val originalSha256: String,
-        val originalSize: Long
+        val originalSize: Long,
+        val archiveApkEntryNames: List<String> = emptyList(),
+        val descriptor: ArtifactArchiveDescriptorPolicy.Claim? = null
     ) {
         fun discard() {
             directory.deleteRecursively()
@@ -83,10 +86,11 @@ internal object ArtifactPrivateStager {
     /** Check every metadata stream too: ignored bytes must not hide corruption or bombs. */
     private fun verifyMetadata(
         input: InputStream, expectedSize: Long, expectedCrc: Long,
-        cancelled: () -> Boolean
-    ) {
+        cancelled: () -> Boolean, captureIndex: Boolean = false
+    ): ByteArray? {
         val crc = CRC32()
         val buffer = ByteArray(64 * 1024)
+        val output = if (captureIndex) ByteArrayOutputStream() else null
         var size = 0L
         while (true) {
             checkActive(cancelled)
@@ -98,11 +102,16 @@ internal object ArtifactPrivateStager {
                 throw ApkVerificationException("Archive metadata exceeds declared limit")
             }
             crc.update(buffer, 0, n)
+            if (output != null) {
+                if (size > 64L * 1024) throw ApkVerificationException("Archive index exceeds size limit")
+                output.write(buffer, 0, n)
+            }
         }
         checkActive(cancelled)
         if (size != expectedSize || crc.value != expectedCrc) {
             throw ApkVerificationException("Archive metadata checksum or size mismatch")
         }
+        return output?.toByteArray()
     }
 
     fun stage(
@@ -147,7 +156,10 @@ internal object ArtifactPrivateStager {
             // is available. Preflight bounds count, layout, modes and symlink attributes.
             val inspected = ArtifactZipPreflight.inspect(copied.file)
             val entries = mutableListOf<CopiedApk>()
+            val archiveApkEntryNames = mutableListOf<String>()
+            val metadataPaths = mutableListOf<String>()
             val usedNames = mutableSetOf<String>()
+            var rawDescriptor: ByteArray? = null
             var total = 0L
             ZipFile(copied.file).use { archive ->
                 // Bound enumeration itself; toList() could allocate for an arbitrary
@@ -183,9 +195,25 @@ internal object ArtifactPrivateStager {
                         throw ApkVerificationException("Archive exceeds total expanded size limit")
                     }
                     if (!isApk) {
-                        // No metadata is trusted, but its CRC and expanded length must still match.
-                        archive.getInputStream(entry).use { stream ->
-                            verifyMetadata(stream, entry.size, entry.crc, cancelled)
+                        // Accept only format-appropriate, explicitly recognized metadata.
+                        // Unlike APK signatures, outer JAR signature files never grant trust.
+                        if (!ArtifactArchiveDescriptorPolicy.allowsMetadata(format, entry.name)) {
+                            throw ApkVerificationException("Unsupported archive-format metadata")
+                        }
+                        metadataPaths.add(entry.name)
+                        val index = when (format) {
+                            ArtifactArchivePolicy.Format.APKM -> entry.name == "info.json"
+                            ArtifactArchivePolicy.Format.XAPK -> entry.name == "manifest.json"
+                            else -> false
+                        }
+                        val captured = archive.getInputStream(entry).use { stream ->
+                            verifyMetadata(stream, entry.size, entry.crc, cancelled, index)
+                        }
+                        if (index) {
+                            if (rawDescriptor != null || captured == null) {
+                                throw ApkVerificationException("Duplicate archive descriptor")
+                            }
+                            rawDescriptor = captured
                         }
                         continue
                     }
@@ -201,18 +229,22 @@ internal object ArtifactPrivateStager {
                         throw ApkVerificationException("Archive entry uncompressed length differs")
                     }
                     entries.add(apk)
+                    archiveApkEntryNames.add(entry.name)
                 }
                 if (entryCount != inspected.size) {
                     throw ApkVerificationException("ZIP entry count differs after preflight")
                 }
             }
             if (entries.isEmpty()) throw ApkVerificationException("No installable APKs in archive")
+            ArtifactArchiveDescriptorPolicy.checkMemberLayout(format, metadataPaths)
+            val descriptor = ArtifactArchiveDescriptorParser.parse(format, rawDescriptor)
             checkActive(cancelled)
             if (!copied.file.delete()) {
                 throw ApkVerificationException("Cannot discard original ZIP after staging")
             }
             checkActive(cancelled)
-            return Staged(directory, format, entries, copied.sha256, copied.byteCount)
+            return Staged(directory, format, entries, copied.sha256, copied.byteCount,
+                archiveApkEntryNames, descriptor)
         } catch (error: Exception) {
             directory.deleteRecursively()
             throw if (error is ApkVerificationException) error else
