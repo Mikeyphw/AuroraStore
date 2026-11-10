@@ -24,7 +24,9 @@ class ArtifactActualInstallAcceptanceDeviceTest {
         val inst = InstrumentationRegistry.getInstrumentation()
         val context = inst.targetContext
         assertThat(Build.VERSION.SDK_INT).isEqualTo(36)
-        val expected = InstrumentationRegistry.getArguments().getString("r3c06_expected")
+        val expected = requireNotNull(
+            InstrumentationRegistry.getArguments().getString("r3c06_expected")
+        ) { "Required r3c06_expected argument must be accept or deny" }
         assertThat(expected).isAnyOf("accept", "deny")
         val fixture = File(context.cacheDir, "r3c06-fixture.apk")
         assertThat(fixture.isFile).isTrue()

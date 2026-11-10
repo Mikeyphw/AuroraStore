@@ -35,6 +35,15 @@ for token in ('ANDROID_NS','"uses-split"','CodingErrorAction.REPORT',
 assert unit.count('@Test') >= 12
 assert signed.count('@Test') == 6
 assert install.count('@Test') == 1
+# Regression gate: Truth assertion does not smart-cast nullable Bundle.getString().
+# Exact API36 test must derive a non-null expected action before uppercasing it.
+assert 'val expected = requireNotNull(' in install, \
+    'R3C06_P3_HF01_REFUSED nullable install-acceptance argument'
+assert 'getString("r3c06_expected")' in install and \
+    'assertThat(expected).isAnyOf("accept", "deny")' in install, \
+    'R3C06_P3_HF01_REFUSED accept/deny contract weakened'
+assert 'expected.uppercase(Locale.ROOT)' in install, \
+    'R3C06_P3_HF01_REFUSED Android receipt no longer records expected decision'
 assert "^OK \\(6 tests\\)" in runner and 'ArtifactRealSignedArchiveDeviceTest' in runner
 assert 'R3C06_ALLOW_LIVE_INSTALL' in runner and 'r3c06_api36_live_install.py' in runner
 assert 'R3C06_ALLOW_LIVE_INSTALL' in script and 'com.aurora.r3c06.fixture' in script
