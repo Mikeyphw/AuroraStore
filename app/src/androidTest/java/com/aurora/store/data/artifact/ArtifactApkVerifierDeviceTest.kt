@@ -76,4 +76,56 @@ class ArtifactApkVerifierDeviceTest {
             staged.discard()
         }
     }
+
+    @Test
+    fun installedSignedApkIdentityAgreesWithAndroidArchiveParser() {
+        assertThat(Build.VERSION.SDK_INT).isEqualTo(36)
+        val file = File(context.applicationInfo.sourceDir)
+        val parsed = com.aurora.store.data.installer.verification.BinaryApkManifest.read(file)
+        val archiveInfo = context.packageManager.getPackageArchiveInfo(
+            file.absolutePath, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
+        )
+        assertThat(archiveInfo).isNotNull()
+        ArtifactApkIdentityPolicy.requireManifestIdentity(
+            parsed.packageName, parsed.versionCode, parsed.splitName
+        )
+        ArtifactApkIdentityPolicy.requirePlatformAgreement(
+            parsed.packageName, parsed.versionCode, parsed.splitName == null,
+            archiveInfo?.packageName, archiveInfo?.longVersionCode
+        )
+    }
+
+    @Test
+    fun platformPackageOrVersionMismatchIsRefused() {
+        assertThat(runCatching {
+            ArtifactApkIdentityPolicy.requirePlatformAgreement(
+                context.packageName, 7L, true, "com.attacker.fake", 7L
+            )
+        }.isFailure).isTrue()
+        assertThat(runCatching {
+            ArtifactApkIdentityPolicy.requirePlatformAgreement(
+                context.packageName, 7L, true, context.packageName, 8L
+            )
+        }.isFailure).isTrue()
+    }
+
+    @Test
+    fun ambiguousSplitIdentityIsRefused() {
+        for (candidate in listOf("", "base", "config.", "config..en", "../base")) {
+            assertThat(runCatching {
+                ArtifactApkIdentityPolicy.requireManifestIdentity(
+                    context.packageName, 7L, candidate
+                )
+            }.isFailure).isTrue()
+        }
+    }
+
+    @Test
+    fun signingHistoryAloneDoesNotAuthorizeIndependentUpgrade() {
+        assertThat(ArtifactApkIdentityPolicy.installedSignerStatus(
+            setOf("a".repeat(64)), setOf("b".repeat(64)),
+            setOf("a".repeat(64), "b".repeat(64))
+        )).isEqualTo(ArtifactApkIdentityPolicy.InstalledSignerStatus.HISTORY_ONLY_UNVERIFIED)
+    }
+
 }

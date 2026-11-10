@@ -27,6 +27,7 @@ internal object ArtifactInstallSession {
         cancelled: () -> Boolean
     ): Int {
         val id = imported.attempt
+        val evidence = ArtifactIndependentEvidence.fromVerifiedImport(imported)
         val review = ArtifactImportDecision.Review(
             id.packageName,
             id.versionCode,
@@ -56,6 +57,7 @@ internal object ArtifactInstallSession {
         }
         val sessionId = installer.createSession(params)
         var committed = false
+        var previousLastSession = -1
         try {
             installer.openSession(sessionId).use { session ->
                 for (file in imported.files) {
@@ -94,15 +96,29 @@ internal object ArtifactInstallSession {
                 // Each session owns its own CAS receipt; never overwrite another
                 // still-pending session's generation, source, signer or result.
                 val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                previousLastSession = preferences.getInt("last_session", -1)
                 if (!preferences.edit()
                         .putLong(key(sessionId, "generation"), id.attemptGeneration)
                         .putString(key(sessionId, "package"), id.packageName)
                         .putLong(key(sessionId, "version"), id.versionCode)
                         .putString(key(sessionId, "source"), id.provenance.source.name)
+                        .putString(key(sessionId, "origin_family"), evidence.distribution.name)
+                        .putString(key(sessionId, "evidence_scope"), "INDEPENDENT_NON_PLAY")
+                        .putString(key(sessionId, "apk_sha256"), evidence.apkSha256.joinToString(","))
                         .putString(
                             key(sessionId, "signer"),
                             imported.signerSha256.sorted().joinToString(",")
                         )
+                        // Private, per-session evidence; do not persist URI/URL or claim Play proof.
+                        .putString(key(sessionId, "source_reference"),
+                            id.provenance.displayOrigin.orEmpty())
+                        .putString(key(sessionId, "source_sha256"), imported.staged.originalSha256)
+                        .putInt(key(sessionId, "apk_count"), imported.files.size)
+                        .putLong(key(sessionId, "apk_bytes"), imported.totalApkBytes)
+                        .putString(key(sessionId, "trust"), imported.trustTier.name)
+                        .putBoolean(key(sessionId, "consent_install"), approvedInstall)
+                        .putBoolean(key(sessionId, "consent_unknown"), approvedUnknownPublisher)
+                        .putBoolean(key(sessionId, "consent_downgrade"), approvedDowngrade)
                         .putString(
                             key(sessionId, "state"),
                             ArtifactSessionReceiptPolicy.State.AWAITING_ANDROID.name
@@ -128,14 +144,31 @@ internal object ArtifactInstallSession {
         } catch (error: Exception) {
             if (!committed) runCatching { installer.abandonSession(sessionId) }
             if (!committed) {
-                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                val cleanup = preferences.edit()
                     .remove(key(sessionId, "generation"))
                     .remove(key(sessionId, "state"))
                     .remove(key(sessionId, "package"))
                     .remove(key(sessionId, "version"))
                     .remove(key(sessionId, "source"))
+                    .remove(key(sessionId, "origin_family"))
+                    .remove(key(sessionId, "evidence_scope"))
+                    .remove(key(sessionId, "apk_sha256"))
                     .remove(key(sessionId, "signer"))
-                    .commit()
+                    .remove(key(sessionId, "source_reference"))
+                    .remove(key(sessionId, "source_sha256"))
+                    .remove(key(sessionId, "apk_count"))
+                    .remove(key(sessionId, "apk_bytes"))
+                    .remove(key(sessionId, "trust"))
+                    .remove(key(sessionId, "consent_install"))
+                    .remove(key(sessionId, "consent_unknown"))
+                    .remove(key(sessionId, "consent_downgrade"))
+                // Failed pre-commit requests must not hide an older valid receipt.
+                if (preferences.getInt("last_session", -1) == sessionId) {
+                    if (previousLastSession >= 0) cleanup.putInt("last_session", previousLastSession)
+                    else cleanup.remove("last_session")
+                }
+                cleanup.commit()
             }
             throw error
         }
@@ -143,17 +176,47 @@ internal object ArtifactInstallSession {
 
     private fun key(session: Int, field: String): String = "session_${session}_$field"
 
+    /** The OS receipt is an outcome report, never a publisher-authentication claim. */
     fun lastResult(context: Context): String {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val session = prefs.getInt("last_session", -1)
-        if (session < 0) return "No installation attempted"
+        if (session < 0) return "No Android installation attempt recorded"
         val pkg = prefs.getString(key(session, "package"), null)
-            ?: return "No installation attempted"
+            ?: return "No Android installation attempt recorded"
         val version = prefs.getLong(key(session, "version"), -1L)
         val source = prefs.getString(key(session, "source"), "UNKNOWN")
-        val signer = prefs.getString(key(session, "signer"), "").orEmpty().take(16)
-        val state = prefs.getString(key(session, "state"), "UNKNOWN")
-        return "$pkg v$version · $state · $source · signer $signer"
+        val family = prefs.getString(key(session, "origin_family"), "UNKNOWN")
+        val scope = prefs.getString(key(session, "evidence_scope"), "UNKNOWN")
+        val apkHashes = prefs.getString(key(session, "apk_sha256"), "").orEmpty()
+        val reference = prefs.getString(key(session, "source_reference"), "").orEmpty()
+        val signer = prefs.getString(key(session, "signer"), "").orEmpty()
+        val sourceHash = prefs.getString(key(session, "source_sha256"), "").orEmpty()
+        val trust = prefs.getString(key(session, "trust"), "UNKNOWN")
+        val state = prefs.getString(key(session, "state"), null)
+            ?.let { runCatching { ArtifactSessionReceiptPolicy.State.valueOf(it) }.getOrNull() }
+        val status = ArtifactReviewPresentation.androidResult(state)
+        return buildString {
+            append("Package: $pkg · version code: $version\n")
+            append("OS session: $session\n")
+            append("Outcome: $status\n")
+            append("Source claim: $source ($family)\n")
+            append("Evidence scope: $scope (not Play verification)\n")
+            append("Attempt generation: ${prefs.getLong(key(session, "generation"), -1L)}\n")
+            append("APK file SHA-256: ${apkHashes.ifEmpty { "unavailable" }}\n")
+            if (reference.isNotEmpty()) append(" · unverified reference: $reference")
+            append("\nPublisher trust at review: $trust (never Play evidence)\n")
+            append("Selected file SHA-256: ${sourceHash.ifEmpty { "unavailable" }}\n")
+            append("Verified signer SHA-256: ${signer.ifEmpty { "unavailable" }}\n")
+            append("APK count: ${prefs.getInt(key(session, "apk_count"), 0)} · ")
+            append("APK bytes: ${prefs.getLong(key(session, "apk_bytes"), 0L)}\n")
+            append("User approved install: ${prefs.getBoolean(key(session, "consent_install"), false)}")
+            append(" · unverified publisher: ${prefs.getBoolean(key(session, "consent_unknown"), false)}")
+            append(" · downgrade: ${prefs.getBoolean(key(session, "consent_downgrade"), false)}")
+            if (state == ArtifactSessionReceiptPolicy.State.ANDROID_REJECTED) {
+                val code = prefs.getInt(key(session, "android_status_code"), -1)
+                append("\nAndroid reason: ${ArtifactReviewPresentation.androidFailureReason(code)} (code $code)")
+            }
+        }
     }
 
     /** Reject stale/foreign OS session callbacks and forbid terminal-state replay. */

@@ -7,6 +7,20 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 class ArtifactPickerPolicyTest {
+    @Test fun systemPickerRejectsFileOrUntrustedSchemes() {
+        assertThat(ArtifactPickerPolicy.acceptsPickerScheme("content")).isTrue()
+        for (scheme in listOf(null, "file", "http", "https", "android.resource", "CONTENT")) {
+            assertThat(ArtifactPickerPolicy.acceptsPickerScheme(scheme)).isFalse()
+        }
+    }
+
+    @Test fun rejectsUntrustedProviderNamesBeforeArchiveClassification() {
+        for (name in listOf(null, "", "/tmp/app.apk", "../release.apk",
+            "release\\bad.apk", "https://host/a.apk", "app?token=123", "x".repeat(241))) {
+            assertThat(ArtifactPickerPolicy.safeDocumentName(name)).isNull()
+        }
+        assertThat(ArtifactPickerPolicy.safeDocumentName("release.apks")).isEqualTo("release.apks")
+    }
     @Test
     fun ordinaryFilenameRetained() {
         assertThat(ArtifactPickerPolicy.safeDisplayLabel("downloads/release.apk"))

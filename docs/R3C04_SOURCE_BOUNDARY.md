@@ -45,3 +45,37 @@ C04-03: exact signed APK/split verification on *copied bytes*, installed signer
 continuity, and a restricted `VerifiedApkSet` factory; an unanchored signer must
 not be called an official publisher. C04-04: installer/session integration with
 fresh downgrade consent, CAS and Android package manager authority.
+
+## HF06 C04-01 audit / state after C04-03 and C04-07
+
+The old text above describes the *original C04-01 contract*. C04-03 now verifies
+real APK signing, manifest/split topology and private staged file hashes on API36,
+and returns `ArtifactApkVerifier.VerifiedImport`. The old `VerifiedApkSet`
+placeholder is **not** the production verifier capability and remains unmintable;
+tests must not mistake its continued presence for absence of C04-03 verification.
+
+`ArtifactOriginBoundary` separately classifies Play, developer-release claim,
+GitHub-release claim, local import and third-party browser handoffs. Play is **not**
+an `ArtifactSource` and cannot be selected by C04. The reserved authenticated
+Play/developer/GitHub identity types deliberately have no public constructors or
+attestation factories: there is no independent developer or GitHub publisher
+verification in C04. Browsing a release page, having a SHA-256, or verifying an
+APK signature is insufficient to call the source authenticated.
+
+`ArtifactIndependentEvidence` is a read-only projection created only from the
+C04-03 verified import, capturing exact package/version/attempt generation,
+selected-file SHA-256, each verified APK's SHA-256, signing certificates,
+installed certificate continuity and distribution family. It never mints Play
+receipts or independently authenticated publisher claims. The UI and private
+PackageInstaller receipt show those facts without storing raw URLs or URI grants.
+
+Import installation still revalidates staged bytes and signing immediately
+before Android session creation. The actual Play evidence authority remains
+`PlayVerifiedEvidenceStore`/`R3bVerifiedProof` guarded by Play account, attempt,
+version and source; it is not modified or invoked by C04. R3C-05/08 must deliver
+independent source authentication before any authenticated developer/GitHub
+release identity may be created.
+
+Acceptance: source/negative tests plus isolated JVM model tests are not native
+API36 verification, publisher authentication, Play live delivery, or installation
+success. Run hosted targeted compilation and milestone API36 instrumentation.

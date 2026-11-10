@@ -77,8 +77,8 @@ private fun ScreenContent(onNavigateTo: (Destination) -> Unit = {}) {
                             contentDescription = null
                         )
                     },
-                    headlineContent = { Text("Import APK or bundle") },
-                    supportingContent = { Text("Choose a file or open a source website") }
+                    headlineContent = { Text("Import and verify APKs") },
+                    supportingContent = { Text("Review signing, source and install consent") }
                 )
             }
             item {

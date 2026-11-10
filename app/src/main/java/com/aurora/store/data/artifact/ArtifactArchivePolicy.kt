@@ -33,6 +33,9 @@ internal object ArtifactArchivePolicy {
         return when (extension) {
             "apk" -> Entry.APK
             "xml", "json", "png", "jpg", "jpeg", "txt", "webp" -> Entry.METADATA
+            // Bundletool APK sets carry toc.pb. Treat it as opaque checked bytes,
+            // NEVER a trusted split selector or provenance claim.
+            "pb" -> if (name == "toc.pb") Entry.METADATA else null
             else -> null // includes OBB, DEX, EXE, symlinks disguised as scripts
         }
     }

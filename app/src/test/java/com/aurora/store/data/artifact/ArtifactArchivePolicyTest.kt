@@ -38,6 +38,9 @@ class ArtifactArchivePolicyTest {
             .isEqualTo(ArtifactArchivePolicy.Entry.APK)
         assertThat(ArtifactArchivePolicy.classify("manifest.json", false))
             .isEqualTo(ArtifactArchivePolicy.Entry.METADATA)
+        assertThat(ArtifactArchivePolicy.classify("toc.pb", false))
+            .isEqualTo(ArtifactArchivePolicy.Entry.METADATA)
+        assertThat(ArtifactArchivePolicy.classify("untrusted.pb", false)).isNull()
     }
 
     @Test

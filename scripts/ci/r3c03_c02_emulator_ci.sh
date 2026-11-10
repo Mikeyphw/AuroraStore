@@ -100,11 +100,11 @@ if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[1
   echo 'R3C04_EMULATOR_REFUSED: private import tests failed' >&2
   exit 1
 fi
-grep -Eq '^OK \(6 tests\)' "$OUT/c04_private_import.txt" || {
-  echo 'R3C04_EMULATOR_REFUSED: expected six real staging device tests' >&2
+grep -Eq '^OK \(17 tests\)' "$OUT/c04_private_import.txt" || {
+  echo 'R3C04_EMULATOR_REFUSED: expected seventeen real staging device tests' >&2
   exit 1
 }
-echo 'R3C04_API36_STAGING_PASS: six bounded archive and cancellation tests'
+echo 'R3C04_API36_STAGING_PASS: seventeen bounded archive and cancellation tests'
 
 # C04-03 HF01: real APK signer verification on the same periodic API36 gate.
 SIGNER_CLASS='com.aurora.store.data.artifact.ArtifactApkVerifierDeviceTest'
@@ -115,11 +115,11 @@ if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[1
   echo 'R3C04_HF01_SIGNER_REFUSED: real APK verification tests failed' >&2
   exit 1
 fi
-grep -Eq '^OK \(3 tests\)' "$OUT/c04_real_apk_signer.txt" || {
-  echo 'R3C04_HF01_SIGNER_REFUSED: expected three real signed/corrupt APK device cases' >&2
+grep -Eq '^OK \(7 tests\)' "$OUT/c04_real_apk_signer.txt" || {
+  echo 'R3C04_HF01_SIGNER_REFUSED: expected seven signed/identity APK device cases' >&2
   exit 1
 }
-echo 'R3C04_HF01_API36_SIGNER_PASS: signed APK, corruption and mutation cases'
+echo 'R3C04_HF01_API36_SIGNER_PASS: signed APK, tampering and exact identity safeguards'
 
 
 # C04-04 HF02: verify *real* signed APK session revalidation and consent refusal.
@@ -137,3 +137,19 @@ grep -Eq '^OK \(5 tests\)' "$OUT/c04_real_session_consent.txt" || {
   exit 1
 }
 echo 'R3C04_HF02_SESSION_PASS: fresh signer, consent and staged-byte mutation'
+
+# C04-07 HF08 — read-only UI/consent/insets test; no Android install performed.
+UI_CLASS='com.aurora.store.data.artifact.ArtifactImportActivityDeviceTest'
+timeout 300 adb shell am instrument -w -r -e class "$UI_CLASS" "$RUNNER" |
+  tee "$OUT/c04_07_review_ui.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/c04_07_review_ui.txt"; then
+  echo 'R3C04_HF06_REVIEW_UI_REFUSED: API36 UI instrumentation failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(3 tests\)' "$OUT/c04_07_review_ui.txt" || {
+  echo 'R3C04_HF06_REVIEW_UI_REFUSED: three actual Android UI test cases missing' >&2
+  exit 1
+}
+echo 'R3C04_HF06_API36_REVIEW_UI_PASS: three read-only tests'
+

@@ -139,6 +139,22 @@ class ArtifactAttemptPolicyTest {
     }
 
     @Test
+    fun provenanceClaimsCannotCreateAuthenticatedPlayOrGithubIdentity() {
+        for (source in ArtifactSource.entries) {
+            assertThat(ArtifactOriginBoundary.claimOnly(source))
+                .isEqualTo(ArtifactOriginAssurance.UNVERIFIED_SOURCE_CLAIM)
+            assertThat(ArtifactOriginBoundary.family(source))
+                .isNotEqualTo(ArtifactOriginFamily.GOOGLE_PLAY)
+        }
+    }
+
+    @Test
+    fun reservedPublisherIdentityIsNotAnInstallCredential() {
+        assertThat(AuthenticatedArtifactOrigin.OfficialDeveloperVerified::class.java.constructors).isEmpty()
+        assertThat(AuthenticatedArtifactOrigin.GitHubReleaseVerified::class.java.constructors).isEmpty()
+    }
+
+    @Test
     fun noPublicVerifiedApkSetConstructorOrFactory() {
         assertThat(VerifiedApkSet::class.java.constructors).isEmpty()
         assertThat(VerifiedApkSet::class.java.methods.any { it.name.startsWith("from") }).isFalse()

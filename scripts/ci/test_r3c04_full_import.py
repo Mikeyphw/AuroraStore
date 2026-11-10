@@ -42,7 +42,7 @@ for label, src, needles in (
                                            'getVerifiedSigningInfo(', 'signingCertificateHistory',
                                            'safeSize' if False else 'signature']),
     ('per-APK rehash', verify, ['ArtifactPrivateStager.sha256(', 'part.sha256', 'signerFor(',
-                               'compatibleInstalledSigners(', 'ArtifactTrustTier.INSTALLED_SIGNER_CONTINUITY',
+                               'ArtifactApkIdentityPolicy.installedSignerStatus(', 'ArtifactTrustTier.INSTALLED_SIGNER_CONTINUITY',
                                'ArtifactTrustTier.APK_SIGNER_VALID_PUBLISHER_UNANCHORED']),
     ('source isolation', url, ['"https"', 'rawUserInfo', 'rawQuery', 'APKPURE_OPT_IN',
                                'apkPureOptIn', 'github.com', 'apkmirror.com', 'f-droid.org']),
@@ -57,7 +57,7 @@ for label, src, needles in (
                                         'startActivity(', 'Intent.EXTRA_INTENT']),
     ('user-visible consent/picker', activity, ['ActivityResultContracts.OpenDocument()',
                    'unknownPublisherConsent', 'downgradeConsent', 'installConsent',
-                   'selectButton', 'cancelled.set(true)', 'review.text', 'openSourceInBrowser()']),
+                   'selectButton', 'cancellation.cancel()', 'review.text', 'openSourceInBrowser()']),
     ('separate review blockers', review, ['SIGNER_MISMATCH', 'DOWNGRADE_CONSENT_REQUIRED',
                                           'UNANCHORED_PUBLISHER_CONSENT_REQUIRED',
                                           'EXPLICIT_INSTALL_CONSENT_REQUIRED']),
@@ -107,3 +107,25 @@ exec(compile((ROOT / "scripts/ci/test_r3c04_c04_install.py").read_text(), "test_
 # C04-05: provider handoffs are display-only claims and cannot survive source/opt-in changes.
 exec(compile((ROOT / "scripts/ci/test_r3c04_c05_handoff.py").read_text(),
              "test_r3c04_c05_handoff.py", "exec"))
+
+# C04-06 HF04 adds bounded *pre-ZipFile* directory inspection and CRC/metadata checks.
+exec(compile((ROOT / "scripts/ci/test_r3c04_c06_archives.py").read_text(),
+             "test_r3c04_c06_archives.py", "exec"))
+
+# C04-07 HF05 review: independent verifiable trust, consent and OS result display.
+exec(compile((ROOT / "scripts/ci/test_r3c04_c07_review.py").read_text(),
+             "test_r3c04_c07_review.py", "exec"))
+
+# C04-01 HF06 re-evaluates the original merged foundation against the actual
+# C04-03 verifier. Do not treat the obsolete future-factory comment as contract.
+exec(compile((ROOT / "scripts/ci/test_r3c04_c01_origin.py").read_text(),
+             "test_r3c04_c01_origin.py", "exec"))
+
+# C04-02 HF07: revocation/cleanup, UI-thread metadata and content-URI tests.
+exec(compile((ROOT / "scripts/ci/test_r3c04_c02_picker.py").read_text(),
+             "test_r3c04_c02_picker.py", "exec"))
+
+# HF08 C04-03: actual verifier must reject ambiguous manifests, cross-check
+# Android platform archive identity and require ACTIVE installed signer match.
+exec(compile((ROOT / "scripts/ci/test_r3c04_c03_signing.py").read_text(),
+             "test_r3c04_c03_signing.py", "exec"))

@@ -36,7 +36,7 @@ for key in ('"Installed app changed after import review"',
             '"Installed app signer changed after import review"',
             '"Private APK changed before installation"',
             'ApkSetPolicy.check(attempt.packageName, attempt.versionCode',
-            'signerFor(manager, part.file)','installed(manager, attempt.packageName)',
+            'signerFor(manager, part.file, identity)','installed(manager, attempt.packageName)',
             '"Verified split or signer identity changed"'):
  require(key in verifier,'missing post-consent check '+key)
 require('review.installedVersion != null && review.installedSignerMatches != true' in review,

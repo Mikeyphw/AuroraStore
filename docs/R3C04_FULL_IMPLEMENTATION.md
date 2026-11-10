@@ -160,3 +160,163 @@ evidence or staging requirements.
 unsafe URL syntax, altered selection, revoked opt-in and failed attribution. These
 are *not* browser UI automation nor proof of downloaded file origin. Hosted targeted
 CI must compile the changed Android code.
+
+
+## C04-06 HF04 — bounded ZIP structure and checksum acceptance (PR #9)
+
+This security audit found that the prior `ZipFile` opened/indexed the central directory
+**before** the existing `MAX_ITEMS` loop. It also skipped extraction of metadata
+without reading it, so declared metadata CRC/actual-size inconsistencies were not
+verified. The periodical staging gate required `6 tests` while the pre-HF04 test class
+already contained **seven**. These discrepancies are now addressed in the source.
+
+- A bounded EOCD/central-directory preflight happens before `ZipFile` indexing. It
+  refuses more than 128 members, ZIP64/multivolume/self-extracting ZIPs, unsupported
+  encoding/method/encryption flags, symlinks/special files, malformed local vs.
+  central headers, name ambiguity, overlapping payloads, extra trailing bytes,
+  and disallowed entry types. Non-ASCII member names are explicitly unsupported.
+- APK bytes receive a **separate archive CRC-32 verification** during bounded
+  staging, in addition to SHA-256 and later Android signing verification. Every
+  opaque metadata entry is bounded, fully read and checked against declared CRC
+  and expanded size before it is ignored. Aggregate expanded bytes are capped.
+- `toc.pb` is accepted only as inert, checksummed bundletool metadata: the parser
+  **does not select a device-appropriate split set** from toc.pb and never treats
+  it as signer/provenance evidence. The existing APK set verifier and Android
+  installer remain the authority for all staged APKs; a universal `.apks`
+  package with incompatible variants may still be refused. Third-party APKM/XAPK
+  variants are not comprehensively qualified. OBB expansion files remain refused.
+- The R1D API36 staging runner now requires **13 actual tests** (previous 7 plus
+  6 new cases), not the stale six-test expectation. A new JVM ZIP-structure
+  suite and targeted source contract cover the new guardrails.
+
+**Qualification boundary:** pure-Kotlin preflight smoke and source checks are not
+Android runtime evidence. The targeted Android build compiles the instrumentation;
+the milestone R1D emulator lane must execute all 13 staging tests on the exact
+commit. No real-world APKM/XAPK dialects, all ABI/locale/feature splits, or
+PackageInstaller end-to-end acceptance are claimed from this hotfix.
+
+## C04-07 HF05 — user-facing verification and consent audit
+
+HF05 folds the unapplied C04-06 HF04 archive fix with a separate C04-07 UI/receipt
+hardening into **one atomic native Devtool overlay** on the same exact PR #9 head.
+
+- Settings explicitly navigates to *Import and verify APKs*. The local-only route
+  remains non-exported; browser choices remain manual claims, not authenticated
+  download integrations or Google Play evidence.
+- The verification panel labels the state **VERIFIED APK FILES — NOT INSTALLED**,
+  gives package/version, source claim and unverified reference, original selected
+  file SHA-256, signing certificate fingerprints, APK count/bytes, installed
+  signer continuity and a conservative compatibility warning.
+- Valid signatures do not establish publisher identity. Existing-signer continuity
+  is distinguished from verified publisher identity and does not falsely mint a
+  developer anchor. No success badges are assigned to mere browser/source claims.
+- A file-specific install approval is always required. Unknown-publisher consent
+  is shown only for unanchored fresh installs; a separate downgrade consent is
+  shown only when the installed version exceeds the selected version.
+  Mismatching/unknown installed signatures remain non-overridable blockers.
+  The install button cannot be enabled until current-attempt blockers clear.
+- File replacement, cancellation, rotation/activity teardown and import failure
+  invalidate prior UI consent. The existing installer **revalidates staged bytes,
+  manifests, installed signing identity and exact streamed SHA-256** before commit.
+- A distinct **Android installation outcome** panel displays the last private
+  per-session receipt (source label, signer/source SHA-256, APK count/size, consent
+  booleans, status), with an explicit refresh action. Pending approval/session
+  submission says *NOT confirmed* and cannot masquerade as Android-reported success.
+- Edge-to-edge content receives system bar insets; the existing scrollable
+  normal-size layout and English controls are preserved.
+- JVM presenter negative tests and three read-only API36 activity instrumentation
+  cases were added to the existing periodic emulator runner. They are not real
+  installation tests and have not been run on API36 yet.
+
+**Still required:** hosted targeted Android compilation on exact HF05 HEAD,
+periodic API36 instrumentation (including 13 archive tests + 3 UI tests),
+real installation consent/success/denial/restore/replay, source browse/SAF
+screenshots, ABI/locale/split compatibility, signed APKM/APKS/XAPK fixture
+matrix, physical-phone acceptance and release qualification. No automatic
+full-gate run or PR merge is performed by this delivery.
+
+## HF06 — C04-01 exact provenance and trust boundary (consolidated with HF04/HF05)
+
+The C04-01 foundation was merged in PR #8. HF06 audits its original promise
+against the later real C04-03 verifier and includes the unapplied C04-06 HF04
+and C04-07 HF05 changes in the same source-pinned PR #9 overlay.
+
+- `ArtifactOriginBoundary` explicitly separates Play, developer-release **claims**,
+  GitHub-release **claims**, local documents, APKMirror, F-Droid and opt-in APKPure.
+  Source-family classification alone has no verifier or publisher authority.
+- Reserved authenticated Play/official-developer/GitHub identities cannot be
+  constructed by a browser handoff. They require actual future attestation;
+  C04 implements **no authenticated official developer or GitHub downloader**.
+- `ArtifactIndependentEvidence.fromVerifiedImport` binds the actual C04-03
+  verified APK hashes and signing fingerprints, exact package/version and
+  random attempt generation to a non-Play source. Installed signer continuity
+  is reported but never equated with publisher or Play authenticity.
+- The import review and private Android session receipt expose per-file hashes,
+  origin family and attempt generation. No user-supplied URL, filename or
+  claimed trust enum can mint Play verification.
+- Unknown-publisher consent remains visible for all new independent imports;
+  caller-supplied VERIFIED_PUBLISHER_IDENTITY must not silently hide the control.
+- `VerifiedApkSet` remains a historical C04-01 unmintable placeholder; the
+  real API36 `ArtifactApkVerifier.VerifiedImport` is the live proof producer.
+
+The existing `PlayVerifiedEvidenceStore`, R3B verifier, C03 Room schema, Play
+worker and download-account checks remain unchanged. Targeted compilation,
+source contracts and isolated JVM tests do not prove source authentication,
+physical-device behavior, API36 installation or Play delivery.
+
+## C04-02 HF07 — SAF picker, private staging and cancellation audit
+
+- The previous picker path left an active verified import in private cache when a
+  replacement picker was launched and then cancelled. HF07 revokes/discards the
+  previous attempt **before** opening the Android document picker, clears consent,
+  and invalidates any earlier background serial. A cancelled/failed picker does not
+  restore the former review or private APKs.
+- Only `content:` URIs returned by the picker are accepted by the activity. The
+  provider `DISPLAY_NAME` is treated as an untrusted format hint and queried on a
+  background worker; it must be a bounded basename without URI syntax, slash,
+  question mark or control characters. SAF provider metadata is *not* source proof.
+- Each copy owns a one-shot cancellation lease. The close of an active provider
+  stream runs on a dedicated close worker so the main thread does not wait on
+  provider I/O. Cancellation is also polled before/after reads, metadata streams,
+  digesting and successful staging. Private files are deleted on exceptions.
+- This intentionally does **not** claim to interrupt an arbitrary provider that
+  indefinitely blocks inside `openInputStream` or metadata query. Such providers
+  remain a compatibility/liveness risk; no main-thread resolver call is made.
+- Four more read-only API36 staging cases cover a self-owned content URI, denied
+  provider, a mid-copy cancellation and an already-cancelled lease. The periodic
+  emulator runner now requires **17** staging tests, not the old 13. Three C04-07
+  UI tests remain separate. JVM cancellation and picker-policy tests are additive.
+- Pending prior commit Android sessions still belong to the OS; cancellation of
+  this screen is **not** equivalent to a PackageInstaller rollback. No Play evidence
+  or account state is written by the SAF importer.
+
+**Not yet qualified:** third-party SAF provider revocation mid-read, actual system
+picker UI instrumentation, rotation/restart while a provider blocks, API36 runtime
+and physical-device install consent. These are acceptance gates, not local PASS.
+
+
+## HF08 C04-03 manifest, split and signing identity hardening
+
+Before presenting a verified local import, each APK must expose exactly one
+`AndroidManifest.xml` entry, have a canonical manifest package/version and a
+nonempty, nonambiguous feature/config split name (when a split attribute exists).
+The base APK must also yield an Android `PackageInfo` whose package and full
+`longVersionCode` match the compiled manifest; when Android exposes standalone
+split archive info, any inconsistent split package/version is rejected.
+A missing standalone split `PackageInfo` is **not** treated as platform proof;
+the signed compiled manifest and split-set policy remain mandatory.
+
+Unlike the more permissive shared Play/R3B rotation compatibility routine,
+**non-Play replacement** requires an exact match against the installed *active*
+signer set. A certificate appearing only in signing history is **not** proof of
+Android-authorized update/rollback lineage capabilities. Such cases fail closed
+until a genuine capabilities-aware platform test is available. This deliberate
+compatibility restriction may reject some legitimate key-rotated APKs. No change
+is made to Play's verifier, database or evidence flow.
+
+The API36 periodic lane is adjusted from three to seven signed-identity device
+methods (one real signed APK positive, one unsigned failure, one staged mutation,
+plus four identity-policy/platform-archive checks). These new tests are **not**
+cryptographic multi-split or key-rotation qualification. Real signed split
+fixtures, lineage capability matrices, device ABI/locale split selection, and
+full PackageInstaller runtime acceptance remain open in R3C-08/R3C-06.
