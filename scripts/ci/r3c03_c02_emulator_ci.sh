@@ -153,3 +153,20 @@ grep -Eq '^OK \(3 tests\)' "$OUT/c04_07_review_ui.txt" || {
 }
 echo 'R3C04_HF06_API36_REVIEW_UI_PASS: three read-only tests'
 
+# R3C-05: three explicit provider-choice and manual-consent UI cases.
+# Read-only tests; no browser, APK download or installation is performed.
+PROVIDER_CLASS='com.aurora.store.data.artifact.ArtifactProviderDiscoveryDeviceTest'
+timeout 300 adb shell am instrument -w -r -e class "$PROVIDER_CLASS" "$RUNNER" |
+  tee "$OUT/r3c05_provider_discovery_ui.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/r3c05_provider_discovery_ui.txt"; then
+  echo 'R3C05_PROVIDER_UI_REFUSED: API36 tests failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(3 tests\)' "$OUT/r3c05_provider_discovery_ui.txt" || {
+  echo 'R3C05_PROVIDER_UI_REFUSED: three real UI tests missing' >&2
+  exit 1
+}
+echo 'R3C05_API36_PROVIDER_UI_PASS: three manual provider tests'
+
+

@@ -129,3 +129,8 @@ exec(compile((ROOT / "scripts/ci/test_r3c04_c02_picker.py").read_text(),
 # Android platform archive identity and require ACTIVE installed signer match.
 exec(compile((ROOT / "scripts/ci/test_r3c04_c03_signing.py").read_text(),
              "test_r3c04_c03_signing.py", "exec"))
+
+# R3C05: additive legitimate-provider discovery and manual browser handoff.
+# This is a SOURCE contract in targeted CI; API36 runtime is a separate gate.
+exec(compile((ROOT / "scripts/ci/test_r3c05_source_handoff.py").read_text(),
+             "test_r3c05_source_handoff.py", "exec"))

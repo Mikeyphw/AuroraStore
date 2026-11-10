@@ -49,6 +49,10 @@ class ArtifactImportActivity : AppCompatActivity() {
     private lateinit var sources: Spinner
     private lateinit var sourceUrl: EditText
     private lateinit var apkPureEnabled: CheckBox
+    private lateinit var alternativeConsent: CheckBox
+    private lateinit var fossAcknowledgement: CheckBox
+    private lateinit var providerStatus: TextView
+    private var lastProviderIndex = -1
     private lateinit var installConsent: CheckBox
     private lateinit var unknownPublisherConsent: CheckBox
     private lateinit var downgradeConsent: CheckBox
@@ -57,19 +61,8 @@ class ArtifactImportActivity : AppCompatActivity() {
     // A source claim is valid only for the exact successful browser launch and selection.
     // Never persist raw URLs or use a browser navigation as publisher authentication.
     private var lastBrowserLaunch: ArtifactHandoffClaimPolicy.BrowserLaunch? = null
-    private val options = listOf(
-        "Local document", "Official developer website (claimed)",
-        "GitHub Releases (claimed)", "APKMirror web handoff",
-        "F-Droid (conditional)", "APKPure (requires opt-in)"
-    )
-    private val kinds = listOf(
-        ArtifactSource.LOCAL_DOCUMENT,
-        ArtifactSource.DEVELOPER_WEBSITE,
-        ArtifactSource.GITHUB_RELEASE,
-        ArtifactSource.APKMIRROR_BROWSER_HANDOFF,
-        ArtifactSource.FDROID_REPOSITORY,
-        ArtifactSource.APKPURE_OPT_IN
-    )
+    private val providers = ArtifactProviderDiscovery.Provider.entries
+    private val options = providers.map { it.title }
     private val picker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) handlePickedFile(uri)
         else {
@@ -101,8 +94,17 @@ class ArtifactImportActivity : AppCompatActivity() {
             adapter = ArrayAdapter(this@ArtifactImportActivity, android.R.layout.simple_spinner_dropdown_item, options)
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                    // Switching away and back cannot reuse an old browser handoff.
+                    // Never carry a verified selection or browser claim across sources.
+                    if (lastProviderIndex != -1 && lastProviderIndex != position &&
+                        ::status.isInitialized
+                    ) {
+                        invalidateCurrentImport("Provider changed. Select a new file for verification.")
+                    }
+                    lastProviderIndex = position
                     lastBrowserLaunch = null
+                    if (::alternativeConsent.isInitialized) alternativeConsent.isChecked = false
+                    if (::fossAcknowledgement.isInitialized) fossAcknowledgement.isChecked = false
+                    refreshProviderPresentation()
                 }
 
                 override fun onNothingSelected(parent: AdapterView<*>?) {
@@ -118,9 +120,9 @@ class ArtifactImportActivity : AppCompatActivity() {
             setSingleLine(true)
             addTextChangedListener(object : TextWatcher {
                 override fun afterTextChanged(s: Editable?) {
-                    if (lastBrowserLaunch?.exactInput != s?.toString()) {
-                        lastBrowserLaunch = null
-                    }
+                    if (lastBrowserLaunch?.exactInput != s?.toString()) lastBrowserLaunch = null
+                    // Editing a source after verification cannot silently relabel an import.
+                    if (active != null) invalidateCurrentImport("Source changed. Verify the selected file again.")
                 }
 
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -139,15 +141,34 @@ class ArtifactImportActivity : AppCompatActivity() {
             }
         }
         column.addView(apkPureEnabled)
+        alternativeConsent = CheckBox(this).apply {
+            text = "I explicitly choose this alternative provider for this browser visit (no automatic fallback)"
+            isChecked = false
+            setOnCheckedChangeListener { _, checked ->
+                if (!checked) lastBrowserLaunch = null
+            }
+        }
+        column.addView(alternativeConsent)
+        fossAcknowledgement = CheckBox(this).apply {
+            text = "This is a FOSS app; I understand F-Droid signatures may differ from installed copies"
+            isChecked = false
+            setOnCheckedChangeListener { _, checked ->
+                if (!checked) lastBrowserLaunch = null
+            }
+        }
+        column.addView(fossAcknowledgement)
+        providerStatus = label("Provider not selected. Availability is UNKNOWN until checked at the provider.")
         column.addView(Button(this).apply {
-            text = "Open selected source in browser"
+            text = "Open chosen provider (manual browser handoff)"
             setOnClickListener { openSourceInBrowser() }
         })
         label(
             "Browser links are manual handoffs, not direct downloads or trusted publisher " +
                 "proof. F-Droid may use a different signing key. APKPure is off by default. " +
+                "No paid/protected downloads, scraping, or automatic Play fallback. " +
                 "After downloading, use the system file picker below."
         )
+        refreshProviderPresentation()
         selectButton = Button(this).apply {
             text = "Choose downloaded file"
             setOnClickListener {
@@ -235,7 +256,29 @@ class ArtifactImportActivity : AppCompatActivity() {
         clearReview(message)
     }
 
-    private fun selectedSource(): ArtifactSource = kinds[sources.selectedItemPosition]
+    private fun selectedProvider(): ArtifactProviderDiscovery.Provider =
+        providers[sources.selectedItemPosition.coerceIn(0, providers.lastIndex)]
+
+    private fun selectedSource(): ArtifactSource =
+        selectedProvider().source ?: ArtifactSource.LOCAL_DOCUMENT
+
+    private fun refreshProviderPresentation() {
+        if (!::providerStatus.isInitialized || !::sourceUrl.isInitialized) return
+        val choice = selectedProvider()
+        providerStatus.text = choice.explanation + "\n" + ArtifactProviderDiscovery.status(choice)
+        sourceUrl.hint = when (choice) {
+            ArtifactProviderDiscovery.Provider.GOOGLE_PLAY -> "Exact Android package ID (e.g. org.example.app)"
+            ArtifactProviderDiscovery.Provider.LOCAL_DOCUMENT -> "No provider URL needed for local documents"
+            else -> "Allowed HTTPS provider page (not a direct APK URL)"
+        }
+        alternativeConsent.visibility = if (choice.isAlternative) View.VISIBLE else View.GONE
+        fossAcknowledgement.visibility = if (choice == ArtifactProviderDiscovery.Provider.FDROID) {
+            View.VISIBLE
+        } else View.GONE
+        apkPureEnabled.visibility = if (choice == ArtifactProviderDiscovery.Provider.APKPURE) {
+            View.VISIBLE
+        } else View.GONE
+    }
 
     private fun verifiedFacts(verified: ArtifactApkVerifier.VerifiedImport):
         ArtifactReviewPresentation.VerifiedFacts {
@@ -316,26 +359,45 @@ class ArtifactImportActivity : AppCompatActivity() {
     }
 
     private fun openSourceInBrowser() {
-        val source = selectedSource()
-        // A failed link check invalidates any earlier browser claim.
+        // Only an explicit user click may open the system browser; NEVER auto-fallback.
         lastBrowserLaunch = null
+        val provider = selectedProvider()
         val enteredUrl = sourceUrl.text.toString()
-        val handoff = ArtifactSourceHandoff.parse(
-            enteredUrl, source, apkPureEnabled.isChecked
+        val plan = ArtifactProviderDiscovery.decide(
+            provider, enteredUrl,
+            alternativeConsent.isChecked, apkPureEnabled.isChecked,
+            fossAcknowledgement.isChecked
         )
-        if (handoff == null) {
-            showStatus("Enter an allowed HTTPS provider page. APKPure requires explicit opt-in.")
-            return
-        }
-        runCatching {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(handoff.uri.toASCIIString())).apply {
-                addCategory(Intent.CATEGORY_BROWSABLE)
-            })
-            lastBrowserLaunch = ArtifactHandoffClaimPolicy.afterSuccessfulLaunch(enteredUrl, handoff)
-            showStatus("Browser opened. A later file selection is still untrusted and independently verified.")
-        }.onFailure {
-            lastBrowserLaunch = null
-            showStatus("No browser can open the provider page")
+        when (plan) {
+            is ArtifactProviderDiscovery.Outcome.Refused -> showStatus(plan.explanation)
+            is ArtifactProviderDiscovery.Outcome.Ready -> {
+                if (plan.route == ArtifactProviderDiscovery.Route.NATIVE_FILE_PICKER) {
+                    selectButton.performClick()
+                    return
+                }
+                val page = plan.url ?: return showStatus("No verified provider URL; nothing opened.")
+                runCatching {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(page.toASCIIString())).apply {
+                        addCategory(Intent.CATEGORY_BROWSABLE)
+                    })
+                    if (plan.route == ArtifactProviderDiscovery.Route.EXTERNAL_PROVIDER_PAGE) {
+                        // This is only a time-bounded navigation claim; no file's actual
+                        // origin, developer identity or signing key has been established.
+                        val handoff = ArtifactSourceHandoff.parse(
+                            enteredUrl, selectedSource(), apkPureEnabled.isChecked
+                        ) ?: error("Provider page no longer passes HTTPS validation")
+                        lastBrowserLaunch = ArtifactHandoffClaimPolicy.afterSuccessfulLaunch(enteredUrl, handoff)
+                    }
+                    showStatus(if (plan.route == ArtifactProviderDiscovery.Route.PLAY_LISTING) {
+                        "Google Play listing opened. Version availability and Play delivery are not established here."
+                    } else {
+                        "Provider page opened in browser. Download manually, then use Android's picker; publisher is unverified."
+                    })
+                }.onFailure {
+                    lastBrowserLaunch = null
+                    showStatus("Provider browser is unavailable. No file was downloaded or installed.")
+                }
+            }
         }
     }
 
@@ -358,6 +420,8 @@ class ArtifactImportActivity : AppCompatActivity() {
         val source = selectedSource()
         val enteredUrl = sourceUrl.text.toString()
         val optIn = apkPureEnabled.isChecked
+        val alternativeApproved = alternativeConsent.isChecked
+        val pickedAtMonotonicMs = System.nanoTime() / 1_000_000L
         val launched = lastBrowserLaunch
         lastBrowserLaunch = null
         requestSerial += 1
@@ -379,7 +443,9 @@ class ArtifactImportActivity : AppCompatActivity() {
                 val provenance = ArtifactHandoffClaimPolicy.selection(
                     selected = source, enteredUrl = enteredUrl, apkPureOptIn = optIn,
                     launched = launched,
-                    untrustedFilename = ArtifactPickerPolicy.safeDisplayLabel(name)
+                    untrustedFilename = ArtifactPickerPolicy.safeDisplayLabel(name),
+                    alternativeConsent = alternativeApproved,
+                    nowMonotonicMs = pickedAtMonotonicMs
                 )
                 staged = ArtifactPrivateStager.stage(this, uri, name, ticket) {
                     ticket.isCancelled()

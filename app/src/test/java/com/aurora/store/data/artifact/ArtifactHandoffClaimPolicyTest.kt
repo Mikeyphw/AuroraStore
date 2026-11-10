@@ -76,4 +76,32 @@ class ArtifactHandoffClaimPolicyTest {
         assertThat(source.displayOrigin).isNull()
         assertThat(source.claimedPublisher).isNull()
     }
+
+    @Test fun expiredBrowserHandoffCannotLabelAnUnrelatedDownload() {
+        val opened = ArtifactHandoffClaimPolicy.afterSuccessfulLaunch(githubUrl, handoff, nowMonotonicMs = 1000L)
+        val expired = ArtifactHandoffClaimPolicy.selection(
+            git, githubUrl, false, opened, "later.apk", nowMonotonicMs = 1000L + 10L * 60L * 1000L + 1L
+        )
+        assertThat(expired.source).isEqualTo(ArtifactSource.LOCAL_DOCUMENT)
+    }
+
+    @Test fun futureOrClockResetBrowserClaimIsRefused() {
+        val opened = ArtifactHandoffClaimPolicy.afterSuccessfulLaunch(githubUrl, handoff, nowMonotonicMs = 5000L)
+        val fake = ArtifactHandoffClaimPolicy.selection(
+            git, githubUrl, false, opened, "file.apk", nowMonotonicMs = 4000L
+        )
+        assertThat(fake.source).isEqualTo(ArtifactSource.LOCAL_DOCUMENT)
+    }
+
+    @Test fun revokedAlternativeConsentClearsProviderClaim() {
+        val url = "https://apkmirror.com/apk/a/b/"
+        val source = ArtifactSource.APKMIRROR_BROWSER_HANDOFF
+        val page = requireNotNull(ArtifactSourceHandoff.parse(url, source, false))
+        val state = ArtifactHandoffClaimPolicy.afterSuccessfulLaunch(url, page)
+        val revoked = ArtifactHandoffClaimPolicy.selection(
+            source, url, false, state, "app.apkm", alternativeConsent = false
+        )
+        assertThat(revoked.source).isEqualTo(ArtifactSource.LOCAL_DOCUMENT)
+    }
+
 }
