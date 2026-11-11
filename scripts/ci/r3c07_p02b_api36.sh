@@ -23,24 +23,33 @@ ORIGINAL_FONT="$(adb shell settings get system font_scale | tr -d '\r\n')"
 }
 CHANGED=0
 restore_font() {
-  local rc=$?
+  # Preserve the original test failure. Print RESTORE_REFUSED only if the
+  # independent font cleanup actually failed; never mask the Android cause.
+  local upstream_rc=$?
   trap - EXIT
   if [[ "$CHANGED" == 1 ]]; then
+    local restore_failed=0
+    local after=''
     if [[ "$ORIGINAL_FONT" == null ]]; then
-      adb shell settings delete system font_scale >/dev/null || rc=1
+      adb shell settings delete system font_scale >/dev/null || restore_failed=1
     else
-      adb shell settings put system font_scale "$ORIGINAL_FONT" || rc=1
+      adb shell settings put system font_scale "$ORIGINAL_FONT" >/dev/null || restore_failed=1
     fi
-    local after
-    after="$(adb shell settings get system font_scale | tr -d '\r\n')" || rc=1
-    [[ "$after" == "$ORIGINAL_FONT" ]] || rc=1
-    if [[ $rc != 0 ]]; then echo R3C07_P02B_REFUSED_FONT_RESTORE >&2; fi
+    after="$(adb shell settings get system font_scale | tr -d '\r\n')" || restore_failed=1
+    [[ "$after" == "$ORIGINAL_FONT" ]] || restore_failed=1
+    if [[ "$restore_failed" != 0 ]]; then
+      echo R3C07_P02B_REFUSED_FONT_RESTORE >&2
+      exit 1
+    fi
+    echo R3C07_P02B_FONT_RESTORE_VERIFIED_AFTER_FAILURE >&2
   fi
-  exit "$rc"
+  exit "$upstream_rc"
 }
 trap restore_font EXIT
-adb shell settings put system font_scale 2.0
+# ADB may have changed the setting even if its command reports an error.
+# Arm cleanup before the first mutating system settings command.
 CHANGED=1
+adb shell settings put system font_scale 2.0
 DURING="$(adb shell settings get system font_scale | tr -d '\r\n')"
 [[ "$DURING" == '2.0' || "$DURING" == '2' ]] || {
   echo R3C07_P02B_REFUSED_FONT_SETTING_NOT_APPLIED >&2; exit 1;

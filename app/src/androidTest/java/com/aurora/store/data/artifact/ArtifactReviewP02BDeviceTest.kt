@@ -114,7 +114,11 @@ class ArtifactReviewP02BDeviceTest {
                 try {
                     assertThat(node).isNotNull()
                     assertThat(node.isEnabled).isFalse()
-                    assertThat(node.text.toString()).contains("Request Android installation")
+                    // AppCompat's textAllCaps can expose the same button label as
+                    // uppercase AccessibilityNodeInfo text. Verify the actual
+                    // action label modulo case, not a hard-coded display casing.
+                    val accessibleLabel = node.text.toString()
+                    assertThat(accessibleLabel.equals(action.text.toString(), ignoreCase = true)).isTrue()
                 } finally { node.recycle() }
                 val announcements = ui.filterIsInstance<TextView>()
                     .count { it.accessibilityLiveRegion == View.ACCESSIBILITY_LIVE_REGION_POLITE }

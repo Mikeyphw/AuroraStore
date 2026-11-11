@@ -42,7 +42,12 @@ def host_ok(host:str)->bool:
         'INSTRUMENTATION_CODE: -1' in host and
         'FAILURES!!!' in host and
         'GITHUB_SHA=' not in host and
-        'PackageInstaller.Session' not in host
+        'PackageInstaller.Session' not in host and
+        'local upstream_rc=$?' in host and
+        'local restore_failed=0' in host and
+        'R3C07_P02B_FONT_RESTORE_VERIFIED_AFTER_FAILURE' in host and
+        host.index('CHANGED=1\nadb shell settings put system font_scale 2.0') <
+            host.index('DURING=')
     )
 
 require(host_ok(HOST),'real font/process verification or restore path missing')
@@ -63,6 +68,8 @@ for required in (
     'heading.createAccessibilityNodeInfo()',
     'node.isHeading',
     'node.isEnabled).isFalse()',
+    'val accessibleLabel = node.text.toString()',
+    'assertThat(accessibleLabel.equals(action.text.toString(), ignoreCase = true)).isTrue()',
     'ViewCompat.isAccessibilityHeading(it)',
     'accessibilityLiveRegion == View.ACCESSIBILITY_LIVE_REGION_POLITE',
     'ArtifactReviewPresentation.androidResult(state)',
@@ -82,6 +89,32 @@ for forbidden in ('install(ui).performClick()', 'ArtifactInstallSession.install(
                   'startActivity(Intent.ACTION_VIEW', 'Settings.Secure.putString(',
                   'PackageInstaller.SessionParams('):
     require(forbidden not in TEST,'P02B automated test must not install/browse '+forbidden)
+# HF01: a real API36 failure proved AppCompat uppercase accessibility
+# node text is not an identity or missing-label failure. Case sensitivity
+# must not be reintroduced, nor may the restore trap mask a prior failure.
+require('assertThat(node.text.toString()).contains("Request Android installation")' not in TEST,
+        'HF01: case-sensitive A11y node assertion reintroduced')
+require('local restore_failed=0' in HOST and
+        'echo R3C07_P02B_FONT_RESTORE_VERIFIED_AFTER_FAILURE' in HOST,
+        'HF01: font cleanup must distinguish restored setting from original test failure')
+for case, old, new in (
+    ('case-only text comparison removed',
+     'assertThat(accessibleLabel.equals(action.text.toString(), ignoreCase = true)).isTrue()',
+     'assertThat(node.text.toString()).contains("Request Android installation")'),
+    ('restore success marker removed',
+     'echo R3C07_P02B_FONT_RESTORE_VERIFIED_AFTER_FAILURE',
+     'echo R3C07_P02B_REFUSED_FONT_RESTORE'),
+):
+    selected = TEST if case.startswith('case') else HOST
+    mutated = selected.replace(old, new, 1)
+    require(old in selected and mutated != selected,
+            'HF01 mutation anchor changed: '+case)
+    if case.startswith('case'):
+        require('assertThat(accessibleLabel.equals(action.text.toString(), ignoreCase = true)).isTrue()' not in mutated,
+                'HF01 unsafe case-sensitive accessibility mutation accepted')
+    else:
+        require(not host_ok(mutated), 'HF01 unsafe restore-result mutation accepted')
+
 require('actual_talkback_service_qualified' in RECEIPT and
         "'actual_talkback_service_qualified': False" in RECEIPT,
         'do not falsely qualify TalkBack')
