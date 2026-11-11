@@ -18,6 +18,7 @@ MATRIX=(ROOT/'scripts/ci/r3c06_bundletool_matrix.py').read_text()
 for path in ('settings.gradle.kts','build.gradle.kts','gradle.properties',
              'app/build.gradle.kts','app/src/main/AndroidManifest.xml',
              'featureproof/build.gradle.kts','featureproof/src/main/AndroidManifest.xml',
+             'app/src/main/res/values/strings.xml',
              'featureproof/src/main/res/values/strings.xml',
              'featureproof/src/main/assets/qualification.marker'):
     assert (FIX/path).is_file(), 'P6 missing independent fixture file: '+path
@@ -35,6 +36,12 @@ assert module is not None and module.find(ns+'delivery/'+ns+'on-demand') is not 
 assert module.find(ns+'delivery/'+ns+'install-time') is None
 assert module.find(ns+'fusing').get(ns+'include')=='false'
 assert (FIX/'featureproof/src/main/assets/qualification.marker').read_bytes() == b'R3C06_FEATUREPROOF_ON_DEMAND_FIXTURE_ONLY\n'
+# The module title is referenced from the *feature* manifest, but its
+# resource MUST be declared solely in the *base* resource table. AGP bundle
+# packaging rejects a title declared only in the feature table.
+from test_r3c06_p6_title_contract import verify_feature_title
+verify_feature_title(FIX)
+
 
 for token in ('r3c06_feature_matrix:', 'default: false',
               'R3C06_P6_FEATURE_AAB=', 'bundletool-all-1.18.3.jar',
@@ -65,4 +72,8 @@ r=subprocess.run([sys.executable,'-B','scripts/ci/test_r3c06_p6_composite.py'],
                  cwd=ROOT,capture_output=True,text=True,timeout=60)
 assert r.returncode==0, 'P6 negative suite failed: '+(r.stdout+r.stderr)[-5000:]
 assert 'Ran 19 tests' in r.stderr, 'P6 negative count stale'
-print('R3C06_P6_SOURCE_AND_19_NEGATIVES_PASS: dynamic-feature CI wired, no false production feature claim')
+r_title=subprocess.run([sys.executable,'-B','scripts/ci/test_r3c06_p6_title_contract.py'],
+                 cwd=ROOT,capture_output=True,text=True,timeout=60)
+assert r_title.returncode==0, 'P6 feature-title negatives failed: '+(r_title.stdout+r_title.stderr)[-5000:]
+assert 'Ran 11 tests' in r_title.stderr, 'P6 feature-title negative count stale'
+print('R3C06_P6_SOURCE_AND_30_NEGATIVES_PASS: real base-module title, dynamic-feature CI wired, no false production feature claim')

@@ -1,3 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<resources><string name="r3c06_feature_title">R3C06 synthetic dynamic feature</string></resources>
+<!-- The feature title is defined in the BASE module. No feature-local strings. -->
+<resources/>
