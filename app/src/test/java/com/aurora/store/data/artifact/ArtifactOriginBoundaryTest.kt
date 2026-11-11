@@ -30,7 +30,8 @@ class ArtifactOriginBoundaryTest {
             ArtifactProvenance(source, "selected.apks"))
         return ArtifactApkVerifier.VerifiedImport(
             staged, attempt, setOf("d".repeat(64)), tier,
-            installedVersion, continuity, listOf(null, "config.en"), 204L
+            installedVersion, continuity, listOf(null, "config.en"), 204L,
+            signedFeatureDependencies = listOf<String?>(null, null)
         )
     }
 

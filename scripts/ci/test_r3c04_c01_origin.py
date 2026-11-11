@@ -89,4 +89,45 @@ need('assertThat(r.isPlayEvidence).isFalse()' in model and
      'forgedVerifiedPublisherTierIsRejected' in model and
      'githubBrowserClaimNeverBecomesAuthenticatedReleaseProof' in model,
      'source/cryptographic evidence separation not tested')
+# HF04: the new R3C07 targeted JVM lane compiles all unit-test Kotlin,
+# even when --tests selects only two P03A suites. An inherited source-only gate
+# must refuse a stale VerifiedImport fixture before hosted Gradle spends minutes.
+def hf04_fixture_valid(model_src: str, verifier_src: str) -> bool:
+    constructor = re.search(
+        r'class VerifiedImport internal constructor\((.*?)\n\s*\)\s*\{',
+        verifier_src, re.S
+    )
+    if constructor is None:
+        return False
+    required = 'val signedFeatureDependencies: List<String?>'
+    if required not in constructor.group(1):
+        return False
+    fixture = model_src.split('private fun verified(', 1)
+    if len(fixture) != 2:
+        return False
+    fixture_body = fixture[1].split('@Test fun everyNonPlaySource', 1)[0]
+    return (
+        fixture_body.count('ArtifactPrivateStager.CopiedApk(') == 2 and
+        'listOf(null, "config.en"), 204L,' in fixture_body and
+        fixture_body.count('signedFeatureDependencies = listOf<String?>(null, null)') == 1 and
+        'ArtifactApkVerifier.VerifiedImport(' in fixture_body
+    )
+
+need(hf04_fixture_valid(model, verified),
+     'HF04 stale JVM VerifiedImport fixture: exact signed feature dependency list required')
+for label, mutated in (
+    ('missing constructor argument', model.replace(
+        'signedFeatureDependencies = listOf<String?>(null, null)', '', 1)),
+    ('only one dependency row', model.replace(
+        'listOf<String?>(null, null)', 'listOf<String?>(null)', 1)),
+    ('fabricated feature target', model.replace(
+        'listOf<String?>(null, null)', 'listOf<String?>("feature", null)', 1)),
+    ('removed APK fixture', model.replace(
+        'ArtifactPrivateStager.CopiedApk(File("part-001.apk"), "b".repeat(64), 103L)',
+        '/* missing second APK */', 1)),
+):
+    need(mutated != model and not hf04_fixture_valid(mutated, verified),
+         'HF04 mutation escaped source contract: ' + label)
+print('R3C07_HF04_JVM_FIXTURE_SOURCE_AND_FOUR_NEGATIVES_PASS')
+
 print('R3C04_C01_HF06_SOURCE_PASS: independent delivery families, explicit unmintable anchors, exact signed-byte receipt, generation binding, Play noninterference')
