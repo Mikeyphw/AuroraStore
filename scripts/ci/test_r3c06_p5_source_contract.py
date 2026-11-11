@@ -140,7 +140,17 @@ for needle in ("doc.get('run_id') == run_id", 'signed_archive_sha256',
 assert MATRIX_NEGATIVE.is_file(), 'HF09 20 negative tests missing'
 security = subprocess.run([sys.executable, '-B', str(MATRIX_NEGATIVE)],
                           cwd=ROOT, capture_output=True,text=True,timeout=30)
-assert security.returncode == 0 and 'Ran 20 tests' in security.stderr,     'HF09 bundletool negative suite failed: '+(security.stdout+security.stderr)[-3000:]
-assert 'OFFICIAL_SHA' in matrix_src and 'CERT_RE' in matrix_src
+assert security.returncode == 0 and 'Ran 37 tests' in security.stderr, \
+    'HF10 bundletool security suite failed: '+(security.stdout+security.stderr)[-3000:]
+# HF10: a new apksigner label cannot silently evade certificate verification.
+for needle in ('OFFICIAL_SHA', 'CERT_RE', 'SIGNER_COUNT_RE',
+               'unrecognized certificate signer label',
+               'different certificates across signing schemes'):
+    assert needle in matrix_src, 'HF10 SDK37 signer evidence missing '+needle
+for needle in ('test_sdk37_single_v2_scheme_certificate_parses',
+               'test_sdk37_realistic_three_window_selection_is_signed',
+               'test_sdk37_multiple_scheme_signers_disagree_refused',
+               'test_sdk37_api36_invalid_signature_rc_still_refused'):
+    assert needle in MATRIX_NEGATIVE.read_text(), 'HF10 regression missing '+needle
 assert 'test_r3c06_p5_source_contract.py' in CI
-print('R3C06_P5_SOURCE_CONTRACT_PASS: manual R1D opt-in, pinned bundletool, effective Android permission, foreground OS consent, private signing-key hygiene, 29 receipt regressions and 20 bundletool negatives')
+print('R3C06_P5_SOURCE_CONTRACT_PASS: manual R1D opt-in, pinned bundletool, effective Android permission, foreground OS consent, private signing-key hygiene, 29 receipt regressions and 37 bundletool negatives')

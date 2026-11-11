@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""HF09 host-only signing/provenance negatives; no Android SDK or live install."""
+"""HF10 host-only signer-output compatibility and signing/provenance negatives; no Android SDK or live install."""
 import hashlib
 import importlib.util
 from pathlib import Path
@@ -178,8 +178,117 @@ class MatrixSecurityTest(unittest.TestCase):
                    'api36_verified':True,'signer_sha256':CERT_B}]}
         self.assertFalse(m.qualifies_variant(reference,candidate))
 
+
+    # HF10: Android Build Tools 37 changed the apksigner output labels. Real
+    # cryptographic rc=0 verification, v2 and API36 windows are still mandatory.
+    def test_sdk37_single_v2_scheme_certificate_parses(self):
+        self.assertEqual(m.single_signer('V2 Signer: certificate SHA-256 digest: '+CERT_A+'\n'),CERT_A)
+
+    def test_sdk37_single_v30_scheme_certificate_parses(self):
+        self.assertEqual(m.single_signer('V3.0 Signer: certificate SHA-256 digest: '+CERT_A+'\n'),CERT_A)
+
+    def test_sdk37_multiple_scheme_lines_same_signer_pass(self):
+        output=('Number of signers: 1\n'
+                'V2 Signer: certificate SHA-256 digest: '+CERT_A+'\n'
+                'V3.0 Signer: certificate SHA-256 digest: '+CERT_A.upper()+'\n')
+        self.assertEqual(m.single_signer(output),CERT_A)
+
+    def test_sdk37_realistic_three_window_selection_is_signed(self):
+        def output(label):
+            return ('Verifies\nNumber of signers: 1\n'
+                    'Verified using v1 scheme (JAR signing): false\n'
+                    'Verified using v2 scheme (APK Signature Scheme v2): true\n'
+                    'Verified using v3 scheme (APK Signature Scheme v3): true\n'
+                    +label+': certificate SHA-256 digest: '+CERT_A+'\n')
+        fake,seen=self.mock_verifier([output('V3.0 Signer'),output('V3.0 Signer'),output('V2 Signer')])
+        with patch.object(m,'cmd',side_effect=fake):
+            proof=m.verify_extracted_apk('apksigner',self.apk,self.index,signer_expected=CERT_A)
+        self.assertTrue(proof['v2_api24_27_verified'])
+        self.assertTrue(proof['api36_verified'])
+        self.assertEqual(proof['signer_sha256'],CERT_A)
+        self.assertEqual(len(seen),3)
+
+    def test_sdk37_multiple_scheme_signers_disagree_refused(self):
+        with self.assertRaisesRegex(m.Refused,'different certificates'):
+            m.single_signer('V2 Signer: certificate SHA-256 digest: '+CERT_A+'\n'
+                            'V3.0 Signer: certificate SHA-256 digest: '+CERT_B+'\n')
+
+    def test_sdk37_extra_signer_number_refused(self):
+        with self.assertRaisesRegex(m.Refused,'multiple signer identities'):
+            m.single_signer('V2 Signer #2: certificate SHA-256 digest: '+CERT_A+'\n')
+
+    def test_sdk37_two_signers_count_refused_even_if_one_digest(self):
+        with self.assertRaisesRegex(m.Refused,'signer count was not one'):
+            m.single_signer('Number of signers: 2\n'
+                            'V2 Signer: certificate SHA-256 digest: '+CERT_A+'\n')
+
+    def test_sdk37_multiple_schemes_same_certificate_but_count_two_refused(self):
+        with self.assertRaisesRegex(m.Refused,'signer count was not one'):
+            m.single_signer('Number of signers: 2\n'
+                            'V2 Signer: certificate SHA-256 digest: '+CERT_A+'\n'
+                            'V3.0 Signer: certificate SHA-256 digest: '+CERT_A+'\n')
+
+    def test_sdk37_duplicate_cert_scheme_line_refused(self):
+        with self.assertRaisesRegex(m.Refused,'duplicate signer certificate'):
+            m.single_signer(('V2 Signer: certificate SHA-256 digest: '+CERT_A+'\n')*2)
+
+    def test_sdk37_duplicate_signer_count_refused(self):
+        with self.assertRaisesRegex(m.Refused,'signer count was not one'):
+            m.single_signer('Number of signers: 1\nNumber of signers: 1\n'
+                            'V2 Signer: certificate SHA-256 digest: '+CERT_A+'\n')
+
+    def test_sdk37_unknown_certificate_label_not_accepted(self):
+        with self.assertRaisesRegex(m.Refused,'unrecognized certificate signer label'):
+            m.single_signer('Unverified Signer: certificate SHA-256 digest: '+CERT_A+'\n')
+
+    def test_sdk37_truncated_certificate_digest_refused(self):
+        with self.assertRaisesRegex(m.Refused,'unrecognized certificate signer label'):
+            m.single_signer('V2 Signer: certificate SHA-256 digest: '+CERT_A[:-1]+'\n')
+
+    def test_sdk37_public_key_sha256_not_accepted_as_signing_certificate(self):
+        with self.assertRaisesRegex(m.Refused,'missing certificate'):
+            m.single_signer('V2 Signer: public key SHA-256 digest: '+CERT_A+'\n')
+
+    def test_sdk37_wrong_scheme_certificate_consistency_refused_in_full_probe(self):
+        def fmt(cert):
+            return ('Verifies\nVerified using v2 scheme (APK Signature Scheme v2): true\n'
+                    'Verified using v3 scheme (APK Signature Scheme v3): true\n'
+                    'V2 Signer: certificate SHA-256 digest: '+cert+'\n')
+        fake,_=self.mock_verifier([fmt(CERT_A),fmt(CERT_B),fmt(CERT_A)])
+        with patch.object(m,'cmd',side_effect=fake):
+            with self.assertRaisesRegex(m.Refused,'certificate changes'):
+                m.verify_extracted_apk('apksigner',self.apk,self.index)
+
+    def test_sdk37_api36_invalid_signature_rc_still_refused(self):
+        def fmt():
+            return ('Verifies\nVerified using v2 scheme (APK Signature Scheme v2): true\n'
+                    'V2 Signer: certificate SHA-256 digest: '+CERT_A+'\n')
+        fake,_=self.mock_verifier([fmt(),(1,fmt())])
+        with patch.object(m,'cmd',side_effect=fake):
+            with self.assertRaisesRegex(m.Refused,'API36 refused'):
+                m.verify_extracted_apk('apksigner',self.apk,self.index)
+
+    def test_sdk37_v2_missing_on_24_27_still_refused(self):
+        def fmt(v2):
+            return ('Verifies\nVerified using v2 scheme (APK Signature Scheme v2): '
+                    +str(v2).lower()+'\n'
+                    'Verified using v3 scheme (APK Signature Scheme v3): true\n'
+                    'V3.0 Signer: certificate SHA-256 digest: '+CERT_A+'\n')
+        fake,_=self.mock_verifier([fmt(True),fmt(True),fmt(False)])
+        with patch.object(m,'cmd',side_effect=fake):
+            with self.assertRaisesRegex(m.Refused,'v2 signing not cryptographically proven'):
+                m.verify_extracted_apk('apksigner',self.apk,self.index)
+
+    def test_sdk37_mixed_old_new_same_cert_allowed_and_distinct_cert_refused(self):
+        ok=('Signer #1 certificate SHA-256 digest: '+CERT_A+'\n'
+            'V2 Signer: certificate SHA-256 digest: '+CERT_A+'\n')
+        self.assertEqual(m.single_signer(ok),CERT_A)
+        with self.assertRaisesRegex(m.Refused,'different certificates'):
+            m.single_signer(ok.replace('V2 Signer: certificate SHA-256 digest: '+CERT_A,
+                                       'V2 Signer: certificate SHA-256 digest: '+CERT_B))
+
 if __name__=='__main__':
     suite=unittest.defaultTestLoader.loadTestsFromTestCase(MatrixSecurityTest)
     result=unittest.TextTestRunner(verbosity=2).run(suite)
     if not result.wasSuccessful():raise SystemExit(1)
-    print('R3C06_HF09_BUNDLETOOL_SECURITY_PASS='+str(result.testsRun))
+    print('R3C06_HF10_BUNDLETOOL_SECURITY_PASS='+str(result.testsRun))

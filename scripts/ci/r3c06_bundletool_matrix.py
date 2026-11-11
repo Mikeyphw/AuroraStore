@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Official bundletool API36 targeting probe; never an Aurora/Play trust oracle.
 
-HF09: prove *both* APK v2 cryptography (API24-27 verifier window) and
+HF10: retain HF09 proof of *both* APK v2 cryptography (API24-27 verifier window) and
 actual API36 verification. apksigner's default scheme-reporting is SDK-window
 sensitive. A printed `v2: false` is not alone proof that v2 bytes are absent.
 Fail closed on errors, changing APK bytes, mismatched signers, or missing
@@ -21,7 +21,17 @@ import tempfile
 import zipfile
 
 OFFICIAL_SHA = 'a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29'
-CERT_RE = re.compile(r'^Signer #(\d+) certificate SHA-256 digest: ([0-9a-fA-F]{64})$', re.M)
+# Android SDK Build Tools 37 changed `--print-certs` from the legacy
+# `Signer #1 certificate ...` form to per-scheme `V2 Signer:` / `V3.0 Signer:`.
+# Accept only these documented, anchored labels, never arbitrary digest text.
+# One *APK signer identity* may legitimately appear once per signing scheme.
+CERT_RE = re.compile(
+    r'^(?:Signer #(?P<old_number>[0-9]+)'
+    r'|(?P<scheme>V(?:1|2|3(?:\.[0-9]+)?|4)) Signer'
+    r'(?: #(?P<new_number>[0-9]+))?:)'
+    r' certificate SHA-256 digest: (?P<digest>[0-9a-fA-F]{64})$'
+)
+SIGNER_COUNT_RE = re.compile(r'^Number of signers: ([0-9]+)$')
 SCHEME_RE = re.compile(r'^Verified using v([123]) scheme(?: \([^\r\n]*?\))?: (true|false)$', re.M)
 MAX_APKS_ZIP_ENTRIES = 4096
 MAX_SPLIT_SIZE = 512 * 1024 * 1024
@@ -59,10 +69,45 @@ def signed_schemes(text):
 
 
 def single_signer(text):
-    entries = CERT_RE.findall(text)
-    check(len(entries)==1 and entries[0][0]=='1',
-          'apksigner must prove exactly one certificate SHA-256 digest')
-    return entries[0][1].lower()
+    """Require one identity across old/new apksigner certificate presentations.
+
+    SDK 37 prints a digest for EACH scheme (e.g. V2 Signer / V3.0 Signer),
+    and those lines can repeat the SAME cert. That does not mean the APK has
+    multiple signers. Reject a second signer, an unknown/truncated digest line,
+    a duplicate scheme record or different cert digests across schemes.
+    Cryptographic verification is still independently required for each APK.
+    """
+    entries = {}
+    counts = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        count = SIGNER_COUNT_RE.fullmatch(line)
+        if count is not None:
+            counts.append(int(count.group(1)))
+        if 'certificate SHA-256 digest:' not in line:
+            continue
+        match = CERT_RE.fullmatch(line)
+        check(match is not None,
+              'apksigner must prove exactly one certificate SHA-256 digest: '
+              'unrecognized certificate signer label')
+        number = match.group('old_number') or match.group('new_number')
+        check(number is None or number == '1',
+              'apksigner must prove exactly one certificate SHA-256 digest: '
+              'multiple signer identities')
+        label = match.group('scheme') or 'legacy'
+        check(label not in entries,
+              'apksigner must prove exactly one certificate SHA-256 digest: '
+              'duplicate signer certificate line')
+        entries[label] = match.group('digest').lower()
+    check(len(counts) <= 1 and (not counts or counts[0] == 1),
+          'apksigner must prove exactly one certificate SHA-256 digest: '
+          'signer count was not one')
+    check(bool(entries),
+          'apksigner must prove exactly one certificate SHA-256 digest: missing certificate')
+    check(len(set(entries.values())) == 1,
+          'apksigner must prove exactly one certificate SHA-256 digest: '
+          'different certificates across signing schemes')
+    return next(iter(entries.values()))
 
 
 def run_apksigner(apksigner, apk, *, minimum=None, maximum=None, label='default'):
