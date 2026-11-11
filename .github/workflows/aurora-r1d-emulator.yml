@@ -235,13 +235,9 @@ jobs:
           force-avd-creation: false
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: |
-            test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = '36'
-            if adb shell pm list packages | grep -Fq 'package:com.aurora.store.debug'; then
-              echo R3C07_HF03_AVD_REFUSED_NOT_CLEAN >&2
-              exit 1
-            fi
-            echo R3C07_HF03_PREINSTALL_AVD_SNAPSHOT_INITIALIZED
+          # HF07 single /bin/sh -c command; control flow is inside the reviewed
+          # bash file. Historical HF05 marker: echo R3C07_HF03_PREINSTALL_AVD_SNAPSHOT_INITIALIZED
+          script: bash scripts/ci/r3c07_hf07_avd_snapshot.sh
       - name: Save clean pre-install snapshot BEFORE running any Android tests
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2, Node.js 24

@@ -170,6 +170,108 @@ fi
                 with self.assertRaises(AssertionError):
                     self.evaluate(mutated)
 
+class HF07SnapshotBootContract(unittest.TestCase):
+    """Executable repro: emulator-runner runs script content as /bin/sh -c."""
+
+    @staticmethod
+    def _workflow():
+        return (ROOT/'.github/workflows/aurora-r1d-emulator.yml').read_text(encoding='utf-8')
+
+    @staticmethod
+    def _bootstrap_command(workflow):
+        start='      - name: Generate pre-install AVD snapshot only on cache miss\n'
+        end='      - name: Save clean pre-install snapshot BEFORE running any Android tests\n'
+        assert workflow.count(start)==1 and workflow.count(end)==1
+        block=workflow.split(start,1)[1].split(end,1)[0]
+        commands=[line.strip() for line in block.splitlines() if line.strip().startswith('script:')]
+        assert len(commands)==1, 'bootstrap script must be an unambiguous single command'
+        assert commands[0]=='script: bash scripts/ci/r3c07_hf07_avd_snapshot.sh', \
+            'emulator runner splits multiline shell statements into distinct /bin/sh -c commands'
+        assert 'script: |' not in block and 'script: >' not in block
+        assert 'bash scripts/ci/r1d2_emulator_ci.sh' not in block
+        return commands[0][len('script: '):]
+
+    def test_bootstrap_single_shell_command_and_original_qualification_unchanged(self):
+        workflow=self._workflow()
+        command=self._bootstrap_command(workflow)
+        self.assertEqual(command,'bash scripts/ci/r3c07_hf07_avd_snapshot.sh')
+        self.assertEqual(workflow.count('script: bash scripts/ci/r1d2_emulator_ci.sh'),1)
+        script=(ROOT/'scripts/ci/r3c07_hf07_avd_snapshot.sh')
+        self.assertTrue(script.is_file())
+        result=subprocess.run(['bash','-n',str(script)],capture_output=True,text=True,timeout=8)
+        self.assertEqual(result.returncode,0,result.stderr)
+        content=script.read_text(encoding='utf-8')
+        self.assertIn('set -euo pipefail',content)
+        self.assertIn('pm list packages --user 0',content)
+        self.assertIn('R3C07_HF03_AVD_REFUSED_NOT_CLEAN',content)
+        for unsafe in ('adb install','am instrument','ksud module install','pm clear','pm uninstall'):
+            self.assertNotIn(unsafe,content)
+
+    def test_multiline_shell_action_and_duplicate_qualifier_refused(self):
+        workflow=self._workflow()
+        self._bootstrap_command(workflow)
+        for name,mutant in {
+            'split shell action':workflow.replace(
+                'script: bash scripts/ci/r3c07_hf07_avd_snapshot.sh',
+                'script: |\n            if true; then\n              echo bad\n            fi',1),
+            'scalar shell block':workflow.replace(
+                'script: bash scripts/ci/r3c07_hf07_avd_snapshot.sh',
+                'script: >\n            bash scripts/ci/r3c07_hf07_avd_snapshot.sh',1),
+            'qualifier in bootstrap':workflow.replace(
+                'script: bash scripts/ci/r3c07_hf07_avd_snapshot.sh',
+                'script: bash scripts/ci/r1d2_emulator_ci.sh',1),
+            'two bootstrap script entries':workflow.replace(
+                'script: bash scripts/ci/r3c07_hf07_avd_snapshot.sh',
+                'script: bash scripts/ci/r3c07_hf07_avd_snapshot.sh\n'
+                '          script: bash scripts/ci/r3c07_hf07_avd_snapshot.sh',1),
+        }.items():
+            with self.subTest(case=name):
+                with self.assertRaises(AssertionError):
+                    self._bootstrap_command(mutant)
+
+    def test_actual_host_shell_invocation_and_fail_closed_user0_inventory(self):
+        command=self._bootstrap_command(self._workflow())
+        with tempfile.TemporaryDirectory(prefix='r3c07-hf07-runner-shell-') as directory:
+            tmp=Path(directory)
+            fake=tmp/'adb'
+            fake.write_text('''#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$*" == 'shell getprop ro.build.version.sdk' ]]; then
+  if [[ "${HF07_CASE:-}" == wrong_api ]]; then echo 35; else echo 36; fi
+elif [[ "$*" == 'shell pm list packages --user 0' ]]; then
+  case "${HF07_CASE:-}" in
+    clean) printf 'package:android\npackage:com.android.settings\n' ;;
+    app) printf 'package:android\npackage:com.aurora.store.debug\n' ;;
+    test) printf 'package:android\npackage:com.aurora.store.debug.test\n' ;;
+    prefix_only) printf 'package:android\npackage:com.aurora.store.debug2\n' ;;
+    empty) printf '' ;;
+    failed) exit 23 ;;
+    wrong_api) printf 'package:android\n' ;;
+    *) exit 42 ;;
+  esac
+else exit 65
+fi
+''',encoding='utf-8')
+            fake.chmod(0o755)
+            for scenario,expected in (
+                ('clean',True),('app',False),('test',False),
+                ('prefix_only',True),('empty',False),
+                ('failed',False),('wrong_api',False)):
+                with self.subTest(case=scenario):
+                    environment={**os.environ,'HF07_CASE':scenario,
+                                 'PATH':directory+os.pathsep+os.environ.get('PATH','')}
+                    result=subprocess.run(['/bin/sh','-c',command],cwd=ROOT,
+                                          env=environment,capture_output=True,
+                                          text=True,timeout=12)
+                    self.assertEqual(result.returncode==0,expected,
+                                     result.stdout+'\n'+result.stderr)
+                    if expected:
+                        self.assertIn('R3C07_HF03_PREINSTALL_AVD_SNAPSHOT_INITIALIZED',
+                                      result.stdout)
+                    else:
+                        self.assertNotIn('R3C07_HF03_PREINSTALL_AVD_SNAPSHOT_INITIALIZED',
+                                         result.stdout)
+
 class PairNegative(unittest.TestCase):
     def setUp(self):
         self.d=tempfile.TemporaryDirectory(prefix='r3c07-ci-opt-')
