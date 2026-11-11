@@ -181,3 +181,8 @@ exec(compile((ROOT / 'scripts/ci/test_r3c07_p01_ux.py').read_text(),
 # R3C07 P01 HF02: executable inline Python regression (positive + negative).
 exec(compile((ROOT / 'scripts/ci/test_r3c07_hf02_receipt.py').read_text(encoding='utf-8'),
              'test_r3c07_hf02_receipt.py', 'exec'))
+
+# R3C07 P02A: actual signed-content review/source contract and executable
+# evidence parser negatives; API36 UI execution is deliberately a separate gate.
+exec(compile((ROOT / 'scripts/ci/test_r3c07_p02_source.py').read_text(),
+             'test_r3c07_p02_source.py', 'exec'))

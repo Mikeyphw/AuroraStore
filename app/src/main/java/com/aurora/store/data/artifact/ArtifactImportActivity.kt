@@ -98,6 +98,7 @@ class ArtifactImportActivity : AppCompatActivity() {
                 "verified, then installed by Android only after your approval."
         )
         sources = Spinner(this).apply {
+            contentDescription = "Import source or provider"
             adapter = ArrayAdapter(this@ArtifactImportActivity, android.R.layout.simple_spinner_dropdown_item, options)
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
@@ -121,6 +122,7 @@ class ArtifactImportActivity : AppCompatActivity() {
         }
         column.addView(sources)
         sourceUrl = EditText(this).apply {
+            contentDescription = "Provider reference for browser navigation; not APK publisher proof"
             hint = "HTTPS page to open in browser (optional)"
             inputType = android.text.InputType.TYPE_CLASS_TEXT or
                 android.text.InputType.TYPE_TEXT_VARIATION_URI
@@ -164,7 +166,9 @@ class ArtifactImportActivity : AppCompatActivity() {
             }
         }
         column.addView(fossAcknowledgement)
-        providerStatus = label("Provider not selected. Availability is UNKNOWN until checked at the provider.")
+        providerStatus = label("Provider not selected. Availability is UNKNOWN until checked at the provider.").apply {
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
         column.addView(Button(this).apply {
             text = "Open chosen provider (manual browser handoff)"
             setOnClickListener { openSourceInBrowser() }
@@ -291,6 +295,7 @@ class ArtifactImportActivity : AppCompatActivity() {
     private fun refreshProviderPresentation() {
         if (!::providerStatus.isInitialized || !::sourceUrl.isInitialized) return
         val choice = selectedProvider()
+        sources.contentDescription = "Import source or provider: ${choice.title}"
         providerStatus.text = choice.explanation + "\n" + ArtifactProviderDiscovery.status(choice)
         sourceUrl.hint = when (choice) {
             ArtifactProviderDiscovery.Provider.GOOGLE_PLAY -> "Exact Android package ID (e.g. org.example.app)"

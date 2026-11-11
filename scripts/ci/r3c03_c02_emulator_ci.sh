@@ -295,3 +295,25 @@ receipt={'overall':'PASS','source_sha':sha,'run_id':run_id,'android_api':36,
          'physical_device_qualified':False,'release_qualified':False}
 pathlib.Path(sys.argv[1]).write_text(json.dumps(receipt,sort_keys=True,indent=2)+'\n',encoding='utf-8')
 R3C07_RECEIPT_PY
+
+# R3C07 P02A: actually signed debug APK via a private content:// stream and
+# production picker/verifier/review UI. No install button click or network.
+# Independent of the R3C06 51/51 and R3C07 P01 5/5 historical receipts.
+R3C07_P02A_CLASS='com.aurora.store.data.artifact.ArtifactReviewP02DeviceTest'
+timeout 420 adb shell am instrument -w -r -e class "$R3C07_P02A_CLASS" "$RUNNER" |
+  tee "$OUT/r3c07_p02a_signed_document_ui.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/r3c07_p02a_signed_document_ui.txt"; then
+  echo 'R3C07_P02A_API36_UI_REFUSED: real signed-file review tests failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(4 tests\)' "$OUT/r3c07_p02a_signed_document_ui.txt" || {
+  echo 'R3C07_P02A_API36_UI_REFUSED: four actual Android UI tests missing' >&2
+  exit 1
+}
+grep -Eq '^INSTRUMENTATION_CODE: -1' "$OUT/r3c07_p02a_signed_document_ui.txt" || {
+  echo 'R3C07_P02A_API36_UI_REFUSED: Android instrumentation did not succeed' >&2
+  exit 1
+}
+python3 -B scripts/ci/r3c07_p02_receipt.py --log "$OUT/r3c07_p02a_signed_document_ui.txt" \
+  --output "$OUT/R3C07_P02A_API36_UX_RECEIPT.json"
