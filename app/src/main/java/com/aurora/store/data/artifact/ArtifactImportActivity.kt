@@ -60,6 +60,8 @@ class ArtifactImportActivity : AppCompatActivity() {
     private lateinit var downgradeConsent: CheckBox
     private lateinit var installButton: Button
     private lateinit var selectButton: Button
+    private lateinit var retryButton: Button
+    private lateinit var requestedVersion: EditText
     // A source claim is valid only for the exact successful browser launch and selection.
     // Never persist raw URLs or use a browser navigation as publisher authentication.
     private var lastBrowserLaunch: ArtifactHandoffClaimPolicy.BrowserLaunch? = null
@@ -70,6 +72,7 @@ class ArtifactImportActivity : AppCompatActivity() {
         else {
             lastBrowserLaunch = null
             clearReview("Document picker closed. No file selected or installed.")
+            offerManualRetry()
         }
     }
 
@@ -131,7 +134,9 @@ class ArtifactImportActivity : AppCompatActivity() {
                 override fun afterTextChanged(s: Editable?) {
                     if (lastBrowserLaunch?.exactInput != s?.toString()) lastBrowserLaunch = null
                     // Editing a source after verification cannot silently relabel an import.
-                    if (active != null) invalidateCurrentImport("Source changed. Verify the selected file again.")
+                    if (active != null || (::selectButton.isInitialized && !selectButton.isEnabled)) {
+                        invalidateCurrentImport("Source changed. Verify the selected file again.")
+                    }
                 }
 
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -139,6 +144,26 @@ class ArtifactImportActivity : AppCompatActivity() {
             })
         }
         column.addView(sourceUrl)
+        requestedVersion = EditText(this).apply {
+            contentDescription = "Optional exact version code reference, not a provider lookup"
+            hint = "Optional version code to match after verification"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setSingleLine(true)
+            addTextChangedListener(object : TextWatcher {
+                override fun afterTextChanged(s: Editable?) {
+                    // A different requested version invalidates previously verified
+                    // consent or an in-flight copy; do not reuse a stale session.
+                    if (active != null || (::selectButton.isInitialized && !selectButton.isEnabled)) {
+                        invalidateCurrentImport("Version reference changed. Verify a new file.")
+                    }
+                }
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            })
+        }
+        column.addView(requestedVersion)
+        label("The version reference is a local preference, not a provider search or availability check. " +
+            "Only a matching verified file can enable installation consent.")
         apkPureEnabled = CheckBox(this).apply {
             text = "Enable APKPure browser handoff (off by default)"
             isChecked = getSharedPreferences("artifact_source_preferences", MODE_PRIVATE)
@@ -188,16 +213,28 @@ class ArtifactImportActivity : AppCompatActivity() {
                 runCatching { picker.launch(arrayOf("*/*")) }.onFailure {
                     lastBrowserLaunch = null
                     clearReview("Android document picker is unavailable. No file installed.")
+                    offerManualRetry()
                 }
             }
         }
         column.addView(selectButton)
+        retryButton = Button(this).apply {
+            text = "Retry file selection"
+            contentDescription = "Retry manual Android file selection without reusing prior consent"
+            visibility = View.GONE
+            setOnClickListener {
+                invalidateCurrentImport(ArtifactImportJourney.retryMessage())
+                selectButton.performClick()
+            }
+        }
+        column.addView(retryButton)
         column.addView(Button(this).apply {
             text = "Cancel current import"
             setOnClickListener {
                 invalidateCurrentImport(
                     "Import cancelled. An already committed Android session may continue."
                 )
+                offerManualRetry()
             }
         })
         status = label("Select an APK or bundle to verify before installing.").apply {
@@ -275,6 +312,10 @@ class ArtifactImportActivity : AppCompatActivity() {
         status.text = message
     }
 
+    private fun offerManualRetry() {
+        if (::retryButton.isInitialized) retryButton.visibility = View.VISIBLE
+    }
+
     /** Invalidate selection, verification, consent and owned cache before another picker. */
     private fun invalidateCurrentImport(message: String, preserveBrowserClaim: Boolean = false) {
         requestSerial += 1
@@ -296,7 +337,13 @@ class ArtifactImportActivity : AppCompatActivity() {
         if (!::providerStatus.isInitialized || !::sourceUrl.isInitialized) return
         val choice = selectedProvider()
         sources.contentDescription = "Import source or provider: ${choice.title}"
-        providerStatus.text = choice.explanation + "\n" + ArtifactProviderDiscovery.status(choice)
+        providerStatus.text = choice.explanation + "\n" + when {
+            active != null -> "Provider choice alone does not authenticate this selected file. " +
+                "The verified file receipt below is authoritative for bytes, signer and installed status."
+            ::selectButton.isInitialized && !selectButton.isEnabled ->
+                "Document selected; verification in progress. Installation NOT approved."
+            else -> ArtifactProviderDiscovery.status(choice)
+        }
         sourceUrl.hint = when (choice) {
             ArtifactProviderDiscovery.Provider.GOOGLE_PLAY -> "Exact Android package ID (e.g. org.example.app)"
             ArtifactProviderDiscovery.Provider.LOCAL_DOCUMENT -> "No provider URL needed for local documents"
@@ -350,7 +397,9 @@ class ArtifactImportActivity : AppCompatActivity() {
             receiptToggle.text = "Show technical verification details"
         }
         if (::consentHint.isInitialized) consentHint.text = "Consent options appear after verification."
+        if (::retryButton.isInitialized) retryButton.visibility = View.GONE
         if (::status.isInitialized) showStatus(message)
+        refreshProviderPresentation()
     }
 
     private fun configureConsent(verified: ArtifactApkVerifier.VerifiedImport) {
@@ -393,8 +442,12 @@ class ArtifactImportActivity : AppCompatActivity() {
             return
         }
         val blockers = decisionFor(verified)
-        installButton.isEnabled = blockers.isEmpty()
-        consentHint.text = ArtifactReviewPresentation.blockerDescription(blockers)
+        val versionMatches = ArtifactImportJourney.versionMatches(
+            requestedVersion.text.toString(), verified.attempt.versionCode)
+        installButton.isEnabled = blockers.isEmpty() && versionMatches
+        consentHint.text = if (!versionMatches) {
+            ArtifactImportJourney.versionMessage(requestedVersion.text.toString(), verified.attempt.versionCode)
+        } else ArtifactReviewPresentation.blockerDescription(blockers)
     }
 
     private fun openSourceInBrowser() {
@@ -503,6 +556,7 @@ class ArtifactImportActivity : AppCompatActivity() {
                         active?.discard()
                         active = result
                         selectButton.isEnabled = true
+                        refreshProviderPresentation()
                         val facts = verifiedFacts(result)
                         review.text = ArtifactReviewPresentation.summary(facts)
                         technicalReceipt.text = ArtifactReviewPresentation.verification(facts)
@@ -510,6 +564,9 @@ class ArtifactImportActivity : AppCompatActivity() {
                         receiptToggle.text = "Show technical verification details"
                         receiptToggle.visibility = View.VISIBLE
                         configureConsent(result)
+                        // A successful verification removes stale retry prompts; manual
+                        // selection and source-specific provenance remain visible.
+                        retryButton.visibility = View.GONE
                         showStatus("APK signature checks passed. Review the receipt and required approvals; NOT installed.")
                     }
                 }
@@ -518,7 +575,9 @@ class ArtifactImportActivity : AppCompatActivity() {
                 runOnUiThread {
                     if (serial == requestSerial && !isDestroyed && !ticket.isCancelled()) {
                         selectButton.isEnabled = true
-                        clearReview("Import refused. The selected file could not be verified. No install consent remains; choose a supported file and try again.")
+                        clearReview("Import refused. The selected file could not be verified. " +
+                            ArtifactImportJourney.failureMessage(error))
+                        offerManualRetry()
                     }
                 }
             }
@@ -531,6 +590,14 @@ class ArtifactImportActivity : AppCompatActivity() {
         val unknown = unknownPublisherConsent.isChecked
         val downgrade = downgradeConsent.isChecked
         val decision = decisionFor(receipt)
+        // Button disablement is presentation, not authorization. Guard the
+        // actual install entry point against a mismatched version reference.
+        if (!ArtifactImportJourney.versionMatches(
+                requestedVersion.text.toString(), receipt.attempt.versionCode)) {
+            showStatus(ArtifactImportJourney.versionMessage(
+                requestedVersion.text.toString(), receipt.attempt.versionCode))
+            return
+        }
         if (decision.isNotEmpty()) {
             showStatus("Installation blocked: ${ArtifactReviewPresentation.blockerDescription(decision)}")
             return

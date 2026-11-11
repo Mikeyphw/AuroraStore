@@ -109,14 +109,21 @@ internal object ArtifactProviderDiscovery {
         return Outcome.Ready(Route.EXTERNAL_PROVIDER_PAGE, handoff.uri, source)
     }
 
-    /** Explicit statuses. No UNKNOWN condition may be displayed as positive availability. */
-    fun status(provider: Provider): String = when (provider) {
-        Provider.GOOGLE_PLAY -> "Google Play listing only; exact-version availability is UNKNOWN here"
-        Provider.LOCAL_DOCUMENT -> "Local file not selected or verified"
-        Provider.DEVELOPER_WEBSITE, Provider.GITHUB_RELEASE ->
-            "Publisher not authenticated; open a page manually and verify the downloaded APK"
-        Provider.APKMIRROR -> "Listing not checked; official browser handoff only"
-        Provider.FDROID -> "FOSS eligibility not independently verified; APK signer may differ"
-        Provider.APKPURE -> "Optional provider; disabled by default, no availability assertion"
+    /**
+     * R3C07 P03A: status is the pre-selection projection only. The Settings
+     * import screen already displays this function on each provider change.
+     * Verified file facts must be obtained from ArtifactApkVerifier, not here.
+     */
+    fun status(provider: Provider): String {
+        val providerNote = when (provider) {
+            Provider.GOOGLE_PLAY -> "Google Play listing only; exact-version availability is UNKNOWN here"
+            Provider.LOCAL_DOCUMENT -> "Local file not selected or verified"
+            Provider.DEVELOPER_WEBSITE, Provider.GITHUB_RELEASE ->
+                "Publisher not authenticated; open a page manually and verify the downloaded APK"
+            Provider.APKMIRROR -> "Listing not checked; official browser handoff only"
+            Provider.FDROID -> "FOSS eligibility not independently verified; APK signer may differ"
+            Provider.APKPURE -> "Optional provider; disabled by default, no availability assertion"
+        }
+        return providerNote + "\n" + ArtifactProviderDisclosure.summary(provider)
     }
 }

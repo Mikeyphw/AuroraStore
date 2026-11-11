@@ -322,3 +322,15 @@ python3 -B scripts/ci/r3c07_p02_receipt.py --log "$OUT/r3c07_p02a_signed_documen
 # accessibility node semantics and accurate (non-installing) outcome labels.
 # Not actual TalkBack activation, user approval or publisher proof.
 bash scripts/ci/r3c07_p02b_api36.sh "$RUNNER" "$OUT"
+
+# R3C07 P03B: real content URI, provider/retry/rotation, screenshots, source receipt.
+# Read-only: no installed package mutation or browser-side network I/O.
+bash scripts/ci/r3c07_p03b_api36.sh "$RUNNER" "$OUT"
+
+# R3C07 P03: never activate TalkBack by default or claim live traversal from
+# the read-only P01/P02 UX tests. Actual Android service must be installed.
+if [[ "${R3C07_ALLOW_LIVE_TALKBACK:-no}" == yes ]]; then
+  python3 -B scripts/ci/r3c07_p03_talkback.py --run --runner "$RUNNER" --out "$OUT"
+else
+  echo 'R3C07_P03_ACTUAL_TALKBACK_NOT_QUALIFIED: explicit workflow opt-in required'
+fi

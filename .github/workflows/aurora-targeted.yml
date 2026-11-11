@@ -70,6 +70,8 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$HEAD_SHA"
           python3 -B scripts/ci/test_r3c07_hf03_optimization.py
+          python3 -B scripts/ci/test_r3c07_p03a_source.py
+          python3 -B scripts/ci/test_r3c07_p03b_source.py
           python3 -B scripts/ci/aurora_ci_policy.py run-targeted --base "$BASE_SHA" --head "$HEAD_SHA"
 
   targeted-android:
@@ -102,6 +104,12 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon --max-workers=2 \
             :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest
+      - name: Run R3C07 P03A actual JVM evidence tests
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon --max-workers=2 :app:testVanillaDebugUnitTest \
+            --tests 'com.aurora.store.data.artifact.ArtifactProviderDisclosureTest' \
+            --tests 'com.aurora.store.data.artifact.ArtifactImportJourneyTest'
       - name: Require checked-in Room schema to match hosted KSP output
         shell: bash
         run: |

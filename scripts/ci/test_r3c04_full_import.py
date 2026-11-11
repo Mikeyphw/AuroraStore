@@ -191,3 +191,13 @@ exec(compile((ROOT / 'scripts/ci/test_r3c07_p02_source.py').read_text(),
 # Device qualification is measured separately by the hosted API36 R1D run.
 exec(compile((ROOT / 'scripts/ci/test_r3c07_p02b_source.py').read_text(),
              'test_r3c07_p02b_source.py', 'exec'))
+
+# R3C07 P03/P04: new manual-only accessibility and real Android OS
+# acceptance wiring; source contracts are unconditional, runtime gates opt-in.
+exec(compile((ROOT / 'scripts/ci/test_r3c07_p03_p04_source.py').read_text(),
+             'test_r3c07_p03_p04_source.py', 'exec'))
+
+# R3C07 P03B: real provider/retry/rotation UI and PNG evidence source contract.
+# Default R1D API36 is the device gate; this Python source test is not.
+exec(compile((ROOT / 'scripts/ci/test_r3c07_p03b_source.py').read_text(),
+             'test_r3c07_p03b_source.py', 'exec'))

@@ -19,6 +19,16 @@ on:
         type: boolean
         required: true
         default: false
+      r3c07_live_talkback:
+        description: 'R3C07 P03 explicit opt-in: actual installed TalkBack service, focus events and secure-setting restoration; refuses if unavailable'
+        type: boolean
+        required: true
+        default: false
+      r3c07_live_installer:
+        description: 'R3C07 P04 explicit opt-in: isolated signed-fixture Android system DENY then ACCEPT and cleanup'
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
@@ -54,7 +64,15 @@ jobs:
           python3 -B scripts/ci/check_r1g.py
           # Execute the real R3C07 receipt heredoc before any SDK/Gradle work.
           python3 -B scripts/ci/test_r3c07_hf02_receipt.py scripts/ci/r3c03_c02_emulator_ci.sh
+          # P03 and P04 are independent manual gates. Never mutate OS
+          # accessibility and PackageInstaller state in the same workflow run.
+          if [[ '${{ inputs.r3c07_live_talkback }}' == 'true' && '${{ inputs.r3c07_live_installer }}' == 'true' ]]; then
+            echo R3C07_P03_P04_REFUSED_CONCURRENT_LIVE_GATES >&2
+            exit 1
+          fi
           python3 -B scripts/ci/test_r3c07_hf03_optimization.py
+          python3 -B scripts/ci/test_r3c07_p03_p04_source.py
+          python3 -B scripts/ci/test_r3c07_p03b_source.py
 
   emulator:
     name: R1D production Room DAO + watchdog + process restart on API 36
@@ -142,7 +160,7 @@ jobs:
             --receipt "$RUNNER_TEMP/aurora-r3c03-c02/R3C07_HF03_APK_SOURCE_RECEIPT.json" \
             --reused '${{ steps.apk_reuse.outputs.reused }}'
       - name: Provision Android 36 platform for opt-in signed fixture (manual only)
-        if: ${{ inputs.r3c06_live_install == true }}
+        if: ${{ inputs.r3c06_live_install == true || inputs.r3c07_live_installer == true }}
         shell: bash
         run: |
           set -euo pipefail
@@ -249,7 +267,8 @@ jobs:
         env:
           # The same old workflow defaults to non-destructive, read-only behavior.
           # Never infer consent from a branch push or periodic router dispatch.
-          R3C06_ALLOW_LIVE_INSTALL: ${{ github.event_name == 'workflow_dispatch' && inputs.r3c06_live_install == true && 'yes' || 'no' }}
+          R3C06_ALLOW_LIVE_INSTALL: ${{ github.event_name == 'workflow_dispatch' && (inputs.r3c06_live_install == true || inputs.r3c07_live_installer == true) && 'yes' || 'no' }}
+          R3C07_ALLOW_LIVE_TALKBACK: ${{ github.event_name == 'workflow_dispatch' && inputs.r3c07_live_talkback == true && 'yes' || 'no' }}
         with:
           api-level: 36
           target: google_apis
@@ -263,10 +282,10 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: bash scripts/ci/r1d2_emulator_ci.sh
       - name: Verify explicitly opted-in R3C06 P5 evidence (no auto-qualification)
-        if: ${{ inputs.r3c06_live_install == true || inputs.r3c06_bundletool_matrix == true }}
+        if: ${{ inputs.r3c06_live_install == true || inputs.r3c07_live_installer == true || inputs.r3c06_bundletool_matrix == true }}
         shell: bash
         env:
-          R3C06_P5_EXPECT_LIVE: ${{ inputs.r3c06_live_install == true && 'yes' || 'no' }}
+          R3C06_P5_EXPECT_LIVE: ${{ (inputs.r3c06_live_install == true || inputs.r3c07_live_installer == true) && 'yes' || 'no' }}
           R3C06_P5_EXPECT_MATRIX: ${{ inputs.r3c06_bundletool_matrix == true && 'yes' || 'no' }}
         run: |
           set -euo pipefail
@@ -277,6 +296,16 @@ jobs:
             --sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" \
             --expect-live "$R3C06_P5_EXPECT_LIVE" \
             --expect-bundletool "$R3C06_P5_EXPECT_MATRIX"
+      - name: R3C07 P04 certify actual OS deny/accept from the isolated P5 fixture (manual only)
+        if: ${{ inputs.r3c07_live_installer == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -B scripts/ci/r3c07_p04_os_receipt.py \
+            --logs "$RUNNER_TEMP/aurora-r3c03-c02" \
+            --output "$RUNNER_TEMP/aurora-r3c03-c02/R3C07_P04_ACTUAL_OS_OUTCOMES_RECEIPT.json" \
+            --sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID"
       - name: R3C06 P6 validate independent feature + production targeting (manual only)
         if: ${{ inputs.r3c06_feature_matrix == true }}
         shell: bash
