@@ -172,3 +172,8 @@ assert "'pm','path',TARGET" not in _live_hf03, 'R3C06_P5_HF03: stale pm path ass
 # Source/security tests run on targeted CI; Android evidence is separate.
 exec(compile((ROOT / 'scripts/ci/test_r3c06_p6_source.py').read_text(),
              'test_r3c06_p6_source.py', 'exec'))
+
+
+# R3C07 P01: review UI source/security gate; device UX tests remain separate.
+exec(compile((ROOT / 'scripts/ci/test_r3c07_p01_ux.py').read_text(),
+             'test_r3c07_p01_ux.py', 'exec'))

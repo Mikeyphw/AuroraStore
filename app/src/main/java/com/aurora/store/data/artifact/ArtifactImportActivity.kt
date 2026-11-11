@@ -44,6 +44,8 @@ class ArtifactImportActivity : AppCompatActivity() {
     private var active: ArtifactApkVerifier.VerifiedImport? = null
     private lateinit var status: TextView
     private lateinit var review: TextView
+    private lateinit var technicalReceipt: TextView
+    private lateinit var receiptToggle: Button
     private lateinit var lastReceipt: TextView
     private lateinit var consentHint: TextView
     private lateinit var sources: Spinner
@@ -85,6 +87,11 @@ class ArtifactImportActivity : AppCompatActivity() {
             textSize = 14f
             setPadding(0, margin / 2, 0, margin / 2)
             column.addView(this)
+        }
+        fun heading(value: String): TextView = label(value).apply {
+            textSize = 18f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            ViewCompat.setAccessibilityHeading(this, true)
         }
         label(
             "Import APK/APKS/APKM/XAPK files. Bytes are copied to private storage, " +
@@ -189,16 +196,35 @@ class ArtifactImportActivity : AppCompatActivity() {
                 )
             }
         })
-        status = label("Select an APK or bundle to verify before installing.")
-        label("Verification receipt")
+        status = label("Select an APK or bundle to verify before installing.").apply {
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
+        heading("Verification receipt")
         review = label("No verified files. Selecting a website does not verify a publisher.")
-        label("Android installation outcome")
-        lastReceipt = label(ArtifactInstallSession.lastResult(this))
+        receiptToggle = Button(this).apply {
+            text = "Show technical verification details"
+            visibility = View.GONE
+            setOnClickListener {
+                val expanding = technicalReceipt.visibility != View.VISIBLE
+                technicalReceipt.visibility = if (expanding) View.VISIBLE else View.GONE
+                text = if (expanding) "Hide technical verification details"
+                    else "Show technical verification details"
+            }
+        }
+        column.addView(receiptToggle)
+        technicalReceipt = label("Technical verification details unavailable until a file is verified.").apply {
+            visibility = View.GONE
+            setTextIsSelectable(true)
+        }
+        heading("Android installation outcome")
+        lastReceipt = label(ArtifactInstallSession.lastResult(this)).apply {
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
         column.addView(Button(this).apply {
             text = "Refresh Android install outcome"
             setOnClickListener { lastReceipt.text = ArtifactInstallSession.lastResult(this@ArtifactImportActivity) }
         })
-        label("Installation permissions for this verified file")
+        heading("Installation permissions for this verified file")
         installConsent = CheckBox(this).apply {
             text = "I approve installation of the verified package and version shown above"
             visibility = View.GONE
@@ -310,6 +336,14 @@ class ArtifactImportActivity : AppCompatActivity() {
             downgradeConsent.visibility = View.GONE
         }
         if (::review.isInitialized) review.text = "No verified files."
+        if (::technicalReceipt.isInitialized) {
+            technicalReceipt.visibility = View.GONE
+            technicalReceipt.text = "Technical verification details unavailable until a file is verified."
+        }
+        if (::receiptToggle.isInitialized) {
+            receiptToggle.visibility = View.GONE
+            receiptToggle.text = "Show technical verification details"
+        }
         if (::consentHint.isInitialized) consentHint.text = "Consent options appear after verification."
         if (::status.isInitialized) showStatus(message)
     }
@@ -464,7 +498,12 @@ class ArtifactImportActivity : AppCompatActivity() {
                         active?.discard()
                         active = result
                         selectButton.isEnabled = true
-                        review.text = ArtifactReviewPresentation.verification(verifiedFacts(result))
+                        val facts = verifiedFacts(result)
+                        review.text = ArtifactReviewPresentation.summary(facts)
+                        technicalReceipt.text = ArtifactReviewPresentation.verification(facts)
+                        technicalReceipt.visibility = View.GONE
+                        receiptToggle.text = "Show technical verification details"
+                        receiptToggle.visibility = View.VISIBLE
                         configureConsent(result)
                         showStatus("APK signature checks passed. Review the receipt and required approvals; NOT installed.")
                     }
@@ -474,7 +513,7 @@ class ArtifactImportActivity : AppCompatActivity() {
                 runOnUiThread {
                     if (serial == requestSerial && !isDestroyed && !ticket.isCancelled()) {
                         selectButton.isEnabled = true
-                        clearReview("Import refused: ${error.message ?: "unreadable or unsupported file"}. No install consent remains.")
+                        clearReview("Import refused. The selected file could not be verified. No install consent remains; choose a supported file and try again.")
                     }
                 }
             }
@@ -517,7 +556,7 @@ class ArtifactImportActivity : AppCompatActivity() {
                         active = null
                         if (!isDestroyed) {
                             selectButton.isEnabled = true
-                            clearReview("Install refused before Android confirmation: ${error.message ?: "system error"}")
+                            clearReview("Android install request was refused before confirmation. No installation success is claimed; verify the file again.")
                         }
                     }
                 }

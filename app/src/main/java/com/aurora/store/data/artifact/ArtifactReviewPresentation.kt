@@ -45,6 +45,32 @@ internal object ArtifactReviewPresentation {
         else -> "APK signature valid; developer/publisher identity NOT independently verified"
     }
 
+    /**
+     * R3C07: concise, user-facing review. A cryptographically valid APK signature
+     * does not authenticate its publisher, a browser claim, or Google Play delivery.
+     * Exact hashes remain available through an explicit technical disclosure.
+     */
+    fun summary(f: VerifiedFacts): String = buildString {
+        append("SIGNED APK FILES VERIFIED — NOT INSTALLED\n")
+        append("Package: ${f.packageName}\nVersion code: ${f.versionCode}\n")
+        append("Verified files: ${f.fileCount} APK(s)\n")
+        append("Selected source: ${source(f.provenance)}\n")
+        append("Exact-version availability from provider: UNKNOWN\n")
+        append("Publisher identity: NOT independently authenticated\n")
+        append("APK signature: verified for selected bytes; this is NOT Google Play proof\n")
+        append("Installed signer: ${when (f.signerMatchesInstalled) {
+            true -> "Matches installed identity (not publisher authentication)"
+            false -> "Mismatch — installation blocked"
+            null -> if (f.installedVersion != null) "Unknown — installation blocked"
+                    else "No installed version to compare"
+        }}\n")
+        if (f.installedVersion != null && f.installedVersion > f.versionCode) {
+            append("Downgrade requested: separate approval required; Android may refuse\n")
+        }
+        append("Final Android compatibility and installation result: NOT CONFIRMED\n")
+        append("Review the separate installation permissions below. Technical SHA-256 proof is optional to expand.")
+    }
+
     fun verification(f: VerifiedFacts): String = buildString {
         append("VERIFIED APK FILES — NOT INSTALLED\n")
         append("Source: ${source(f.provenance)}\n")

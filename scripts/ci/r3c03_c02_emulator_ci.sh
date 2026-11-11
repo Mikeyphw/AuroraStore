@@ -265,3 +265,34 @@ if [[ -n "${R3C06_P6_FEATURE_AAB:-}" ]]; then
     --feature featureproof \
     --receipt "$OUT/R3C06_P6_FEATURE_MATRIX_RECEIPT.json"
 fi
+
+
+# R3C07 P01: independent read-only import review accessibility/rotation tests.
+# This is not part of the historical 51-test R3C06 P4 receipt and never
+# submits a PackageInstaller session, browser handoff or SAF data transfer.
+R3C07_UX_CLASS='com.aurora.store.data.artifact.ArtifactReviewUxDeviceTest'
+timeout 240 adb shell am instrument -w -r -e class "$R3C07_UX_CLASS" "$RUNNER" |
+  tee "$OUT/r3c07_p01_review_ux.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/r3c07_p01_review_ux.txt"; then
+  echo 'R3C07_P01_API36_UX_REFUSED: read-only review tests failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(5 tests\)' "$OUT/r3c07_p01_review_ux.txt" || {
+  echo 'R3C07_P01_API36_UX_REFUSED: five actual Android tests missing' >&2
+  exit 1
+}
+echo 'R3C07_P01_API36_UX_PASS: five read-only review and lifecycle tests'
+python3 -B - "$OUT/R3C07_P01_API36_UX_RECEIPT.json" <<'R3C07_RECEIPT_PY'
+import json,os,pathlib,sys
+sha=os.environ.get('GITHUB_SHA','')
+run_id=os.environ.get('GITHUB_RUN_ID','')
+assert len(sha)==40 and all(c in '0123456789abcdef' for c in sha), 'no exact GitHub source SHA'
+assert run_id.isdecimal(), 'no exact hosted run id'
+receipt={'overall':'PASS','source_sha':sha,'run_id':run_id,'android_api':36,
+         'actual_instrumentation_tests':5,'read_only_ui':True,
+         'installation_qualified':False,'publisher_authenticated':False,
+         'physical_device_qualified':False,'release_qualified':False}
+pathlib.Path(sys.argv[1]).write_text(json.dumps(receipt,sort_keys=True,indent=2)+'
+')
+R3C07_RECEIPT_PY
