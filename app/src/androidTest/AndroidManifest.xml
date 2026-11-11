@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- R3C08 P01: providers exist ONLY in the separately installed instrumentation APK. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <permission
+        android:name="com.aurora.store.r3c08.TEST_SAF_READ"
+        android:protectionLevel="signature" />
+    <application>
+        <provider
+            android:name="com.aurora.store.data.artifact.R3C08GrantDataProvider"
+            android:authorities="com.aurora.store.r3c08.document"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:readPermission="com.aurora.store.r3c08.TEST_SAF_READ" />
+        <provider
+            android:name="com.aurora.store.data.artifact.R3C08GrantControlProvider"
+            android:authorities="com.aurora.store.r3c08.control"
+            android:exported="true" />
+    </application>
+</manifest>

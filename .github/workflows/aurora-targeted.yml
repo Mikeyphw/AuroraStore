@@ -72,6 +72,7 @@ jobs:
           python3 -B scripts/ci/test_r3c07_hf03_optimization.py
           python3 -B scripts/ci/test_r3c07_p03a_source.py
           python3 -B scripts/ci/test_r3c07_p03b_source.py
+          python3 -B scripts/ci/test_r3c08_p01_source.py
           python3 -B scripts/ci/aurora_ci_policy.py run-targeted --base "$BASE_SHA" --head "$HEAD_SHA"
 
   targeted-android:

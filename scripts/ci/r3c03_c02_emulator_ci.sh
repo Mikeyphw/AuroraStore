@@ -327,6 +327,10 @@ bash scripts/ci/r3c07_p02b_api36.sh "$RUNNER" "$OUT"
 # Read-only: no installed package mutation or browser-side network I/O.
 bash scripts/ci/r3c07_p03b_api36.sh "$RUNNER" "$OUT"
 
+# R3C08 P01: real Android-owned SAF grant/revoke and importer refusal.
+# Default read-only API36 test: no Play state writes or installer session.
+bash scripts/ci/r3c08_p01_api36.sh "$RUNNER" "$OUT"
+
 # R3C07 P03: never activate TalkBack by default or claim live traversal from
 # the read-only P01/P02 UX tests. Actual Android service must be installed.
 if [[ "${R3C07_ALLOW_LIVE_TALKBACK:-no}" == yes ]]; then

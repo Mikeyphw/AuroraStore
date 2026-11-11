@@ -70,8 +70,9 @@ class ArtifactImportActivity : AppCompatActivity() {
     private val picker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) handlePickedFile(uri)
         else {
-            lastBrowserLaunch = null
-            clearReview("Document picker closed. No file selected or installed.")
+            // Dismissal revokes verified bytes, consent and the cancellation
+            // lease. Keep the existing P03B manual retry affordance intact.
+            invalidateCurrentImport("Document picker closed. No file selected or installed.")
             offerManualRetry()
         }
     }

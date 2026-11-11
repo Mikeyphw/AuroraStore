@@ -201,3 +201,8 @@ exec(compile((ROOT / 'scripts/ci/test_r3c07_p03_p04_source.py').read_text(),
 # Default R1D API36 is the device gate; this Python source test is not.
 exec(compile((ROOT / 'scripts/ci/test_r3c07_p03b_source.py').read_text(),
              'test_r3c07_p03b_source.py', 'exec'))
+
+# R3C08 P01: actual Android URI-grant revocation and picker cancellation.
+# Source negatives run in targeted CI; on-device evidence remains separate.
+exec(compile((ROOT / 'scripts/ci/test_r3c08_p01_source.py').read_text(),
+             'test_r3c08_p01_source.py', 'exec'))
