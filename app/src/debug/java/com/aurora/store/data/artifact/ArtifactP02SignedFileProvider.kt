@@ -46,8 +46,10 @@ class ArtifactP02SignedFileProvider : ContentProvider() {
             throw IllegalArgumentException("Unsupported fixture metadata column")
         }
         return MatrixCursor(columns).apply {
-            addRow(columns.map { column ->
-                when (column) {
+            // Explicit element type: DISPLAY_NAME is String and SIZE is Long.
+            // Kotlin 2.4 cannot reify their inferred intersection in toTypedArray().
+            val row = Array<Any?>(columns.size) { index ->
+                when (columns[index]) {
                     OpenableColumns.DISPLAY_NAME -> if (uri.path == "/signed.apk") {
                         "r3c07-signed-debug.apk"
                     } else {
@@ -56,7 +58,8 @@ class ArtifactP02SignedFileProvider : ContentProvider() {
                     OpenableColumns.SIZE -> file.length()
                     else -> throw IllegalArgumentException("Unsupported column")
                 }
-            }.toTypedArray())
+            }
+            addRow(row)
         }
     }
 

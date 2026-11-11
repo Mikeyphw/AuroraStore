@@ -126,4 +126,27 @@ result = subprocess.run([sys.executable, '-B', str(RECEIPT), '--selftest'],
                         cwd=ROOT, capture_output=True, text=True, timeout=20)
 require(result.returncode == 0 and '1 positive, 9 negatives' in result.stdout,
         'P02A receipt negative tests failed: '+(result.stdout+result.stderr)[-1600:])
+# HF02: this row contains both String metadata and a Long size.  Kotlin 2.4
+# must see a declared Array<Any?>, not an inferred reified intersection type.
+CURSOR_BLOCK = PROVIDER.split('return MatrixCursor(columns).apply {', 1)[1].split('\n    override fun getType', 1)[0]
+require(PROVIDER.count('return MatrixCursor(columns).apply {') == 1,
+        'ambiguous debug provider MatrixCursor source')
+require('val row = Array<Any?>(columns.size) { index ->' in CURSOR_BLOCK and
+        'when (columns[index]) {' in CURSOR_BLOCK and
+        'addRow(row)' in CURSOR_BLOCK and
+        '.toTypedArray()' not in CURSOR_BLOCK,
+        'P02A HF02 regression: heterogeneous metadata requires explicit row element type')
+# Offline adversarial negatives ensure simply removing the guard is not enough.
+for case, candidate in {
+    'reified intersection returned': CURSOR_BLOCK.replace('addRow(row)',
+        'addRow(columns.map { file.length() }.toTypedArray())'),
+    'explicit row typing removed': CURSOR_BLOCK.replace('Array<Any?>', 'Array'),
+    'metadata switch removed': CURSOR_BLOCK.replace('when (columns[index]) {', 'when (0) {'),
+}.items():
+    require(candidate != CURSOR_BLOCK and not (
+        'val row = Array<Any?>(columns.size) { index ->' in candidate and
+        'when (columns[index]) {' in candidate and
+        'addRow(row)' in candidate and '.toTypedArray()' not in candidate),
+        'P02A HF02 unsafe MatrixCursor negative accepted: '+case)
+
 print('R3C07_P02A_SOURCE_CONTRACT_PASS: real signed content URI, private debug provider, four non-installing Android UI cases, lifecycle and receipt negatives')
