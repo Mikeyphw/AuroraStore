@@ -14,6 +14,11 @@ on:
         type: boolean
         required: true
         default: false
+      r3c06_feature_matrix:
+        description: 'R3C06 P6 manual: isolated on-demand dynamic feature AAB plus production targeting; NO live install'
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
@@ -118,6 +123,17 @@ jobs:
           set -euo pipefail
           sdkmanager --install 'platforms;android-36'
           test -s "$ANDROID_SDK_ROOT/platforms/android-36/android.jar"
+      - name: R3C06 P6 refuse feature qualification without production matrix
+        if: ${{ inputs.r3c06_feature_matrix == true }}
+        env:
+          R3C06_P6_PRODUCTION_REQUESTED: ${{ inputs.r3c06_bundletool_matrix == true && 'yes' || 'no' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$R3C06_P6_PRODUCTION_REQUESTED" = yes || {
+            echo R3C06_P6_MATRIX_REQUIRED >&2
+            exit 1
+          }
       - name: Prepare optional real AAB + SHA256-pinned official bundletool (manual only)
         if: ${{ inputs.r3c06_bundletool_matrix == true }}
         shell: bash
@@ -136,6 +152,26 @@ jobs:
           echo "R3C06_BUNDLETOOL_JAR=$jar" >> "$GITHUB_ENV"
           echo 'R3C06_BUNDLETOOL_SHA256=a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29' >> "$GITHUB_ENV"
           echo 'R3C06_P5_OFFICIAL_BUNDLETOOL_PIN_VERIFIED'
+      - name: Build independent on-demand feature AAB (P6 manual only)
+        if: ${{ inputs.r3c06_feature_matrix == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -s "$R3C06_BUNDLETOOL_JAR"
+          sdkmanager --install 'platforms;android-36'
+          test -s "$ANDROID_SDK_ROOT/platforms/android-36/android.jar"
+          chmod +x gradlew
+          ./gradlew --no-daemon --max-workers=2 \
+            --project-dir scripts/ci/fixtures/r3c06_feature_bundle :app:bundleDebug
+          mapfile -d '' fixture_bundles < <(find scripts/ci/fixtures/r3c06_feature_bundle/app/build/outputs/bundle/debug \
+            -maxdepth 1 -type f -name '*.aab' -print0)
+          [[ "${#fixture_bundles[@]}" -eq 1 ]] || {
+            echo R3C06_P6_FIXTURE_AAB_NOT_UNIQUE >&2
+            exit 1
+          }
+          echo "R3C06_P6_FEATURE_AAB=$(realpath -- "${fixture_bundles[0]}")" >> "$GITHUB_ENV"
+          echo R3C06_P6_INDEPENDENT_FEATURE_AAB_BUILT
       - name: Require KVM-enabled ephemeral Linux runner
         shell: bash
         run: |
@@ -175,6 +211,18 @@ jobs:
             --sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" \
             --expect-live "$R3C06_P5_EXPECT_LIVE" \
             --expect-bundletool "$R3C06_P5_EXPECT_MATRIX"
+      - name: R3C06 P6 validate independent feature + production targeting (manual only)
+        if: ${{ inputs.r3c06_feature_matrix == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -B scripts/ci/r3c06_p6_composite_receipt.py \
+            --production "$RUNNER_TEMP/aurora-r3c03-c02/R3C06_P3_BUNDLETOOL_MATRIX_RECEIPT.json" \
+            --feature "$RUNNER_TEMP/aurora-r3c03-c02/R3C06_P6_FEATURE_MATRIX_RECEIPT.json" \
+            --manifest "$RUNNER_TEMP/aurora-r3c03-c02/R3C06_P6_FIXTURE_MANIFEST_RECEIPT.json" \
+            --receipt "$RUNNER_TEMP/aurora-r3c03-c02/R3C06_P6_COMPOSITE_RECEIPT.json" \
+            --sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID"
       - name: Upload source-bound emulator receipt and offline test logs
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4

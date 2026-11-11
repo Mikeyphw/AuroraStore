@@ -167,3 +167,8 @@ assert "'pm', 'list', 'packages', '--user', '0'" in _live_hf03, 'R3C06_P5_HF03: 
 assert "'package:' + AURORA in records" in _live_hf03, 'R3C06_P5_HF03: Aurora anchor missing'
 assert "return 'package:' + TARGET in records" in _live_hf03, 'R3C06_P5_HF03: exact fixture identity missing'
 assert "'pm','path',TARGET" not in _live_hf03, 'R3C06_P5_HF03: stale pm path assumption'
+
+# R3C06 P6: independent real on-demand feature targeting is opt-in.
+# Source/security tests run on targeted CI; Android evidence is separate.
+exec(compile((ROOT / 'scripts/ci/test_r3c06_p6_source.py').read_text(),
+             'test_r3c06_p6_source.py', 'exec'))

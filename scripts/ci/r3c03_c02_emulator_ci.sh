@@ -245,6 +245,23 @@ else
   echo 'R3C06_P3_BUNDLETOOL_NOT_QUALIFIED: signed AAB and pinned bundletool required'
 fi
 
-
-
-
+# P6: second *independent* real AAB, never relabel Aurora's production AAB.
+# This block is reachable only after the existing 51-case read-only gate and
+# the production matrix have completed on this same emulator/source/run.
+if [[ -n "${R3C06_P6_FEATURE_AAB:-}" ]]; then
+  [[ -s "$R3C06_P6_FEATURE_AAB" && -s "${R3C06_AAB_FIXTURE:-}" &&
+     -s "${R3C06_BUNDLETOOL_JAR:-}" && -n "${R3C06_BUNDLETOOL_SHA256:-}" ]] || {
+    echo R3C06_P6_FEATURE_INPUTS_MISSING >&2
+    exit 1
+  }
+  python3 -B scripts/ci/r3c06_p6_feature_aab.py \
+    --bundle "$R3C06_P6_FEATURE_AAB" \
+    --bundletool-jar "$R3C06_BUNDLETOOL_JAR" \
+    --receipt "$OUT/R3C06_P6_FIXTURE_MANIFEST_RECEIPT.json"
+  python3 -B scripts/ci/r3c06_bundletool_matrix.py \
+    --bundle "$R3C06_P6_FEATURE_AAB" \
+    --bundletool-jar "$R3C06_BUNDLETOOL_JAR" \
+    --bundletool-sha256 "$R3C06_BUNDLETOOL_SHA256" \
+    --feature featureproof \
+    --receipt "$OUT/R3C06_P6_FEATURE_MATRIX_RECEIPT.json"
+fi
