@@ -137,6 +137,32 @@ require(AGGREGATE.count("'test_r3c07_p02b_source.py'")==1 and
         'P02B source gate is not in the aggregated historical test suite')
 r=subprocess.run([sys.executable,'-B',str(ROOT/'scripts/ci/r3c07_p02b_receipt.py'),'--selftest'],
                  cwd=ROOT,text=True,capture_output=True,timeout=25)
-require(r.returncode==0 and '1 positive, 13 negatives' in r.stdout,
+require(r.returncode==0 and '1 positive, 14 negatives' in r.stdout,
         'actual receipt negative test failed: '+(r.stdout+r.stderr)[-1300:])
-print('R3C07_P02B_CONSOLIDATED_SOURCE_PASS: five real API36 instrumented scenarios, actual font/process host, as-run receipt 13 negatives')
+# HF02: preserve JUnit's *actual* singular banner, which the previous
+# fake-ADB harness had incorrectly spelled 'OK (1 tests)'. No weaker
+# count checks are allowed for the seed and process-reopen acceptance.
+require('local noun=\'tests\'' in HOST and
+        'if [[ "$count" == 1 ]]; then noun=\'test\'; fi' in HOST and
+        'grep -Fxq "OK ($count $noun)"' in HOST and
+        'grep -Fxq "OK ($count tests)"' not in HOST,
+        'HF02: host must validate singular/plural JUnit counts exactly')
+require("suffix = 'test' if count == 1 else 'tests'" in RECEIPT and
+        "('test' if n == 1 else 'tests')" in RECEIPT and
+        "'incorrect plural one-test banner'" in RECEIPT,
+        'HF02: as-run receipt and selftest must reject synthetic plural 1 tests')
+for label,candidate in (
+    ('host reverted', HOST.replace('grep -Fxq "OK ($count $noun)"',
+                                   'grep -Fxq "OK ($count tests)"')),
+    ('host accepts arbitrary count', HOST.replace('grep -Fxq "OK ($count $noun)"',
+                                   'true # unsafe skip')),
+    ('host singular branch removed', HOST.replace('if [[ "$count" == 1 ]]; then noun=\'test\'; fi',
+                                                'true')),
+):
+    require(candidate!=HOST and not (
+        'local noun=\'tests\'' in candidate and
+        'if [[ "$count" == 1 ]]; then noun=\'test\'; fi' in candidate and
+        'grep -Fxq "OK ($count $noun)"' in candidate and
+        'grep -Fxq "OK ($count tests)"' not in candidate),
+        'HF02 unsafe host count mutation accepted: '+label)
+print('R3C07_P02B_CONSOLIDATED_SOURCE_PASS: five real API36 instrumented scenarios, actual font/process host, as-run receipt 14 negatives')

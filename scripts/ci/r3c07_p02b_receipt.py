@@ -45,7 +45,9 @@ def verify_log(raw: bytes, count: int, pid_key: str | None) -> dict:
                 'INSTRUMENTATION_CODE: 0', 'INSTRUMENTATION_STATUS_CODE: -2',
                 'INSTRUMENTATION_STATUS_CODE: -1'):
         require(bad not in text, 'failed instrumentation evidence: '+bad)
-    require(len(re.findall(r'^OK \('+str(count)+r' tests\)\s*$', text, re.M)) == 1,
+    # AndroidJUnitRunner's real JUnit grammar is singular for exactly one.
+    suffix = 'test' if count == 1 else 'tests'
+    require(len(re.findall(r'^OK \('+str(count)+r' '+suffix+r'\)\s*$', text, re.M)) == 1,
             'missing exact successful JUnit test count')
     require(len(re.findall(r'^INSTRUMENTATION_CODE: -1\s*$', text, re.M)) == 1,
             'missing unique final OS instrumentation result')
@@ -118,7 +120,7 @@ def fake_log(n: int, pidkey: str | None, pid: int) -> bytes:
     if pidkey:
         t += 'INSTRUMENTATION_STATUS: '+pidkey+'='+str(pid)+'\n'
         t += 'INSTRUMENTATION_STATUS_CODE: 0\n'
-    t += 'OK ('+str(n)+' tests)\nINSTRUMENTATION_CODE: -1\n'
+    t += 'OK ('+str(n)+' '+('test' if n == 1 else 'tests')+')\nINSTRUMENTATION_CODE: -1\n'
     return t.encode()
 
 def selftest() -> None:
@@ -142,6 +144,7 @@ def selftest() -> None:
         'wrong android terminal':({**good,'reopen':good['reopen'].replace(b'INSTRUMENTATION_CODE: -1',b'INSTRUMENTATION_CODE: 0')},'1.15','2.0','1.15','a'*40,'12345'),
         'invalid UTF8':({**good,'font':good['font']+b'\xff'},'1.15','2.0','1.15','a'*40,'12345'),
         'missing log':({**good,'font':b''},'1.15','2.0','1.15','a'*40,'12345'),
+        'incorrect plural one-test banner':({**good,'seed':good['seed'].replace(b'OK (1 test)',b'OK (1 tests)')},'1.15','2.0','1.15','a'*40,'12345'),
     }
     for label,args in bad.items():
         try:validate(*args)

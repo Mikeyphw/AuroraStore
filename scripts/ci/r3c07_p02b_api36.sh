@@ -80,7 +80,11 @@ instrument() {
   if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|INSTRUMENTATION_CODE: 0' "$OUT/$log"; then
     echo "R3C07_P02B_REFUSED_${label}_ANDROID" >&2; exit 1
   fi
-  grep -Fxq "OK ($count tests)" "$OUT/$log" || {
+  # AndroidJUnitRunner prints 'OK (1 test)' for one-test runs.
+  # Do not accept the synthetic but invalid 'OK (1 tests)' variant.
+  local noun='tests'
+  if [[ "$count" == 1 ]]; then noun='test'; fi
+  grep -Fxq "OK ($count $noun)" "$OUT/$log" || {
     echo "R3C07_P02B_REFUSED_${label}_COUNT" >&2; exit 1;
   }
   grep -Fxq 'INSTRUMENTATION_CODE: -1' "$OUT/$log" || {
