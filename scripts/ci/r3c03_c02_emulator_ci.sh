@@ -317,3 +317,8 @@ grep -Eq '^INSTRUMENTATION_CODE: -1' "$OUT/r3c07_p02a_signed_document_ui.txt" ||
 }
 python3 -B scripts/ci/r3c07_p02_receipt.py --log "$OUT/r3c07_p02a_signed_document_ui.txt" \
   --output "$OUT/R3C07_P02A_API36_UX_RECEIPT.json"
+
+# R3C07 P02B: consolidated API36 actual large-font + genuine process stop,
+# accessibility node semantics and accurate (non-installing) outcome labels.
+# Not actual TalkBack activation, user approval or publisher proof.
+bash scripts/ci/r3c07_p02b_api36.sh "$RUNNER" "$OUT"

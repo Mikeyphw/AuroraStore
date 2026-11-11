@@ -186,3 +186,8 @@ exec(compile((ROOT / 'scripts/ci/test_r3c07_hf02_receipt.py').read_text(encoding
 # evidence parser negatives; API36 UI execution is deliberately a separate gate.
 exec(compile((ROOT / 'scripts/ci/test_r3c07_p02_source.py').read_text(),
              'test_r3c07_p02_source.py', 'exec'))
+
+# R3C07 P02B consolidated source, negative, and receipt regressions.
+# Device qualification is measured separately by the hosted API36 R1D run.
+exec(compile((ROOT / 'scripts/ci/test_r3c07_p02b_source.py').read_text(),
+             'test_r3c07_p02b_source.py', 'exec'))
