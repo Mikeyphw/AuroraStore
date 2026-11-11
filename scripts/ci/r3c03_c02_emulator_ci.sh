@@ -293,6 +293,5 @@ receipt={'overall':'PASS','source_sha':sha,'run_id':run_id,'android_api':36,
          'actual_instrumentation_tests':5,'read_only_ui':True,
          'installation_qualified':False,'publisher_authenticated':False,
          'physical_device_qualified':False,'release_qualified':False}
-pathlib.Path(sys.argv[1]).write_text(json.dumps(receipt,sort_keys=True,indent=2)+'
-')
+pathlib.Path(sys.argv[1]).write_text(json.dumps(receipt,sort_keys=True,indent=2)+'\n',encoding='utf-8')
 R3C07_RECEIPT_PY

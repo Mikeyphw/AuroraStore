@@ -29,7 +29,29 @@ assert 'import android' not in SCRIPT.read_text(), 'P5 host receipt must remain 
 assert 'aurora-r1d-emulator.yml' in WORKFLOW.as_posix(), 'workflow path mismatch'
 assert R1D.count("name: Execute 40 R1D through R1G Android device tests and screenshots") == 1
 assert R1D.count('name: Upload source-bound emulator receipt and offline test logs') == 1
-assert R1D.count('uses: ReactiveCircus/android-emulator-runner@') == 1, 'duplicate emulator graph'
+# HF05: one clean-snapshot bootstrap, one historical qualification runner.
+# Both actions are SHA pinned. The bootstrap must not run any acceptance test.
+_emulator_action = 'uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d'
+_bootstrap_name = '      - name: Generate pre-install AVD snapshot only on cache miss\n'
+_qualifier_name = '      - name: Execute 40 R1D through R1G Android device tests and screenshots (KVM/API 36)\n'
+_post_name = '      - name: Verify explicitly opted-in R3C06 P5 evidence (no auto-qualification)\n'
+assert R1D.count('uses: ReactiveCircus/android-emulator-runner@') == 2, 'duplicate emulator graph'
+assert R1D.count(_emulator_action) == 2, 'emulator action identity changed or graph duplicated'
+assert all(R1D.count(n) == 1 for n in (_bootstrap_name, _qualifier_name, _post_name)), 'ambiguous emulator step boundaries'
+_bootstrap = R1D.split(_bootstrap_name, 1)[1].split(_qualifier_name, 1)[0]
+_qualification = R1D.split(_qualifier_name, 1)[1].split(_post_name, 1)[0]
+assert _bootstrap.count(_emulator_action) == 1 and _qualification.count(_emulator_action) == 1, 'duplicate qualification emulator graph'
+assert _bootstrap.count("if: steps.avd-cache.outputs.cache-hit != 'true'") == 2, 'AVD bootstrap/save not both cache-miss only'
+assert 'R3C07_HF03_PREINSTALL_AVD_SNAPSHOT_INITIALIZED' in _bootstrap, 'AVD bootstrap not read-only'
+assert R1D.count('uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7') == 1, 'clean AVD restore missing'
+assert R1D.index('uses: actions/cache/restore@') < R1D.index(_bootstrap_name), 'AVD cache restore not before initializer'
+assert _bootstrap.count('uses: actions/cache/save@8b402f58fbc84540c8b491a91e594a4576fec3d7') == 1, 'clean AVD save missing before qualification'
+assert _bootstrap.index('R3C07_HF03_PREINSTALL_AVD_SNAPSHOT_INITIALIZED') < _bootstrap.index('uses: actions/cache/save@'), 'AVD cache saved before initializer'
+assert 'uses: actions/cache/save@' not in _qualification, 'test state may enter cache'
+assert 'bash scripts/ci/r1d2_emulator_ci.sh' not in _bootstrap, 'acceptance tests run in bootstrap'
+assert 'bash scripts/ci/r1d2_emulator_ci.sh' in _qualification, 'qualification entrypoint missing'
+assert '-no-snapshot-save' in _qualification, 'qualification device state may be saved'
+assert R1D.count('bash scripts/ci/r1d2_emulator_ci.sh') == 1, 'qualification entrypoint duplicated'
 assert 'R3C06_ALLOW_LIVE_INSTALL' not in R1D.split('name: Build vanillaDebug application and instrumentation APKs')[0], 'non-opted default must be non-destructive'
 # P5 HF03: Android 36 'pm path' returns rc=1 for absent package on the
 # hosted emulator. A successful, populated user-0 package inventory (including

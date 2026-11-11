@@ -69,6 +69,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          python3 -B scripts/ci/test_r3c07_hf03_optimization.py
           python3 -B scripts/ci/aurora_ci_policy.py run-targeted --base "$BASE_SHA" --head "$HEAD_SHA"
 
   targeted-android:
@@ -107,3 +108,20 @@ jobs:
           set -euo pipefail
           # Generated schema changes may be code-facing, even if no Kotlin file changed.
           git diff --exit-code -- app/schemas/
+      - name: Verify, sign-check and seal exact-SHA targeted Android APK pair
+        env:
+          HEAD_SHA: ${{ needs.scope.outputs.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          python3 -B scripts/ci/r3c07_hf03_apk_pair.py publish \
+            --root . --sha "$HEAD_SHA" --out "$RUNNER_TEMP/aurora-r3c07-targeted-apks"
+      - name: Upload immutable source/run-bound targeted APK pair for R1D reuse
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: aurora-targeted-apks-${{ needs.scope.outputs.head_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/aurora-r3c07-targeted-apks/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7

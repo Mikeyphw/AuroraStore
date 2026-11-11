@@ -177,3 +177,7 @@ exec(compile((ROOT / 'scripts/ci/test_r3c06_p6_source.py').read_text(),
 # R3C07 P01: review UI source/security gate; device UX tests remain separate.
 exec(compile((ROOT / 'scripts/ci/test_r3c07_p01_ux.py').read_text(),
              'test_r3c07_p01_ux.py', 'exec'))
+
+# R3C07 P01 HF02: executable inline Python regression (positive + negative).
+exec(compile((ROOT / 'scripts/ci/test_r3c07_hf02_receipt.py').read_text(encoding='utf-8'),
+             'test_r3c07_hf02_receipt.py', 'exec'))

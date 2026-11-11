@@ -209,7 +209,9 @@ jobs:
           retention-days: 14
   unsigned-release:
     name: Compile unsigned vanilla release candidate (not certified)
-    needs: [source-contract, kotlin-format, root-gradle-format, android-lint, android]
+    # Run unsigned compilation in parallel; the full gate still requires
+    # success of all six original mandatory jobs before signing its tag.
+    needs: source-contract
     runs-on: ubuntu-24.04
     timeout-minutes: 70
     steps:

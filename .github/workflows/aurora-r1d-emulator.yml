@@ -22,6 +22,7 @@ on:
 
 permissions:
   contents: read
+  actions: read # Download only exact-source, completed, signed targeted artifacts.
 
 concurrency:
   group: aurora-r1d-${{ github.ref }}
@@ -51,6 +52,9 @@ jobs:
           python3 -B scripts/ci/check_r1e.py
           python3 -B scripts/ci/check_r1f.py
           python3 -B scripts/ci/check_r1g.py
+          # Execute the real R3C07 receipt heredoc before any SDK/Gradle work.
+          python3 -B scripts/ci/test_r3c07_hf02_receipt.py scripts/ci/r3c03_c02_emulator_ci.sh
+          python3 -B scripts/ci/test_r3c07_hf03_optimization.py
 
   emulator:
     name: R1D production Room DAO + watchdog + process restart on API 36
@@ -109,13 +113,34 @@ jobs:
               "$HOME/.android/cache"
             sleep "$(( attempt * 10 ))"
           done
+      - name: Reuse successful exact-SHA targeted APKs only after signed manifest verification
+        id: apk_reuse
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 -B scripts/ci/r3c07_hf03_apk_pair.py consume \
+            --root . --sha "$GITHUB_SHA" \
+            --tmp "$RUNNER_TEMP/aurora-r3c07-apk-reuse" --github-output "$GITHUB_OUTPUT"
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
+        if: steps.apk_reuse.outputs.reused != 'true'
       - name: Build vanillaDebug application and instrumentation APKs on GitHub
+        if: steps.apk_reuse.outputs.reused != 'true'
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
           ./gradlew --no-daemon --max-workers=2 :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest
+      - name: Seal actual APK bytes, matched signing identity and exact source/run provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B scripts/ci/r3c07_hf03_apk_pair.py finalize \
+            --root . --sha "$GITHUB_SHA" \
+            --tmp "$RUNNER_TEMP/aurora-r3c07-apk-reuse" \
+            --receipt "$RUNNER_TEMP/aurora-r3c03-c02/R3C07_HF03_APK_SOURCE_RECEIPT.json" \
+            --reused '${{ steps.apk_reuse.outputs.reused }}'
       - name: Provision Android 36 platform for opt-in signed fixture (manual only)
         if: ${{ inputs.r3c06_live_install == true }}
         shell: bash
@@ -179,6 +204,50 @@ jobs:
           test -c /dev/kvm || { echo R1D_KVM_UNAVAILABLE >&2; exit 1; }
           if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then sudo chmod a+rw /dev/kvm; fi
           test -r /dev/kvm && test -w /dev/kvm
+      - name: Fingerprint the installed API36 image, emulator and clean AVD configuration
+        id: avd_identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="$ANDROID_SDK_ROOT/system-images/android-36/google_apis/x86_64/source.properties"
+          emulator="$ANDROID_SDK_ROOT/emulator/emulator"
+          test -s "$image" && test -x "$emulator"
+          key="$({ cat "$image"; "$emulator" -version; printf '%s\n' 'api36-google_apis-x86_64-pixel_6-2cores-2048M-3072M'; } | sha256sum | cut -d' ' -f1)"
+          [[ "$key" =~ ^[a-f0-9]{64}$ ]] || exit 1
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - name: Restore immutable, clean pre-install API36 AVD snapshot
+        id: avd-cache
+        uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2, Node.js 24
+        with:
+          path: ~/.android/avd/*
+          key: AVD_SNAPSHOT_CACHE_V2-${{ runner.os }}-${{ runner.arch }}-${{ steps.avd_identity.outputs.key }}
+      - name: Generate pre-install AVD snapshot only on cache miss
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 2048M
+          disk-size: 3072M
+          force-avd-creation: false
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: |
+            test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = '36'
+            if adb shell pm list packages | grep -Fq 'package:com.aurora.store.debug'; then
+              echo R3C07_HF03_AVD_REFUSED_NOT_CLEAN >&2
+              exit 1
+            fi
+            echo R3C07_HF03_PREINSTALL_AVD_SNAPSHOT_INITIALIZED
+      - name: Save clean pre-install snapshot BEFORE running any Android tests
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2, Node.js 24
+        with:
+          path: ~/.android/avd/*
+          key: AVD_SNAPSHOT_CACHE_V2-${{ runner.os }}-${{ runner.arch }}-${{ steps.avd_identity.outputs.key }}
       - name: Execute 40 R1D through R1G Android device tests and screenshots (KVM/API 36)
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         env:
@@ -193,8 +262,9 @@ jobs:
           cores: 2
           ram-size: 2048M
           disk-size: 3072M
+          force-avd-creation: false
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: bash scripts/ci/r1d2_emulator_ci.sh
       - name: Verify explicitly opted-in R3C06 P5 evidence (no auto-qualification)
         if: ${{ inputs.r3c06_live_install == true || inputs.r3c06_bundletool_matrix == true }}
