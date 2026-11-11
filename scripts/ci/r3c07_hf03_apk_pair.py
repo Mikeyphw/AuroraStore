@@ -23,6 +23,15 @@ import subprocess
 import sys
 import tempfile
 
+# Reuse Aurora's independently qualified SDK37-aware certificate parser.
+# It distinguishes a single signer repeated across V2/V3 schemes from
+# multiple signer identities, malformed evidence, and certificate drift.
+from r3c06_bundletool_matrix import (
+    Refused as SigningProofRefused,
+    signed_schemes as checked_signing_schemes,
+    single_signer as checked_single_signer,
+)
+
 REPO = 'Mikeyphw/AuroraStore-Standalone'
 BRANCH = 'feature/r3c04-c02-c08-import-handoff-archives-20261109'
 WORKFLOW = '.github/workflows/aurora-targeted.yml'
@@ -43,7 +52,6 @@ APK_LIMIT = 150 * 1024 * 1024
 ZIP_LIMIT = 310 * 1024 * 1024
 ARTIFACT_LIMIT = 310 * 1024 * 1024
 SHA = re.compile(r'^[0-9a-f]{40}$')
-CERT = re.compile(r'^Signer #1 certificate SHA-256 digest:\s*([0-9a-fA-F]{64})$', re.M)
 
 class Refused(RuntimeError):
     pass
@@ -94,9 +102,19 @@ def check_apk(path: Path, role: str) -> dict:
     raw=path.read_bytes()
     ensure(raw.startswith(b'PK'), f'{role} not an APK ZIP')
     apksigner=find_tool('apksigner')
-    cert_output=run([apksigner,'verify','--print-certs',str(path)],timeout=90)
-    found=CERT.findall(cert_output)
-    ensure(len(found)==1, f'{role} missing exactly one validated signer certificate')
+    # SDK37 prints one certificate line per signing scheme, unlike SDK36.
+    # Cryptographic verification is mandatory for the actual API36 window;
+    # signer text alone is never accepted as evidence of verification.
+    cert_output=run([apksigner,'verify','--verbose','--print-certs',
+                     '--min-sdk-version','36','--max-sdk-version','36',
+                     str(path)],timeout=90)
+    try:
+        certificate=checked_single_signer(cert_output)
+        schemes=checked_signing_schemes(cert_output)
+    except SigningProofRefused as exc:
+        raise Refused(f'R3C07_HF06_SIGNER_REFUSED: {role}: {exc}') from exc
+    ensure(schemes.get('2') is True or schemes.get('3') is True,
+           f'{role} lacks verified APK v2/v3 signing scheme on API36')
     aapt=find_tool('aapt')
     package=run([aapt,'dump','badging',str(path)],timeout=90)
     packages=re.findall(r"^package:\s+name='([^']+)'",package,re.M)
@@ -108,7 +126,7 @@ def check_apk(path: Path, role: str) -> dict:
                'HiltInstrumentationTestRunner' in xml,
                'AndroidTest APK does not target the real Hilt instrumented application')
     return {'filename':NAMES[role], 'size':len(raw), 'sha256':sha(raw),
-            'package':want, 'signer_sha256':found[0].lower()}
+            'package':want, 'signer_sha256':certificate}
 
 
 def validate_pair(app: Path, test: Path) -> dict:

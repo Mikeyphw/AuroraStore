@@ -196,7 +196,7 @@ class PairNegative(unittest.TestCase):
         tool.write_text('''#!/usr/bin/env python3
 import sys
 if 'verify' in sys.argv:
- print('Signer #1 certificate SHA-256 digest: ' + 'a1'*32)
+ print('Verified using v2 scheme: true\nNumber of signers: 1\nV2 Signer: certificate SHA-256 digest: ' + 'a1'*32 + '\nV3.0 Signer: certificate SHA-256 digest: ' + 'a1'*32)
 elif 'badging' in sys.argv:
  role='androidTest' if 'androidTest' in sys.argv[-1] else 'app'
  print("package: name='com.aurora.store.debug" + (".test" if role=='androidTest' else '') + "'")
@@ -211,7 +211,9 @@ elif 'xmltree' in sys.argv:
         def simulated_android_cli(argv, *, binary=False, timeout=120):
             if argv and argv[0]==str(tool):
                 if 'verify' in argv:
-                    return 'Signer #1 certificate SHA-256 digest: ' + 'a1'*32
+                    return ('Verified using v2 scheme: true\nNumber of signers: 1\n'
+                            'V2 Signer: certificate SHA-256 digest: ' + 'a1'*32 + '\n'
+                            'V3.0 Signer: certificate SHA-256 digest: ' + 'a1'*32)
                 if 'badging' in argv:
                     role='androidTest' if 'androidTest' in argv[-1] else 'app'
                     return "package: name='com.aurora.store.debug" + ('.test' if role=='androidTest' else '') + "'"
@@ -222,6 +224,71 @@ elif 'xmltree' in sys.argv:
         fake_run=mock.patch.object(ci,'run',side_effect=simulated_android_cli)
         fake_run.start()
         self.addCleanup(fake_run.stop)
+
+    # HF06: actual SDK37 uses per-scheme certificate lines. The old mock only
+    # covered SDK36 and missed the hosted regression. Both formats remain
+    # supported, but v2/v3 verified cryptographic evidence is mandatory.
+    @staticmethod
+    def _sdk37(scheme_v2=True, scheme_v3=True, digest_a='a1', digest_b='a1'):
+        lines=['Verified using v2 scheme: '+str(scheme_v2).lower(),
+               'Verified using v3 scheme: '+str(scheme_v3).lower(),
+               'Number of signers: 1',
+               'V2 Signer: certificate SHA-256 digest: '+digest_a*32,
+               'V3.0 Signer: certificate SHA-256 digest: '+digest_b*32]
+        return '\n'.join(lines)
+
+    def _with_signature(self, output):
+        original=ci.run
+        def fake(argv, *, binary=False, timeout=120):
+            if len(argv)>1 and argv[1]=='verify':
+                return output
+            return original(argv,binary=binary,timeout=timeout)
+        return mock.patch.object(ci,'run',side_effect=fake)
+
+    def test_hf06_sdk37_v2_v3_single_signer_accepted(self):
+        with self._with_signature(self._sdk37()):
+            cert=ci.check_apk(self.root/ci.ROLE_PATHS['app']/'app.apk','app')
+        self.assertEqual(cert['signer_sha256'],'a1'*32)
+
+    def test_hf06_legacy_signer_output_with_verified_scheme_accepted(self):
+        out=('Verified using v2 scheme: true\nNumber of signers: 1\n'
+             'Signer #1 certificate SHA-256 digest: '+'a1'*32)
+        with self._with_signature(out):
+            cert=ci.check_apk(self.root/ci.ROLE_PATHS['app']/'app.apk','app')
+        self.assertEqual(cert['signer_sha256'],'a1'*32)
+
+    def test_hf06_signer_mismatches_and_unsafe_evidence_refused(self):
+        good=self._sdk37()
+        samples={
+            'different_certs_across_schemes':self._sdk37(digest_b='b2'),
+            'all_schemes_unverified':self._sdk37(False,False),
+            'duplicate_v2_label':good+'\nV2 Signer: certificate SHA-256 digest: '+'a1'*32,
+            'multiple_signer_count':good.replace('Number of signers: 1','Number of signers: 2'),
+            'explicit_second_signer':good+'\nV2 Signer #2: certificate SHA-256 digest: '+'a1'*32,
+            'malformed_label':good.replace('V2 Signer:','Totally trusted Signer:'),
+            'digest_without_label':good.replace('V2 Signer: certificate','certificate'),
+            'no_certificate': 'Verified using v2 scheme: true\nNumber of signers: 1',
+            'duplicate_scheme_status':'Verified using v2 scheme: true\n'+good,
+        }
+        path=self.root/ci.ROLE_PATHS['app']/'app.apk'
+        for name,out in samples.items():
+            with self.subTest(name=name), self._with_signature(out):
+                with self.assertRaises(ci.Refused):
+                    ci.check_apk(path,'app')
+
+    def test_hf06_android36_scoped_verification_invocation(self):
+        original=ci.run
+        seen=[]
+        def capture(argv, *, binary=False, timeout=120):
+            if len(argv)>1 and argv[1]=='verify':
+                seen.append(list(argv))
+            return original(argv,binary=binary,timeout=timeout)
+        with mock.patch.object(ci,'run',side_effect=capture):
+            ci.check_apk(self.root/ci.ROLE_PATHS['app']/'app.apk','app')
+        self.assertEqual(len(seen),1)
+        args=seen[0]
+        self.assertEqual(args[1:4],['verify','--verbose','--print-certs'])
+        self.assertEqual(args[4:8],['--min-sdk-version','36','--max-sdk-version','36'])
 
     def test_publish_signs_exact_run_and_file_bytes(self):
         out=self.root/'pair'
