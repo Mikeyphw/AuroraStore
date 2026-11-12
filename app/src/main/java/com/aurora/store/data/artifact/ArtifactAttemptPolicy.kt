@@ -73,7 +73,9 @@ internal object ArtifactAttemptPolicy {
                 }
             }
             is Event.BytesStaged -> {
-                if (current.stage != Stage.USER_SELECTED_DOCUMENT || event.sizeBytes <= 0L ||
+                if (
+                    current.stage != Stage.USER_SELECTED_DOCUMENT ||
+                    event.sizeBytes <= 0L ||
                     !SHA256_PATTERN.matches(event.copiedSha256)
                 ) {
                     null
