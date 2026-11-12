@@ -33,7 +33,10 @@ class ArtifactAttemptPolicyTest {
     @Test
     fun rawUrisAndSecretsAreNotStoredInLabels() {
         val unsafe = listOf(
-            "content://picked/item", "https://site/file.apk", "repo?token=secret", "x\n"
+            "content://picked/item",
+            "https://site/file.apk",
+            "repo?token=secret",
+            "x\n"
         )
         for (label in unsafe) {
             assertThat(runCatching { source.copy(displayOrigin = label) }.isFailure).isTrue()
@@ -74,7 +77,13 @@ class ArtifactAttemptPolicyTest {
     fun badDigestOrEmptyCopyIsRejected() {
         val selected = ArtifactAttemptPolicy.reduce(attempt, null, Event.DocumentSelected(attempt))
         for (sha in listOf("", "A".repeat(64), "f".repeat(63), "g".repeat(64))) {
-            assertThat(ArtifactAttemptPolicy.reduce(attempt, selected, Event.BytesStaged(attempt, sha, 42))).isNull()
+            assertThat(
+                ArtifactAttemptPolicy.reduce(
+                    attempt,
+                    selected,
+                    Event.BytesStaged(attempt, sha, 42)
+                )
+            ).isNull()
         }
         assertThat(
             ArtifactAttemptPolicy.reduce(
@@ -89,23 +98,59 @@ class ArtifactAttemptPolicyTest {
     fun staleGenerationsAndVersionsAreRejected() {
         val old = attempt.copy(attemptGeneration = 9000)
         val wrongVersion = attempt.copy(versionCode = 124)
-        assertThat(ArtifactAttemptPolicy.reduce(attempt, null, Event.DocumentSelected(old))).isNull()
-        assertThat(ArtifactAttemptPolicy.reduce(attempt, null, Event.DocumentSelected(wrongVersion))).isNull()
+        assertThat(
+            ArtifactAttemptPolicy.reduce(
+                attempt,
+                null,
+                Event.DocumentSelected(old)
+            )
+        ).isNull()
+        assertThat(
+            ArtifactAttemptPolicy.reduce(
+                attempt,
+                null,
+                Event.DocumentSelected(wrongVersion)
+            )
+        ).isNull()
     }
 
     @Test
     fun foreignSourceCannotBorrowThisGeneration() {
-        val foreign = attempt.copy(provenance = ArtifactProvenance(ArtifactSource.APKMIRROR_BROWSER_HANDOFF))
-        assertThat(ArtifactAttemptPolicy.reduce(attempt, null, Event.DocumentSelected(foreign))).isNull()
+        val foreign = attempt.copy(
+            provenance = ArtifactProvenance(ArtifactSource.APKMIRROR_BROWSER_HANDOFF)
+        )
+        assertThat(
+            ArtifactAttemptPolicy.reduce(
+                attempt,
+                null,
+                Event.DocumentSelected(foreign)
+            )
+        ).isNull()
         val wrongSnapshot = ArtifactAttemptPolicy.Snapshot(foreign, Stage.USER_SELECTED_DOCUMENT)
-        assertThat(ArtifactAttemptPolicy.reduce(attempt, wrongSnapshot, Event.DocumentSelected(attempt))).isNull()
+        assertThat(
+            ArtifactAttemptPolicy.reduce(
+                attempt,
+                wrongSnapshot,
+                Event.DocumentSelected(attempt)
+            )
+        ).isNull()
     }
 
     @Test
     fun duplicateSelectionOrStagingCannotReplay() {
         val selected = ArtifactAttemptPolicy.reduce(attempt, null, Event.DocumentSelected(attempt))
-        assertThat(ArtifactAttemptPolicy.reduce(attempt, selected, Event.DocumentSelected(attempt))).isNull()
-        val staged = ArtifactAttemptPolicy.reduce(attempt, selected, Event.BytesStaged(attempt, "a".repeat(64), 300))
+        assertThat(
+            ArtifactAttemptPolicy.reduce(
+                attempt,
+                selected,
+                Event.DocumentSelected(attempt)
+            )
+        ).isNull()
+        val staged = ArtifactAttemptPolicy.reduce(
+            attempt,
+            selected,
+            Event.BytesStaged(attempt, "a".repeat(64), 300)
+        )
         assertThat(
             ArtifactAttemptPolicy.reduce(
                 attempt,
@@ -120,7 +165,13 @@ class ArtifactAttemptPolicyTest {
         val selected = ArtifactAttemptPolicy.reduce(attempt, null, Event.DocumentSelected(attempt))
         val cancelled = ArtifactAttemptPolicy.reduce(attempt, selected, Event.Cancelled(attempt))
         assertThat(cancelled?.stage).isEqualTo(Stage.CANCELLED)
-        assertThat(ArtifactAttemptPolicy.reduce(attempt, cancelled, Event.DocumentSelected(attempt))).isNull()
+        assertThat(
+            ArtifactAttemptPolicy.reduce(
+                attempt,
+                cancelled,
+                Event.DocumentSelected(attempt)
+            )
+        ).isNull()
         assertThat(
             ArtifactAttemptPolicy.reduce(
                 attempt,
@@ -135,7 +186,13 @@ class ArtifactAttemptPolicyTest {
         val failed = ArtifactAttemptPolicy.reduce(attempt, null, Event.Failed(attempt))
         assertThat(failed?.stage).isEqualTo(Stage.FAILED)
         assertThat(failed?.stagedSha256).isNull()
-        assertThat(ArtifactAttemptPolicy.reduce(attempt, failed, Event.DocumentSelected(attempt))).isNull()
+        assertThat(
+            ArtifactAttemptPolicy.reduce(
+                attempt,
+                failed,
+                Event.DocumentSelected(attempt)
+            )
+        ).isNull()
     }
 
     @Test
