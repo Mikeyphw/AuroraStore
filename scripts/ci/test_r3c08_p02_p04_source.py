@@ -109,7 +109,21 @@ def host_guard(s):
             'trap ' in s and
             all('$CLASS#'+m in s for m in METHODS) and
             'pm install ' not in s and 'ksud module install' not in s and
-            'r3c08_p02_p04_android_diagnostics.txt' in s)
+            'r3c08_p02_p04_android_diagnostics.txt' in s and
+            'r3c08_p02_p04_unqualified_attempt1.txt' in s and
+            'r3c08_p02_p04_unqualified_attempt1_process_diagnostics.txt' in s and
+            'INSTRUMENTATION_RESULT: shortMsg=Process crashed.' in s and
+            'R3C08_P02_P04_COMPLETE_RETRY_PASS' in s and
+            'first_unqualified=0' in s and
+            'for attempt in 1 2; do' in s and
+            'success=1' in s and
+            '[[ "$success" == 1 ]]' in s and
+            'R3C08_P02_P04_REFUSED_NO_COMPLETE_PASS' in s and
+            'INSTRUMENTATION_STATUS_CODE: (0|-[12])' in s and
+            'process_diagnostics' in s and
+            "grep -Fxq 'OK (21 tests)'" in s and
+            s.count('timeout 25 adb logcat -c')==1 and
+            s.count('timeout 25 adb shell am force-stop com.aurora.store.debug.test')==2)
 
 # P02 audit must be truthful: only a real separately running Android test provider
 # process (not a routine FileNotFoundException) can satisfy the process-death claim.
@@ -180,6 +194,9 @@ for label,source,old,new,guard in (
  ('remove-P04-consent-matrix',test,'p04_unverifiedInstalledIdentityAndIndependentApprovalMatrix', 'missingP04ApprovalMethod',test_guard),
  ('remove-P04-OS-replay',test,'ArtifactSessionReceiptPolicy.next(', 'println(',test_guard),
  ('remove-test-selector',host,'$CLASS#p04_consentCannotOverrideSignerMismatch','$CLASS#missingMethod',host_guard),
+ ('remove-early-crash-gate',host,'INSTRUMENTATION_RESULT: shortMsg=Process crashed.','some-other-error',host_guard),
+ ('remove-success-counter',host,'[[ "$success" == 1 ]]','[[ "$attempt" == 2 ]]',host_guard),
+ ('remove-unqualified-preservation',host,'r3c08_p02_p04_unqualified_attempt1.txt','discarded-attempt.log',host_guard),
 ):
     mutated=source.replace(old,new) if label in ('remove-stage-cleanup','remove-signed-split-check','remove-feature-veto','remove-identity-veto','remove-Play-isolation','remove-P04-forged-tier','remove-P04-browser-lease','remove-P04-OS-replay') else source.replace(old,new,1)
     check(mutated!=source and not guard(mutated), 'negative test did not reject '+label)
@@ -199,5 +216,5 @@ check(p05_result.returncode==0 and 'R3C08_P05_SOURCE_SECURITY_PASS' in p05_resul
       'P05 final signoff source/security regression failed: '+
       (p05_result.stdout+p05_result.stderr)[-1500:])
 print('R3C08_P02_P04_SOURCE_PASS: twenty-one independently selected API36 tests, '
-      'eighteen guard mutations, 34 P02-P04 receipt negatives, real package-state invariant, '
+      'twenty-one guard mutations, 34 P02-P04 receipt negatives, real package-state invariant, '
       'ordered P01 source-bound receipt and no install/rollback overclaim')
