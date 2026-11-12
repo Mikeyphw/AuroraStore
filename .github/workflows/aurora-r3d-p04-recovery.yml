@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# INERT DEFAULT-BRANCH REGISTRATION ONLY: this workflow NEVER installs anything.
+# To run the real P04 workflow, explicitly dispatch the trusted feature ref.
+name: Aurora R3D P04 — Disposable Recovery and Adversarial Signoff
+
+on:
+  workflow_dispatch:
+    inputs:
+      authorization:
+        description: 'Only the feature branch can run disposable OS recovery tests'
+        required: true
+        type: choice
+        default: DO_NOT_RUN
+        options:
+          - DO_NOT_RUN
+          - I_AUTHORIZE_R3D_P04_DISPOSABLE_API36_RECOVERY
+
+permissions: {}
+
+jobs:
+  registration-only:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'This master workflow is inert; dispatch the feature ref.'

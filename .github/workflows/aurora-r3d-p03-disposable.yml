@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# INERT DEFAULT-BRANCH REGISTRATION ONLY: this workflow NEVER installs anything.
+# To run the real P03 workflow, explicitly dispatch the trusted feature ref.
+name: Aurora R3D P03 — Disposable API36 Install Acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      authorization:
+        description: 'Only the feature branch can run disposable OS installation tests'
+        required: true
+        type: choice
+        default: DO_NOT_RUN
+        options:
+          - DO_NOT_RUN
+          - I_AUTHORIZE_DISPOSABLE_API36_EMULATOR_INSTALLS
+
+permissions: {}
+
+jobs:
+  registration-only:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'This master workflow is inert; dispatch the feature ref.'
