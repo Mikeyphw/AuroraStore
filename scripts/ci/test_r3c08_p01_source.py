@@ -12,8 +12,10 @@ ROOT=pathlib.Path(__file__).resolve().parents[2]
 A=ROOT/'app/src/main/java/com/aurora/store/data/artifact/ArtifactImportActivity.kt'
 MANIFEST=ROOT/'app/src/androidTest/AndroidManifest.xml'
 TEST=ROOT/'app/src/androidTest/java/com/aurora/store/data/artifact/ArtifactR3C08P01DeviceTest.kt'
-DATA=ROOT/'app/src/androidTest/java/com/aurora/store/data/artifact/R3C08GrantDataProvider.kt'
-CONTROL=ROOT/'app/src/androidTest/java/com/aurora/store/data/artifact/R3C08GrantControlProvider.kt'
+DATA=ROOT/'app/src/androidTest/java/com/aurora/store/data/artifact/R3C08GrantDataProvider.java'
+RETIRED_DATA=ROOT/'app/src/androidTest/java/com/aurora/store/data/artifact/R3C08GrantDataProvider.kt'
+CONTROL=ROOT/'app/src/androidTest/java/com/aurora/store/data/artifact/R3C08GrantControlProvider.java'
+RETIRED_CONTROL=ROOT/'app/src/androidTest/java/com/aurora/store/data/artifact/R3C08GrantControlProvider.kt'
 RUNNER=ROOT/'scripts/ci/r3c03_c02_emulator_ci.sh'
 HOST=ROOT/'scripts/ci/r3c08_p01_api36.sh'
 RECEIPT=ROOT/'scripts/ci/r3c08_p01_receipt.py'
@@ -24,11 +26,12 @@ NS='{http://schemas.android.com/apk/res/android}'
 def need(ok: bool, why: str):
     if not ok: raise AssertionError('R3C08_P01_SOURCE_REFUSED: '+why)
 
-for file in (A,MANIFEST,TEST,DATA,CONTROL,RUNNER,HOST,RECEIPT,CI,AGG):
+for file in (A,MANIFEST,TEST,DATA,CONTROL,RETIRED_DATA,RETIRED_CONTROL,RUNNER,HOST,RECEIPT,CI,AGG):
     need(file.is_file(), 'missing '+str(file))
 activity=A.read_text();manifest=MANIFEST.read_text();test=TEST.read_text()
 data=DATA.read_text();control=CONTROL.read_text();runner=RUNNER.read_text()
 host=HOST.read_text();ci=CI.read_text();agg=AGG.read_text()
+retired_data=RETIRED_DATA.read_text();retired_control=RETIRED_CONTROL.read_text()
 
 callback=activity.split('registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->',1)
 need(len(callback)==2,'no real picker callback')
@@ -57,12 +60,16 @@ need('R3C08GrantDataProvider' not in (ROOT/'app/src/main/AndroidManifest.xml').r
      'R3C08GrantDataProvider' not in (ROOT/'app/src/debug/AndroidManifest.xml').read_text(),
      'adversarial fixture leaked into production/debug app')
 need('getPackagesForUid(Binder.getCallingUid())' in control and
-     'targetPackage !in packages' in control and
-     'ctx.grantUriPermission(' in control and 'ctx.revokeUriPermission(' in control,
-     'control provider must authenticate exact target UID and issue/revoke OS grants')
+     'Arrays.asList(packages).contains(TARGET)' in control and
+     'if (!allowed || arg != null' in control and
+     'ctx.grantUriPermission(' in control and 'ctx.revokeUriPermission(' in control and
+     'public final class R3C08GrantControlProvider extends ContentProvider' in control,
+     'framework-only control provider must authenticate exact target UID and issue/revoke OS grants')
 need('ParcelFileDescriptor.MODE_READ_ONLY' in data and
-     'getType(uri: Uri)' in data and 'Array<Any?>(columns.size)' in data,
-     'isolated test provider must serve bounded read-only actual APK bytes')
+     'public String getType(Uri uri)' in data and
+     'final Object[] row = new Object[cols.length]' in data and
+     'public final class R3C08GrantDataProvider extends ContentProvider' in data,
+     'framework-only test provider must serve read-only actual APK bytes')
 need(test.count('@Test fun ') == 3,
      'exact three independent R3C08 Android cases required')
 for token in ('checkUriPermission(', 'PackageManager.PERMISSION_DENIED',
@@ -95,7 +102,7 @@ for label,source,needle,new in (
     ('cancel-only-UI',callback,'invalidateCurrentImport(','clearReview('),
     ('removed-private-read-permission',manifest,'android:readPermission=','android:fakePermission='),
     ('missing-revoke',control,'ctx.revokeUriPermission(','ctx.grantUriPermission('),
-    ('removed-uid-auth',control,'targetPackage !in packages','false'),
+    ('removed-uid-auth',control,'Arrays.asList(packages).contains(TARGET)','true'),
     ('host-bypass-count',host,"grep -Fxq 'OK (3 tests)'",'true # unsafe'),
     ('runner-omitted',runner,'bash scripts/ci/r3c08_p01_api36.sh','echo skipped'),
 ):
@@ -106,7 +113,7 @@ for label,source,needle,new in (
     elif label=='removed-private-read-permission':need('android:readPermission="com.aurora.store.r3c08.TEST_SAF_READ"' not in altered,
                                                        'manifest mutation ineffective')
     elif label=='missing-revoke':need('ctx.revokeUriPermission(' not in altered,'revoke mutation ineffective')
-    elif label=='removed-uid-auth':need('targetPackage !in packages' not in altered,'UID mutation ineffective')
+    elif label=='removed-uid-auth':need('Arrays.asList(packages).contains(TARGET)' not in altered,'UID mutation ineffective')
     elif label=='host-bypass-count':need("grep -Fxq 'OK (3 tests)'" not in altered,'host mutation ineffective')
     else:need('bash scripts/ci/r3c08_p01_api36.sh "$RUNNER" "$OUT"' not in altered,
               'runner mutation ineffective')
@@ -144,4 +151,47 @@ for label,actual,old,new in (
     need(altered!=actual,'HF02 mutation anchor absent: '+label)
     need(old not in altered,'HF02 mutation ineffective: '+label)
 print('R3C08_P01_HF02_GUARDED_CLEANUP_AND_CRASH_DIAGNOSTICS_PASS: six negative mutations')
+# HF03: providers are actually loaded in the separate .test APK process;
+# Kotlin's Intrinsics are not on its classpath. They MUST be framework-only Java.
+for name,java,stub in (
+    ('R3C08GrantDataProvider',data,retired_data),
+    ('R3C08GrantControlProvider',control,retired_control),
+):
+    need(java.count('public final class '+name+' extends ContentProvider')==1,
+         'HF03 separate-process Java ContentProvider absent: '+name)
+    need('package com.aurora.store.data.artifact;' in java,
+         'HF03 provider package differs from AndroidManifest: '+name)
+    need('import kotlin.' not in java and 'kotlin.jvm.internal.' not in java,
+         'HF03 test-APK provider links Kotlin runtime')
+    need('R3C08_P01_HF03_PROVIDER_MOVED_TO_FRAMEWORK_ONLY_JAVA' in stub and
+         'class '+name not in stub,
+         'HF03 conflicting Kotlin ContentProvider still declared: '+name)
+need('private static final String TARGET = "com.aurora.store.debug";' in control and
+     'if (!allowed || arg != null || (extras != null && !extras.isEmpty()))' in control,
+     'HF03 exact target package, caller authorization or extras rejection weakened')
+need('"grant".equals(method)' in control and '"revoke".equals(method)' in control and
+     'throw new IllegalArgumentException("Unknown fixture control")' in control,
+     'HF03 missing exact grant/revoke/unknown-method policy')
+need('!"r".equals(mode)' in data and '"/signed.apk".equals(uri.getPath())' in data,
+     'HF03 read-only path/mode gate removed')
+for label,whole,old,new,required in (
+    ('reintroduce-Kotlin-control',retired_control,'// R3C08_P01_HF03_PROVIDER_MOVED_TO_FRAMEWORK_ONLY_JAVA',
+        'class R3C08GrantControlProvider : ContentProvider()','class R3C08GrantControlProvider'),
+    ('reintroduce-Kotlin-data',retired_data,'// R3C08_P01_HF03_PROVIDER_MOVED_TO_FRAMEWORK_ONLY_JAVA',
+        'class R3C08GrantDataProvider : ContentProvider()','class R3C08GrantDataProvider'),
+    ('remove-UID-gate',control,'Arrays.asList(packages).contains(TARGET)','true',
+        'Arrays.asList(packages).contains(TARGET)'),
+    ('remove-control-readonly',control,'throw new SecurityException("Control endpoint cannot serve document bytes")',
+        'return null','throw new SecurityException("Control endpoint cannot serve document bytes")'),
+    ('allow-write-data',data,'if (!"r".equals(mode))','if (false)',
+        'if (!"r".equals(mode))'),
+    ('remove-revoke',control,'ctx.revokeUriPermission(','ctx.grantUriPermission(',
+        'ctx.revokeUriPermission('),
+    ('remove-validation-method',control,'throw new IllegalArgumentException("Unknown fixture control")',
+        'return new Bundle()','throw new IllegalArgumentException("Unknown fixture control")'),
+):
+    mutated=whole.replace(old,new,1)
+    need(mutated != whole and (required in mutated if label.startswith('reintroduce-') else required not in mutated),
+         'HF03 negative mutation ineffective: '+label)
+print('R3C08_P01_HF03_JAVA_TEST_APK_CLASSLOADER_GUARD_PASS: 7 mutation cases')
 print('R3C08_P01_SOURCE_PASS: independent actual Android URI grant/revoke fixture, fail-closed cancel, 3 API36 cases, 13 receipt negatives and 6 source mutations')
