@@ -14,7 +14,7 @@ ROOT=Path(__file__).resolve().parents[2]
 CI=ROOT/'scripts/ci'
 sys.path.insert(0,str(CI))
 from r3d_p03_fixture import PACKAGE, verify, manifest
-from r3d_p03_disposable import execute, SERIAL
+from r3d_p03_disposable import execute, SERIAL, Refused, parse_device_inventory
 
 class FakeAndroid:
     def __init__(self, *, initial=None, cancel_changes=False, bad_upgrade_data=False,
@@ -63,6 +63,35 @@ def fixtures():
     return {'_folder':'/nonexistent','apks':{key:{'file':key+'.apk',
         'version_code':v,'sha256':'f'*64,'signing_certificate_sha256':('a' if key!='v3_wrong_signer' else 'b')*64}
         for key,v in (('v1',1),('v2',2),('v3_wrong_signer',3))}}
+
+class AndroidInventoryFormatContract(unittest.TestCase):
+    def test_realistic_space_and_tab_separated_online_emulator(self):
+        for separator in ('\t','    ', ' '):
+            for line_end in ('\n', '\r\n'):
+                raw='List of devices attached'+line_end+'emulator-5554'+separator+'device product:sdk_gphone'+line_end
+                self.assertEqual(parse_device_inventory(raw),[('emulator-5554','device')])
+
+    def test_extra_physical_offline_unauthorized_and_duplicate_refused(self):
+        cases=(
+            'emulator-5554 device\nR5CT12345 device\n',
+            'emulator-5554 device\nR5CT12345 offline\n',
+            'emulator-5554 device\nemulator-5554 device\n',
+            'emulator-5554 offline\n',
+            'emulator-5554 unauthorized\n',
+            'R5CT12345 device\n',
+            'emulator-5556 device\n',
+            'emulator-5554\n',
+            'emulator-5554 device\nADB unknown diagnostic\n',
+            '',
+        )
+        for item in cases:
+            with self.subTest(inventory=item),self.assertRaises(Refused):
+                parse_device_inventory('List of devices attached\n'+item)
+
+    def test_missing_header_and_unbounded_output_refused(self):
+        for sample in ('emulator-5554 device\n',
+                       'List of devices attached\n'+(' '*16400)):
+            with self.assertRaises(Refused): parse_device_inventory(sample)
 
 class FixtureContract(unittest.TestCase):
     def test_honest_manifest_packages(self):

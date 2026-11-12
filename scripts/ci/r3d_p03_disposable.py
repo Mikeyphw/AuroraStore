@@ -36,6 +36,29 @@ def command(args, *, allow_failure=False, seconds=120):
         raise Refused('command failed '+str(args[:3])+' rc='+str(p.returncode)+' '+output[-500:])
     return p.returncode,output
 
+def parse_device_inventory(output):
+    """Fail closed on ANY extra ADB target; accept tabs or spaces only.
+
+    Preserve the exact physical-device exclusion and online/emulator requirements;
+    this fixes only the ADB CLI column-separator assumption.
+    """
+    need(isinstance(output,str) and len(output)<=16384,
+         'invalid or oversized ADB inventory')
+    lines=output.splitlines()
+    need(bool(lines) and lines[0].strip()=='List of devices attached',
+         'missing ADB device inventory header')
+    records=[]
+    for line in lines[1:]:
+        if not line.strip():
+            continue
+        columns=line.split()
+        need(len(columns)>=2 and columns[0] and columns[1],
+             'malformed ADB inventory line')
+        records.append((columns[0],columns[1]))
+    need(records==[(SERIAL,'device')],
+         'exactly one online disposable emulator required; ADB inventory='+repr(records[:8]))
+    return records
+
 class Android:
     def __init__(self, serial=SERIAL):
         need(serial==SERIAL, 'only private emulator-5554 is allowed')
@@ -49,8 +72,7 @@ class Android:
 
     def guard(self):
         _, devs = command(('adb','devices','-l'))
-        ready = [line.split()[0] for line in devs.splitlines()[1:] if '\tdevice' in line]
-        need(ready == [SERIAL], 'exactly one online disposable emulator required')
+        parse_device_inventory(devs)
         _, marker = self.shell('getprop','ro.kernel.qemu')
         need(marker.strip()=='1', 'not an Android emulator; physical devices forbidden')
         _, sdk = self.shell('getprop','ro.build.version.sdk')

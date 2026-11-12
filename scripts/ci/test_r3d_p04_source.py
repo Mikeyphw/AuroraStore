@@ -237,6 +237,27 @@ class P04AdversarialTests(unittest.TestCase):
             with self.subTest(case=i), self.assertRaises(SignoffRefused):
                 validate_adb_trace(mutated,r,SHA,RUN)
 
+    def test_28_adb_inventory_whitespace_is_strict_and_format_independent(self):
+        report,fixture=self.good()
+        trace=synthetic_adb_transcript(report)
+        report['adb_trace_commands']=len(trace['commands'])
+        for separator in ('\t','   '):
+            good=copy.deepcopy(trace)
+            good['commands'][0]['output']=('List of devices attached\n'
+                'emulator-5554'+separator+'device product:sdk_gphone\n')
+            validate_adb_trace(good,report,SHA,RUN)
+        for mutation in (
+            'emulator-5554 device\nR5CT12345 device\n',
+            'emulator-5554 device\nemulator-5556 offline\n',
+            'emulator-5554 unauthorized\n',
+            'R5CT12345 device\n',
+            'emulator-5554 device\nemulator-5554 device\n',
+        ):
+            bad=copy.deepcopy(trace)
+            bad['commands'][0]['output']='List of devices attached\n'+mutation
+            with self.subTest(mutation=mutation),self.assertRaises(SignoffRefused):
+                validate_adb_trace(bad,report,SHA,RUN)
+
     def test_26_p04_workflow_requires_transcript_on_both_write_and_signoff(self):
         path=Path(__file__).parents[2]/'.github/workflows/aurora-r3d-p04-recovery.yml'
         workflow=path.read_text()

@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse, hashlib, json, os, re, subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from r3d_p03_disposable import Refused as DeviceRefused, parse_device_inventory
 
 SHA = re.compile(r'[0-9a-f]{40}\Z')
 RUN = re.compile(r'[1-9][0-9]{0,19}\Z')
@@ -73,10 +74,10 @@ def validate_adb_trace(trace: dict, receipt: dict, sha: str, run_id: str) -> dic
     device_events = hits(['devices','-l'])
     need(len(device_events) == 1 and device_events[0][1]['exit_code'] == 0,
          'as-run ADB device inventory not captured')
-    online = [line.split()[0] for line in device_events[0][1]['output'].splitlines()
-              if '\tdevice' in line]
-    need(online == ['emulator-5554'],
-         'ADB transcript does not prove exactly one isolated test emulator')
+    try:
+        parse_device_inventory(device_events[0][1]['output'])
+    except DeviceRefused as error:
+        need(False, 'ADB transcript does not prove exactly one isolated test emulator: '+str(error))
     for cmd, expected in [(['shell','getprop','ro.kernel.qemu'],'1'),
                           (['shell','getprop','ro.build.version.sdk'],'36'),
                           (['shell','getprop','ro.secure'],'1'),
