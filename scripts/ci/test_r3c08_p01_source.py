@@ -110,4 +110,38 @@ for label,source,needle,new in (
     elif label=='host-bypass-count':need("grep -Fxq 'OK (3 tests)'" not in altered,'host mutation ineffective')
     else:need('bash scripts/ci/r3c08_p01_api36.sh "$RUNNER" "$OUT"' not in altered,
               'runner mutation ineffective')
+# HF02: never invoke the remote provider on the cancellation-only case;
+# always preserve grant cleanup when a grant may have been issued. The host
+# must capture AndroidRuntime crashes into the always-uploaded evidence folder.
+for token in ('private var grantMayExist = false',
+              'if (method == "grant") grantMayExist = true',
+              'if (method == "revoke") grantMayExist = false',
+              'if (grantMayExist) control("revoke")',
+              'assertThat(grantMayExist).isFalse()'):
+    need(token in test,'HF02 conditional grant cleanup absent: '+token)
+for token in ('TARGET=' + chr(39) + 'com.aurora.store.debug' + chr(39),
+              'adb shell am force-stop "$TARGET"',
+              'trap ' + chr(39) + 'failure_diagnostics "$?"' + chr(39) + ' EXIT',
+              'adb logcat -d -b crash',
+              'r3c08_p01_android_crash_diagnostics.txt',
+              'AndroidRuntime:E', 'tail -n 100 "$report"'):
+    need(token in host,'HF02 bounded and artifact-uploaded failure diagnostics absent: '+token)
+for label,actual,old,new in (
+    ('cleanup-unguarded',test,'if (grantMayExist) control("revoke")',
+      'control("revoke")'),
+    ('grant-tracking-removed',test,'if (method == "grant") grantMayExist = true',
+      'grantMayExist = false'),
+    ('cleanup-reset-removed',test,'if (method == "revoke") grantMayExist = false',
+      'grantMayExist = true'),
+    ('no-force-stop',host,'adb shell am force-stop "$TARGET"',
+      'echo forced'),
+    ('missing-crash-collection',host,'adb logcat -d -b crash',
+      'echo logcat'),
+    ('missing-EXIT-trap',host,'trap ' + chr(39) + 'failure_diagnostics "$?"' + chr(39) + ' EXIT',
+      'echo diagnostics'),
+):
+    altered=actual.replace(old,new,1)
+    need(altered!=actual,'HF02 mutation anchor absent: '+label)
+    need(old not in altered,'HF02 mutation ineffective: '+label)
+print('R3C08_P01_HF02_GUARDED_CLEANUP_AND_CRASH_DIAGNOSTICS_PASS: six negative mutations')
 print('R3C08_P01_SOURCE_PASS: independent actual Android URI grant/revoke fixture, fail-closed cancel, 3 API36 cases, 13 receipt negatives and 6 source mutations')

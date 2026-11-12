@@ -11,6 +11,34 @@ CLASS='com.aurora.store.data.artifact.ArtifactR3C08P01DeviceTest'
   echo R3C08_P01_REFUSED_NOT_API36 >&2; exit 2;
 }
 SELECTORS="$CLASS#realAndroidUriGrantAndRevocationRejectFreshOpens,$CLASS#revokedDocumentIsRefusedByProductionImportWithoutConsent,$CLASS#cancellingVerifiedSignedFileDiscardsSelectionAndAllConsent"
+# Isolate this adversarial suite from P03B's ActivityScenario/rotation state.
+# This is the hosted test app, not an end-user installation or data wipe.
+TARGET='com.aurora.store.debug'
+if ! timeout 20 adb shell am force-stop "$TARGET"; then
+  echo R3C08_P01_REFUSED_TARGET_FORCE_STOP >&2; exit 1
+fi
+# Capture genuine AndroidRuntime and crash-buffer evidence on EVERY failure.
+# The existing always() artifact upload retains this file even when JUnit dies.
+# Do not print arbitrary provider data; only bounded platform error logs.
+failure_diagnostics() {
+  local rc="$1"
+  if [[ "$rc" == 0 ]]; then return 0; fi
+  local report="$OUT/r3c08_p01_android_crash_diagnostics.txt"
+  {
+    echo "R3C08_P01_HOST_FAILURE_CODE=$rc"
+    echo '--- Android crash buffer (bounded) ---'
+    timeout 20 adb logcat -d -b crash -v threadtime 2>&1 | tail -n 500 || true
+    echo '--- Relevant AndroidRuntime/activity/provider errors (bounded) ---'
+    timeout 20 adb logcat -d -b main,system -v threadtime \
+      -s AndroidRuntime:E ActivityManager:E ActivityTaskManager:E \
+      ContentProviderHelper:E 2>&1 | tail -n 650 || true
+    echo '--- Exact instrumentation terminal ---'
+    tail -n 100 "$OUT/r3c08_p01_revoked_saf.txt" 2>/dev/null || true
+  } > "$report"
+  echo "R3C08_P01_DIAGNOSTIC_REPORT=$report" >&2
+  tail -n 100 "$report" >&2 || true
+}
+trap 'failure_diagnostics "$?"' EXIT
 set +e
 timeout 480 adb shell am instrument -w -r -e class "$SELECTORS" "$RUNNER" | tee "$OUT/r3c08_p01_revoked_saf.txt"
 status=("${PIPESTATUS[@]}")

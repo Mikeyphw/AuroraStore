@@ -35,9 +35,16 @@ class ArtifactR3C08P01DeviceTest {
     private val control = Uri.parse("content://com.aurora.store.r3c08.control")
     private val activityClass = ArtifactImportActivity::class.java
 
+    // Do not start a separate grant-control provider merely to clean up a
+    // cancellation-only test that never obtained any URI grant. Track a
+    // possibly issued grant *before* its Binder call to preserve cleanup on
+    // partial grant failures. Never use this flag as security evidence.
+    private var grantMayExist = false
     private fun control(method: String) {
+        if (method == "grant") grantMayExist = true
         val answer = target.contentResolver.call(control, method, null, null)
         assertThat(answer?.getString("r3c08_result")).isEqualTo(method)
+        if (method == "revoke") grantMayExist = false
     }
     private fun permission(): Int = target.checkUriPermission(
         doc, Process.myPid(), Process.myUid(), Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -79,7 +86,9 @@ class ArtifactR3C08P01DeviceTest {
         assertThat(views.filterIsInstance<CheckBox>().all { !it.isChecked }).isTrue()
     }
 
-    @After fun revokeAnyOutstandingTestGrant() = control("revoke")
+    @After fun revokeAnyOutstandingTestGrant() {
+        if (grantMayExist) control("revoke")
+    }
 
     @Test fun realAndroidUriGrantAndRevocationRejectFreshOpens() {
         assertThat(Build.VERSION.SDK_INT).isEqualTo(36)
@@ -124,6 +133,9 @@ class ArtifactR3C08P01DeviceTest {
 
     @Test fun cancellingVerifiedSignedFileDiscardsSelectionAndAllConsent() {
         assertThat(Build.VERSION.SDK_INT).isEqualTo(36)
+        // This case exercises production cancellation, not grant delivery.
+        // The isolated control provider must remain untouched in this case.
+        assertThat(grantMayExist).isFalse()
         ActivityScenario.launch(activityClass).use { scenario ->
             local(scenario)
             scenario.onActivity { activity ->
