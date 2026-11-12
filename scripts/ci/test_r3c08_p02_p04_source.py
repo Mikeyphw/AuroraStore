@@ -141,7 +141,7 @@ check('method.invoke(activity, Uri.parse(' not in test and
       'method.invoke(a, Uri.parse(' in test,
       'P02 test has a stale/undefined ActivityScenario callback receiver')
 check('R3C08_PROVIDER_(START|KILL)' in receipt and
-      'restarted_pid!=dead_pid' in receipt,
+      'isolated_provider_verified_restart_cycles' in receipt and 'len(cycles)>=1' in receipt,
       'host receipt did not prove distinct provider restart PID')
 
 check(test_guard(test),'twenty-one genuinely authored read-only Android test methods or security gates missing')
@@ -183,13 +183,21 @@ for label,source,old,new,guard in (
 ):
     mutated=source.replace(old,new) if label in ('remove-stage-cleanup','remove-signed-split-check','remove-feature-veto','remove-identity-veto','remove-Play-isolation','remove-P04-forged-tier','remove-P04-browser-lease','remove-P04-OS-replay') else source.replace(old,new,1)
     check(mutated!=source and not guard(mutated), 'negative test did not reject '+label)
-for script,count in ((RECEIPT,'29 negatives'),(P01_RECEIPT,'18 negatives')):
+for script,count in ((RECEIPT,'34 negatives'),(P01_RECEIPT,'18 negatives')):
     result=subprocess.run([sys.executable,'-B',str(script),'--selftest'],
         cwd=ROOT,capture_output=True,text=True,timeout=30)
     check(result.returncode==0 and count in result.stdout,
           'receipt negative tests failed: '+str(script)+' '+(result.stdout+result.stderr)[-1600:])
 check(subprocess.run(['bash','-n',str(HOST)],capture_output=True).returncode==0,
       'adversarial host bash source invalid')
+# P05 is a mandatory additional source gate, not an optional marker-only document.
+p05=ROOT/'scripts/ci/test_r3c08_p05_source.py'
+check(p05.is_file(), 'P05 signoff security source gate missing')
+p05_result=subprocess.run([sys.executable,'-B',str(p05)],cwd=ROOT,
+    capture_output=True,text=True,timeout=70)
+check(p05_result.returncode==0 and 'R3C08_P05_SOURCE_SECURITY_PASS' in p05_result.stdout,
+      'P05 final signoff source/security regression failed: '+
+      (p05_result.stdout+p05_result.stderr)[-1500:])
 print('R3C08_P02_P04_SOURCE_PASS: twenty-one independently selected API36 tests, '
-      'eighteen guard mutations, 29 P02-P04 receipt negatives, real package-state invariant, '
+      'eighteen guard mutations, 34 P02-P04 receipt negatives, real package-state invariant, '
       'ordered P01 source-bound receipt and no install/rollback overclaim')

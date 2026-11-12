@@ -62,17 +62,29 @@ def validate(lograw,before,after,head,run_id,provider_log):
     except UnicodeError as e:raise Refused('provider log not UTF8') from e
     proc_events=re.findall(r'R3C08_PROVIDER_(START|KILL) pid=([0-9]{1,9})',lifecycle)
     need(len(proc_events)>=3, 'missing remote Android provider death/restart trace')
-    saw_kill=False;dead_pid=None;restarted_pid=None
-    started=set()
-    for event,pid in proc_events:
-        need(int(pid)>1,'invalid remote provider PID')
+    # Android may kill/restart a flaky isolated provider more than once. Check
+    # complete, ordered START -> KILL -> START cycles; never compare the first
+    # restart to the LAST killed PID. Every KILL must match the live PID and
+    # every revival must use a different PID. Final START need not be killed.
+    active=None
+    pending_dead=None
+    cycles=[]
+    for event,pid_s in proc_events:
+        pid=int(pid_s)
+        need(pid>1, 'invalid remote provider PID')
         if event=='START':
-            if saw_kill and pid!=dead_pid and restarted_pid is None:restarted_pid=pid
-            started.add(pid)
+            need(active is None, 'multiple provider starts without an intervening kill')
+            if pending_dead is not None:
+                need(pid!=pending_dead, 'provider did not restart in a distinct Android process')
+                cycles.append((pending_dead,pid))
+                pending_dead=None
+            active=pid
         else:
-            need(pid in started,'remote provider killed without known start PID')
-            saw_kill=True;dead_pid=pid
-    need(saw_kill and restarted_pid is not None and restarted_pid!=dead_pid,
+            need(active==pid and pending_dead is None,
+                 'provider kill is not paired with its live START PID')
+            pending_dead=pid
+            active=None
+    need(len(cycles)>=1 and active is not None and pending_dead is None,
          'provider was not restarted in a distinct real Android process')
     test_markers=re.findall(r'^INSTRUMENTATION_STATUS: test=([A-Za-z0-9_]+)\s*$',log,re.M)
     need(len(test_markers)==42 and set(test_markers)==set(METHODS),
@@ -104,6 +116,7 @@ def validate(lograw,before,after,head,run_id,provider_log):
             'actual_instrumentation_tests':21,'test_class':CLASS,
             'log_sha256':hashof(lograw),'package_inventory_sha256':hashof(before),
             'isolated_provider_lifecycle_log_sha256':hashof(provider_log),
+            'isolated_provider_verified_restart_cycles':len(cycles),
             'package_inventory_unchanged':True,
             'p02_bounded_cancellation_and_controlled_provider_failure_tested':True,
             'p02_isolated_test_provider_actual_process_death_and_restart_tested':True,
@@ -174,6 +187,21 @@ def selftest():
         try:validate(l,b,a,s,r,provider)
         except Refused:pass
         else:raise AssertionError('unsafe inventory/identity mutation accepted '+label)
+    repeated=(b'R3C08_PROVIDER_START pid=101\nR3C08_PROVIDER_KILL pid=101\n'
+              b'R3C08_PROVIDER_START pid=102\nR3C08_PROVIDER_KILL pid=102\n'
+              b'R3C08_PROVIDER_START pid=103\n')
+    need(validate(log,before,before,'a'*40,'123',repeated)['isolated_provider_verified_restart_cycles']==2,
+         'two independent true provider crash/restart cycles must qualify')
+    for label,mut in (
+      ('second-kill-without-start', repeated.replace(b'START pid=102',b'START pid=104')),
+      ('second-restart-same-pid', repeated.replace(b'START pid=103',b'START pid=102')),
+      ('trailing-kill-no-recovery', repeated.replace(b'START pid=103\n',b'')),
+      ('duplicate-start-no-kill', repeated.replace(b'KILL pid=102',b'START pid=102')),
+      ('unknown-intermediate-kill', repeated.replace(b'KILL pid=102',b'KILL pid=999')),
+    ):
+        try:validate(log,before,before,'a'*40,'123',mut)
+        except Refused:pass
+        else:raise AssertionError('unsafe multicycle provider mutation accepted '+label)
     for name, altered in (
         ('no-kill',provider.replace(b'R3C08_PROVIDER_KILL pid=101',b'R3C08_PROVIDER_IGNORE pid=101')),
         ('same-pid',provider.replace(b'R3C08_PROVIDER_START pid=102',b'R3C08_PROVIDER_START pid=101')),
@@ -185,7 +213,7 @@ def selftest():
         try:validate(log,before,before,'a'*40,'123',altered)
         except Refused:pass
         else:raise AssertionError('remote provider evidence mutation accepted '+name)
-    print('R3C08_P02_P04_RECEIPT_SELFTEST_PASS: 1 synthetic positive, '+str(len(substitutions)+len(others)+6)+' negatives (NOT device evidence)')
+    print('R3C08_P02_P04_RECEIPT_SELFTEST_PASS: 1 synthetic positive, '+str(len(substitutions)+len(others)+11)+' negatives (NOT device evidence)')
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--selftest',action='store_true')

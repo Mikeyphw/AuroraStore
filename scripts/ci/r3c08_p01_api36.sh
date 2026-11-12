@@ -58,3 +58,10 @@ echo R3C08_P01_API36_REAL_URI_GRANT_REVOKE_READ_ONLY_PASS
 # R3C08 P02-P04: nine independent adversarial Android checks in the same
 # existing emulator; no additional workflow, installs or network activity.
 bash scripts/ci/r3c08_p02_p04_api36.sh "$RUNNER" "$OUT"
+# R3C08 P05: independent source/run-bound security evidence signoff.
+# This seal is READ-ONLY qualified only; it NEVER approves live rollback,
+# arbitrary third-party provider failures, physical devices or release.
+python3 -B scripts/ci/r3c08_p05_signoff.py \
+  --evidence-dir "$OUT" --sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" \
+  --output "$OUT/R3C08_P05_API36_SECURITY_SIGNOFF.json"
+echo R3C08_P05_READONLY_INDEPENDENT_SIGNOFF_PASS_MANUAL_GATES_PENDING
