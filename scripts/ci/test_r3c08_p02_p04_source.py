@@ -81,6 +81,11 @@ def test_guard(s):
                 'not proof', 'rollback',
                 'method.invoke(a, Uri.parse(',
                 'p02_remoteProviderDeathRefusesImportAndRestartsInNewProcess',
+                'acquireUnstableContentProviderClient(crash)',
+                'unstable.openFile(crash, "r")',
+                'assertThat(providerDeath.isFailure).isTrue()',
+                'scenario.onActivity { selectUri(it, signed) }',
+                'request("revoke")\n            signedGranted = false',
                 'p02_failedProviderRetryResetsAllApprovalsAndCleansCache',
                 'noInstallConsent(activity)', 'getDeclaredField("active")')) and
             s.count('ArtifactSplitCompatibilityPolicy.check(')>=2 and
@@ -90,7 +95,8 @@ def test_guard(s):
                 'ArtifactInstallSession.install(',
                 'PackageInstaller.SessionParams',
                 'PlayVerifiedEvidenceStore(', 'startActivity(Intent.ACTION_VIEW',
-                'shell pm install', 'su -c')))
+                'shell pm install', 'su -c',
+                'scenario.onActivity { selectUri(it, crash) }')))
 
 def host_guard(s):
     return (s.count('adb shell am instrument')==1 and
@@ -193,6 +199,18 @@ for label,source,old,new,guard in (
  ('remove-P04-apkpure-gate',test,'p04_apkpureRequiresCurrentOptInAndAlternativeConsent', 'missingP04ApkpureMethod',test_guard),
  ('remove-P04-consent-matrix',test,'p04_unverifiedInstalledIdentityAndIndependentApprovalMatrix', 'missingP04ApprovalMethod',test_guard),
  ('remove-P04-OS-replay',test,'ArtifactSessionReceiptPolicy.next(', 'println(',test_guard),
+ ('replace-unstable-client-with-stable',test,
+  'acquireUnstableContentProviderClient(crash)','acquireContentProviderClient(crash)',test_guard),
+ ('replace-unstable-open-with-stable',test,
+  'unstable.openFile(crash, "r")','target.contentResolver.openInputStream(crash)',test_guard),
+ ('omit-real-provider-death-check',test,
+  'assertThat(providerDeath.isFailure).isTrue()','println("ignored")',test_guard),
+ ('reintroduce-stable-crash-into-importer',test,
+  'scenario.onActivity { selectUri(it, signed) }',
+  'scenario.onActivity { selectUri(it, crash) }',test_guard),
+ ('forget-revoked-grant-cleanup',test,
+  'request("revoke")\n            signedGranted = false',
+  'request("revoke")\n            signedGranted = true',test_guard),
  ('remove-test-selector',host,'$CLASS#p04_consentCannotOverrideSignerMismatch','$CLASS#missingMethod',host_guard),
  ('remove-early-crash-gate',host,'INSTRUMENTATION_RESULT: shortMsg=Process crashed.','some-other-error',host_guard),
  ('remove-success-counter',host,'[[ "$success" == 1 ]]','[[ "$attempt" == 2 ]]',host_guard),
@@ -216,5 +234,5 @@ check(p05_result.returncode==0 and 'R3C08_P05_SOURCE_SECURITY_PASS' in p05_resul
       'P05 final signoff source/security regression failed: '+
       (p05_result.stdout+p05_result.stderr)[-1500:])
 print('R3C08_P02_P04_SOURCE_PASS: twenty-one independently selected API36 tests, '
-      'twenty-one guard mutations, 34 P02-P04 receipt negatives, real package-state invariant, '
+      'twenty-six guard mutations, 34 P02-P04 receipt negatives, real package-state invariant, '
       'ordered P01 source-bound receipt and no install/rollback overclaim')

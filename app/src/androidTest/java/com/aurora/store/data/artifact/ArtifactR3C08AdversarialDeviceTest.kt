@@ -189,26 +189,30 @@ class ArtifactR3C08AdversarialDeviceTest {
         var signedGranted = false
         var crashGranted = false
         try {
-            request("grant")
             signedGranted = true
-            request("grant_crash")
+            request("grant")
             crashGranted = true
+            request("grant_crash")
             assertThat(target.checkUriPermission(crash, android.os.Process.myPid(),
                 android.os.Process.myUid(), Intent.FLAG_GRANT_READ_URI_PERMISSION))
                 .isEqualTo(PackageManager.PERMISSION_GRANTED)
-            ActivityScenario.launch(ArtifactImportActivity::class.java).use { scenario ->
-                withLocalProvider(scenario)
-                scenario.onActivity { selectUri(it, crash) }
-                awaitLabel(scenario, "Import refused")
-                scenario.onActivity { activity ->
-                    noInstallConsent(activity)
-                    val field = ArtifactImportActivity::class.java.getDeclaredField("active")
-                    field.isAccessible = true
-                    assertThat(field.get(activity)).isNull()
+            // ContentResolver.openInputStream() obtains a STABLE provider.
+            // Killing that provider while production uses it makes Android kill
+            // the instrumentation target too (the observed CI failure).
+            // Use a real UNSTABLE Binder client for intentional process death.
+            val unstable = requireNotNull(
+                target.contentResolver.acquireUnstableContentProviderClient(crash))
+            try {
+                val providerDeath = runCatching {
+                    unstable.openFile(crash, "r")?.use { it.statSize }
+                        ?: throw IllegalStateException("No remote test descriptor")
                 }
+                assertThat(providerDeath.isFailure).isTrue()
+            } finally {
+                unstable.close()
             }
-            // A fresh open must come from a newly started OS provider process;
-            // the host also checks distinct START/KILL/START process IDs.
+            // Verify a fresh Android provider instance with actual APK bytes;
+            // the host additionally checks ordered START/KILL/START process IDs.
             var recovered = false
             for (attempt in 0 until 30) {
                 val byte = runCatching {
@@ -218,6 +222,26 @@ class ArtifactR3C08AdversarialDeviceTest {
                 SystemClock.sleep(150)
             }
             assertThat(recovered).isTrue()
+            // Independently verify a production refusal after revoking the URI
+            // from this same recovered provider. Never pass crash.apk to the
+            // production stable resolver: that crashes the test runner instead
+            // of testing app-level recovery.
+            request("revoke")
+            signedGranted = false
+            assertThat(target.checkUriPermission(signed, android.os.Process.myPid(),
+                android.os.Process.myUid(), Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                .isEqualTo(PackageManager.PERMISSION_DENIED)
+            ActivityScenario.launch(ArtifactImportActivity::class.java).use { scenario ->
+                withLocalProvider(scenario)
+                scenario.onActivity { selectUri(it, signed) }
+                awaitLabel(scenario, "Import refused")
+                scenario.onActivity { activity ->
+                    noInstallConsent(activity)
+                    val field = ArtifactImportActivity::class.java.getDeclaredField("active")
+                    field.isAccessible = true
+                    assertThat(field.get(activity)).isNull()
+                }
+            }
         } finally {
             // If the second grant fails, still revoke the first. Never leave
             // test-only permission behind after a partial fixture setup.
