@@ -338,3 +338,36 @@ if [[ "${R3C07_ALLOW_LIVE_TALKBACK:-no}" == yes ]]; then
 else
   echo 'R3C07_P03_ACTUAL_TALKBACK_NOT_QUALIFIED: explicit workflow opt-in required'
 fi
+
+# R3D P04: exactly four actual API36 receipt/callback race cases; NO OS install.
+R3D_P04_CLASS='com.aurora.store.data.artifact.ArtifactR3DRecoveryDeviceTest'
+timeout 300 adb shell am instrument -w -r -e class "$R3D_P04_CLASS" "$RUNNER" |
+  tee "$OUT/r3d_p04_readonly_callback_races.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/r3d_p04_readonly_callback_races.txt"; then
+  echo R3D_P04_CALLBACK_DEVICE_REFUSED >&2
+  exit 1
+fi
+grep -Eq '^OK \(4 tests\)' "$OUT/r3d_p04_readonly_callback_races.txt" || {
+  echo R3D_P04_CALLBACK_TEST_COUNT_REFUSED >&2
+  exit 1
+}
+grep -Eq '^INSTRUMENTATION_CODE: -1' "$OUT/r3d_p04_readonly_callback_races.txt" || {
+  echo R3D_P04_CALLBACK_INSTRUMENTATION_REFUSED >&2
+  exit 1
+}
+python3 -B - "$OUT/R3D_P04_READONLY_RACE_DEVICE_RECEIPT.json" <<'R3D_P04_RECEIPT_PY'
+import json, os, pathlib, sys
+sha=os.environ.get('GITHUB_SHA','')
+run=os.environ.get('GITHUB_RUN_ID','')
+assert len(sha)==40 and all(c in '0123456789abcdef' for c in sha)
+assert run.isdecimal() and int(run)>0
+pathlib.Path(sys.argv[1]).write_text(json.dumps({
+  'overall':'PASS_READONLY_ONLY','source_sha':sha,'run_id':run,
+  'android_api':36,'actual_readonly_race_device_tests':4,
+  'installer_session_created':False,'real_os_installation':False,
+  'physical_device_qualified':False,'release_qualified':False,
+  'final_security_signoff':False,
+},indent=2,sort_keys=True)+'\n',encoding='utf-8')
+R3D_P04_RECEIPT_PY
+echo R3D_P04_API36_READONLY_CALLBACK_RACE_PASS: four noninstalling device tests

@@ -17,7 +17,8 @@ internal object ArtifactReviewPresentation {
         val signerSha256: Set<String>,
         val installedVersion: Long?,
         val signerMatchesInstalled: Boolean?,
-        val trustTier: ArtifactTrustTier
+        val trustTier: ArtifactTrustTier,
+        val historicalPreflight: ArtifactHistoricalVersionPolicy.DevicePreflight? = null
     )
 
     fun source(provenance: ArtifactProvenance): String {
@@ -56,6 +57,10 @@ internal object ArtifactReviewPresentation {
         append("Verified files: ${f.fileCount} APK(s)\n")
         append("Selected source: ${source(f.provenance)}\n")
         append("Exact-version availability from provider: UNKNOWN\n")
+        append(ArtifactHistoricalVersionPolicy.displayPreflight(f.historicalPreflight))
+        append("Historical reference: user-selected only; matching signed APK bytes is required.\n")
+        append(ArtifactDowngradeSafetyPolicy.notice(
+            f.versionCode, f.installedVersion, f.signerMatchesInstalled))
         append("Publisher identity: NOT independently authenticated\n")
         append("APK signature: verified for selected bytes; this is NOT Google Play proof\n")
         append("Installed signer: ${when (f.signerMatchesInstalled) {
@@ -76,6 +81,8 @@ internal object ArtifactReviewPresentation {
         append("Source: ${source(f.provenance)}\n")
         append("Distribution: ${ArtifactOriginBoundary.family(f.provenance.source)} (independent of Play)\n")
         append("Source assurance: user/browser claim only; no Play or publisher proof\n")
+        append(ArtifactHistoricalVersionPolicy.displayPreflight(f.historicalPreflight))
+        append("Preflight is read-only, not a signed installability guarantee or a provider assertion.\n")
         append("Attempt generation: ${f.attemptGeneration}\n")
         append("Package: ${f.packageName}\nVersion code: ${f.versionCode}\n")
         append("Files: ${f.fileCount} APK(s); ${f.totalApkBytes} verified APK bytes\n")
@@ -86,6 +93,8 @@ internal object ArtifactReviewPresentation {
         f.signerSha256.sorted().forEach { append("  $it\n") }
         append("Trust: ${trust(f)}\n")
         append("Installed version: ${f.installedVersion?.toString() ?: "Not installed"}\n")
+        append(ArtifactDowngradeSafetyPolicy.notice(
+            f.versionCode, f.installedVersion, f.signerMatchesInstalled))
         append("Signer continuity: ${when (f.signerMatchesInstalled) {
             true -> "Matches installed signing identity"
             false -> "MISMATCH — blocked"
@@ -102,7 +111,14 @@ internal object ArtifactReviewPresentation {
     fun consentNeedsUnknownPublisher(f: VerifiedFacts): Boolean = f.installedVersion == null
 
     fun consentNeedsDowngrade(f: VerifiedFacts): Boolean =
-        f.installedVersion != null && f.installedVersion > f.versionCode
+        ArtifactDowngradeSafetyPolicy.assess(
+            f.versionCode, f.installedVersion, f.signerMatchesInstalled
+        ).separateDowngradeConsentRequired
+
+    fun consentNeedsDataRisk(f: VerifiedFacts): Boolean =
+        ArtifactDowngradeSafetyPolicy.assess(
+            f.versionCode, f.installedVersion, f.signerMatchesInstalled
+        ).separateDataRiskAcknowledgementRequired
 
     fun blockerDescription(blockers: Set<ArtifactImportDecision.Blocker>): String =
         if (blockers.isEmpty()) "All required confirmations selected. Android will still review the install."
@@ -114,6 +130,8 @@ internal object ArtifactReviewPresentation {
                 ArtifactImportDecision.Blocker.EXPLICIT_INSTALL_CONSENT_REQUIRED -> "Approve installation"
                 ArtifactImportDecision.Blocker.UNANCHORED_PUBLISHER_CONSENT_REQUIRED -> "Acknowledge unverified publisher"
                 ArtifactImportDecision.Blocker.DOWNGRADE_CONSENT_REQUIRED -> "Approve version downgrade separately"
+                ArtifactImportDecision.Blocker.DOWNGRADE_DATA_LOSS_RISK_ACK_REQUIRED ->
+                    "Acknowledge independent data-loss/backup risk"
             }
         }.joinToString(" · ")
 

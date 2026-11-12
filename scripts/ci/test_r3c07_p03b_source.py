@@ -11,6 +11,7 @@ ROOT=Path(__file__).resolve().parents[2]
 BASE=ROOT/'app/src/main/java/com/aurora/store/data/artifact'
 ACT=(BASE/'ArtifactImportActivity.kt').read_text()
 POL=(BASE/'ArtifactImportJourney.kt').read_text()
+HISTORY=(BASE/'ArtifactHistoricalVersionPolicy.kt').read_text()
 TEST=(ROOT/'app/src/androidTest/java/com/aurora/store/data/artifact/ArtifactImportJourneyP03BDeviceTest.kt').read_text()
 JVM=(ROOT/'app/src/test/java/com/aurora/store/data/artifact/ArtifactImportJourneyTest.kt').read_text()
 HOST=(ROOT/'scripts/ci/r3c07_p03b_api36.sh').read_text()
@@ -31,7 +32,7 @@ REQUIRED_METHODS=(
 def require(ok,label):
     if not ok:raise AssertionError('R3C07_P03B_SOURCE_REFUSED: '+label)
 
-def valid(a,p,t,j,h,r,runner,flow,ci,agg):
+def valid(a,p,t,j,h,r,runner,flow,ci,agg,history):
     return all((
       'Retry file selection' in a,
       a.count('offerManualRetry()')==5,
@@ -46,7 +47,10 @@ def valid(a,p,t,j,h,r,runner,flow,ci,agg):
       'if (serial != requestSerial || ticket.isCancelled()' in a,
       'invalidateCurrentImport(ArtifactImportJourney.retryMessage())' in a,
       'versionMatches(reference: String, verifiedVersion: Long)' in p,
-      'reference.any { it !in' in p,
+      'ArtifactHistoricalVersionPolicy.matchesVerified(reference, verifiedVersion)' in p,
+      'private val digits = Regex("[0-9]{1,19}")' in history,
+      'text.toLongOrNull()?.takeIf { it > 0L }' in history,
+      'signedVersion <= 0L || signedVersion != version' in history,
       'fun failureMessage(error: Throwable)' in p,
       'Nothing installed. Choose a file again manually' in p,
       'no automatic provider fallback' in p,
@@ -92,7 +96,7 @@ def valid(a,p,t,j,h,r,runner,flow,ci,agg):
       'r3c06_live_install: ' not in h,
     ))
 
-require(valid(ACT,POL,TEST,JVM,HOST,RECEIPT,RUNNER,FLOW,CI,AGG),
+require(valid(ACT,POL,TEST,JVM,HOST,RECEIPT,RUNNER,FLOW,CI,AGG,HISTORY),
         'real signed UI, safe retry, screenshot evidence and inherited CI contracts')
 for label,which,old,new in (
     ('version bypass','activity','blockers.isEmpty() && versionMatches','blockers.isEmpty()'),
@@ -100,7 +104,8 @@ for label,which,old,new in (
     ('unsanitized error','activity','ArtifactImportJourney.failureMessage(error)','error.message'),
     ('retry removed','activity','offerManualRetry()','/* no retry */'),
     ('unguarded consent','activity','if (serial != requestSerial || ticket.isCancelled()', 'if (false'),
-    ('version overflow','policy','reference.any { it !in','reference.all { it !in'),
+    ('version overflow','history','private val digits = Regex("[0-9]{1,19}")',
+     'private val digits = Regex(".*")'),
     ('false success','receipt',"'installation_qualified':False","'installation_qualified':True"),
     ('fake image permitted','receipt','PNG chunk CRC mismatch','accept damaged CRC'),
     ('removed screenshot','device','uiAutomation.takeScreenshot()','null'),
@@ -115,9 +120,9 @@ for label,which,old,new in (
         '#totallyDifferentTest'),
     ('missing targeted JVM','ci','--tests \'com.aurora.store.data.artifact.ArtifactImportJourneyTest\'','--tests \'DifferentTest\''),
 ):
-    values=[ACT,POL,TEST,JVM,HOST,RECEIPT,RUNNER,FLOW,CI,AGG]
+    values=[ACT,POL,TEST,JVM,HOST,RECEIPT,RUNNER,FLOW,CI,AGG,HISTORY]
     index={'activity':0,'policy':1,'device':2,'jvm':3,'host':4,'receipt':5,
-           'runner':6,'flow':7,'ci':8,'agg':9}[which]
+           'runner':6,'flow':7,'ci':8,'agg':9,'history':10}[which]
     require(old in values[index],'mutant preimage missing: '+label)
     values[index]=values[index].replace(old,new,1)
     require(not valid(*values),'unsafe source mutation accepted: '+label)

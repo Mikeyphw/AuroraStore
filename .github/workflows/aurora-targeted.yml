@@ -73,6 +73,9 @@ jobs:
           python3 -B scripts/ci/test_r3c07_p03a_source.py
           python3 -B scripts/ci/test_r3c07_p03b_source.py
           python3 -B scripts/ci/test_r3c08_p01_source.py
+          python3 -B scripts/ci/test_r3d_p01_p02_source.py
+          python3 -B scripts/ci/test_r3d_p03_source.py
+          python3 -B scripts/ci/test_r3d_p04_source.py
           python3 -B scripts/ci/aurora_ci_policy.py run-targeted --base "$BASE_SHA" --head "$HEAD_SHA"
 
   targeted-android:
@@ -110,7 +113,8 @@ jobs:
           set -euo pipefail
           ./gradlew --no-daemon --max-workers=2 :app:testVanillaDebugUnitTest \
             --tests 'com.aurora.store.data.artifact.ArtifactProviderDisclosureTest' \
-            --tests 'com.aurora.store.data.artifact.ArtifactImportJourneyTest'
+            --tests 'com.aurora.store.data.artifact.ArtifactImportJourneyTest' \
+            --tests 'com.aurora.store.data.artifact.ArtifactR3DP01P02PolicyTest'
       - name: Require checked-in Room schema to match hosted KSP output
         shell: bash
         run: |

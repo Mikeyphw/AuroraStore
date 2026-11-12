@@ -6,6 +6,7 @@ ROOT=Path(__file__).resolve().parents[2]
 A=(ROOT/'app/src/main/java/com/aurora/store/data/artifact/ArtifactImportActivity.kt').read_text()
 R=(ROOT/'app/src/main/java/com/aurora/store/data/artifact/ArtifactReviewPresentation.kt').read_text()
 D=(ROOT/'app/src/main/java/com/aurora/store/data/artifact/ArtifactImportDecision.kt').read_text()
+P=(ROOT/'app/src/main/java/com/aurora/store/data/artifact/ArtifactDowngradeSafetyPolicy.kt').read_text()
 E=(ROOT/'scripts/ci/r3c03_c02_emulator_ci.sh').read_text()
 T=(ROOT/'app/src/androidTest/java/com/aurora/store/data/artifact/ArtifactReviewUxDeviceTest.kt').read_text()
 
@@ -50,9 +51,15 @@ for token in (
         'fun verification(f: VerifiedFacts)',
         'APK signing certificate SHA-256:'):
     require(token in R, 'missing truthful review '+token)
-for token in ('installedSignerMatches != true', 'UNANCHORED_PUBLISHER_CONSENT_REQUIRED',
-              'DOWNGRADE_CONSENT_REQUIRED', 'EXPLICIT_INSTALL_CONSENT_REQUIRED'):
+for token in ('UNANCHORED_PUBLISHER_CONSENT_REQUIRED',
+              'DOWNGRADE_CONSENT_REQUIRED', 'EXPLICIT_INSTALL_CONSENT_REQUIRED',
+              'downgradeSafety.installedIdentityBlocked',
+              'if (downgradeSafety.installedIdentityBlocked) add(Blocker.SIGNER_MISMATCH)'):
     require(token in D, 'install consent/security gate weakened '+token)
+for token in ('installedSignerMatches != true',
+              'installedVersionCode == null && installedSignerMatches != null',
+              'installedVersionCode != null && installedVersionCode <= 0L'):
+    require(token in P, 'central active-signer veto weakened '+token)
 require('R3C07_UX_CLASS' in E and 'R3C07_P01_API36_UX_PASS' in E,
         'API36 independent UX gate not wired')
 require("'^OK \\(5 tests\\)'" in E, 'missing measured 5-test instrument result')

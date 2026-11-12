@@ -32,12 +32,8 @@ internal object ArtifactImportJourney {
     } + " Nothing installed. Choose a file again manually; no automatic provider fallback."
 
     /** A search reference is NOT a provider lookup. Blank means no preference. */
-    fun versionMatches(reference: String, verifiedVersion: Long): Boolean {
-        if (reference.isEmpty()) return true
-        if (reference.length > 19 || reference.any { it !in '0'..'9' }) return false
-        val value = reference.toLongOrNull() ?: return false
-        return value > 0L && value == verifiedVersion
-    }
+    fun versionMatches(reference: String, verifiedVersion: Long): Boolean =
+        ArtifactHistoricalVersionPolicy.matchesVerified(reference, verifiedVersion)
 
     fun versionMessage(reference: String, verifiedVersion: Long): String =
         if (versionMatches(reference, verifiedVersion)) "" else

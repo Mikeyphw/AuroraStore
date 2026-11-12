@@ -24,6 +24,7 @@ internal object ArtifactInstallSession {
         approvedInstall: Boolean,
         approvedUnknownPublisher: Boolean,
         approvedDowngrade: Boolean,
+        approvedDataLossRisk: Boolean = false,
         cancelled: () -> Boolean
     ): Int {
         val id = imported.attempt
@@ -37,7 +38,8 @@ internal object ArtifactInstallSession {
             trustedPublisherAnchor = false,
             userApprovedInstall = approvedInstall,
             userAcceptedUnknownPublisher = approvedUnknownPublisher,
-            userApprovedDowngrade = approvedDowngrade
+            userApprovedDowngrade = approvedDowngrade,
+            userAcknowledgedDataLossRisk = approvedDataLossRisk
         )
         val blocks = ArtifactImportDecision.blockers(review)
         if (blocks.isNotEmpty()) {
@@ -119,6 +121,9 @@ internal object ArtifactInstallSession {
                         .putBoolean(key(sessionId, "consent_install"), approvedInstall)
                         .putBoolean(key(sessionId, "consent_unknown"), approvedUnknownPublisher)
                         .putBoolean(key(sessionId, "consent_downgrade"), approvedDowngrade)
+                        .putBoolean(key(sessionId, "consent_data_loss_risk"), approvedDataLossRisk)
+                        .putLong(key(sessionId, "installed_version_at_review"),
+                            imported.installedVersion ?: -1L)
                         .putString(
                             key(sessionId, "state"),
                             ArtifactSessionReceiptPolicy.State.AWAITING_ANDROID.name
@@ -133,6 +138,11 @@ internal object ArtifactInstallSession {
                 val flags = PendingIntent.FLAG_UPDATE_CURRENT or
                     if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
                 val pending = PendingIntent.getBroadcast(context, sessionId, callback, flags)
+                if (cancelled()) throw ApkVerificationException("Import cancelled before commit")
+                // Recheck installed version + ACTIVE signing identity after stream writing.
+                // A different app version or certificate may have appeared during copy.
+                // Android remains the final authority after we commit the session.
+                ArtifactApkVerifier.revalidateForInstall(context, imported, cancelled)
                 if (cancelled()) throw ApkVerificationException("Import cancelled before commit")
                 session.commit(pending.intentSender)
                 committed = true
@@ -163,6 +173,8 @@ internal object ArtifactInstallSession {
                     .remove(key(sessionId, "consent_install"))
                     .remove(key(sessionId, "consent_unknown"))
                     .remove(key(sessionId, "consent_downgrade"))
+                    .remove(key(sessionId, "consent_data_loss_risk"))
+                    .remove(key(sessionId, "installed_version_at_review"))
                 // Failed pre-commit requests must not hide an older valid receipt.
                 if (preferences.getInt("last_session", -1) == sessionId) {
                     if (previousLastSession >= 0) cleanup.putInt("last_session", previousLastSession)
@@ -199,6 +211,13 @@ internal object ArtifactInstallSession {
             append("Package: $pkg · version code: $version\n")
             append("OS session: $session\n")
             append("Outcome: $status\n")
+            if (state == ArtifactSessionReceiptPolicy.State.AWAITING_ANDROID ||
+                state == ArtifactSessionReceiptPolicy.State.AWAITING_USER_APPROVAL ||
+                state == ArtifactSessionReceiptPolicy.State.APPROVAL_UI_UNAVAILABLE) {
+                append("Recovery: Android outcome is UNCONFIRMED after an interruption. " +
+                    "Check system status and refresh. No automatic uninstall, " +
+                    "rollback, root, or data wipe is performed.\n")
+            }
             append("Source claim: $source ($family)\n")
             append("Evidence scope: $scope (not Play verification)\n")
             append("Attempt generation: ${prefs.getLong(key(session, "generation"), -1L)}\n")
@@ -212,6 +231,10 @@ internal object ArtifactInstallSession {
             append("User approved install: ${prefs.getBoolean(key(session, "consent_install"), false)}")
             append(" · unverified publisher: ${prefs.getBoolean(key(session, "consent_unknown"), false)}")
             append(" · downgrade: ${prefs.getBoolean(key(session, "consent_downgrade"), false)}")
+            append(" · data-loss risk acknowledged: " +
+                "${prefs.getBoolean(key(session, "consent_data_loss_risk"), false)}")
+            append("\nInstalled version at review: " +
+                "${prefs.getLong(key(session, "installed_version_at_review"), -1L)}")
             if (state == ArtifactSessionReceiptPolicy.State.ANDROID_REJECTED) {
                 val code = prefs.getInt(key(session, "android_status_code"), -1)
                 append("\nAndroid reason: ${ArtifactReviewPresentation.androidFailureReason(code)} (code $code)")
@@ -220,6 +243,7 @@ internal object ArtifactInstallSession {
     }
 
     /** Reject stale/foreign OS session callbacks and forbid terminal-state replay. */
+    @Synchronized
     fun recordStatus(
         context: Context,
         session: Int,
@@ -251,6 +275,7 @@ internal object ArtifactInstallSession {
     }
 
     /** Don't claim that Android rejected the APK merely because confirmation UI failed. */
+    @Synchronized
     fun recordPresentationFailure(context: Context, session: Int, generation: Long): Boolean {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (session <= 0 || prefs.getLong(key(session, "generation"), -1) != generation) {

@@ -30,8 +30,14 @@ for key in ('approvedInstall: Boolean','userApprovedInstall = approvedInstall',
             'if (cancelled()) throw ApkVerificationException("Import cancelled before commit")'):
  require(key in install,'C04 session missing '+key)
 require('userApprovedInstall = true' not in install,'hard-coded consent bypass')
-require('ArtifactInstallSession.install(this, receipt, approved, unknown, downgrade)' in activity,
-        'UI approval not passed to session layer')
+require('ArtifactInstallSession.install(this, receipt, approved, unknown, downgrade, dataRisk)' in activity and
+        'val dataRisk = dataRiskAcknowledgement.isChecked' in activity and
+        'userAcknowledgedDataLossRisk = dataRiskAcknowledgement.isChecked' in activity and
+        'approvedDataLossRisk: Boolean = false' in install and
+        'userAcknowledgedDataLossRisk = approvedDataLossRisk' in install and
+        'ArtifactImportDecision.blockers(review)' in install and
+        'Blocker.DOWNGRADE_DATA_LOSS_RISK_ACK_REQUIRED' in review,
+        'UI approval or independent default-false data-loss risk not passed to the session gate')
 for key in ('"Installed app changed after import review"',
             '"Installed app signer changed after import review"',
             '"Private APK changed before installation"',
@@ -39,8 +45,19 @@ for key in ('"Installed app changed after import review"',
             'signerFor(manager, part.file, identity)','installed(manager, attempt.packageName)',
             '"Verified split or signer identity changed"'):
  require(key in verifier,'missing post-consent check '+key)
-require('review.installedVersion != null && review.installedSignerMatches != true' in review,
-        'unknown installed signer can bypass match')
+# The old inline signer rule was extracted into one shared read-only
+# downgrade policy. Fail closed on unknown active signer, invalid installed
+# state, or a reviewer bypassing the central safety assessment.
+downgrade = get(ART, 'ArtifactDowngradeSafetyPolicy.kt')
+new_p02_tests = get(TESTS, 'ArtifactR3DP01P02PolicyTest.kt')
+require('ArtifactDowngradeSafetyPolicy.assess(' in review and
+        'downgradeSafety.installedIdentityBlocked' in review and
+        'if (downgradeSafety.installedIdentityBlocked) add(Blocker.SIGNER_MISMATCH)' in review and
+        'installedSignerMatches != true' in downgrade and
+        'installedVersionCode == null && installedSignerMatches != null' in downgrade and
+        'installedVersionCode != null && installedVersionCode <= 0L' in downgrade and
+        'p02AckCannotOverrideUnknownOrMismatchedInstalledSigner' in new_p02_tests,
+        'unknown or mismatched installed signer can bypass the central signer gate')
 require('SIGNER_MISMATCH' in case and 'installedUnknownSignerCannotBeAuthorizedByPublisherConsent' in case,
         'installed identity negative tests missing')
 for key in ('key(sessionId, "generation")','key(sessionId, "state")',
@@ -64,6 +81,6 @@ require(device.count('@Test') == 5 and 'foreignSessionAndCallbackReplayAreReject
 require('ArtifactInstallSessionDeviceTest' in runner and
         'R3C04_HF02_SESSION_PASS' in runner,
         'existing API36 periodic gate does not run C04-04 device suite')
-for source in (install,verifier,receipt,review,receiver,activity):
+for source in (install,verifier,receipt,review,receiver,activity,downgrade):
  require('PlayVerifiedEvidenceStore' not in source,'local install touched Play proof storage')
 print('R3C04_C04_SECURITY_PASS: fresh signer revalidation, strict consent, per-session CAS, no Play evidence')

@@ -58,10 +58,15 @@ class ArtifactImportActivity : AppCompatActivity() {
     private lateinit var installConsent: CheckBox
     private lateinit var unknownPublisherConsent: CheckBox
     private lateinit var downgradeConsent: CheckBox
+    private lateinit var dataRiskAcknowledgement: CheckBox
     private lateinit var installButton: Button
     private lateinit var selectButton: Button
     private lateinit var retryButton: Button
     private lateinit var requestedVersion: EditText
+    private lateinit var requestedPackage: EditText
+    private lateinit var historicalReferencesStatus: TextView
+    private val historicalReferences = mutableListOf<ArtifactHistoricalVersionPolicy.Reference>()
+    private var activePreflight: ArtifactHistoricalVersionPolicy.DevicePreflight? = null
     // A source claim is valid only for the exact successful browser launch and selection.
     // Never persist raw URLs or use a browser navigation as publisher authentication.
     private var lastBrowserLaunch: ArtifactHandoffClaimPolicy.BrowserLaunch? = null
@@ -163,8 +168,36 @@ class ArtifactImportActivity : AppCompatActivity() {
             })
         }
         column.addView(requestedVersion)
-        label("The version reference is a local preference, not a provider search or availability check. " +
-            "Only a matching verified file can enable installation consent.")
+        requestedPackage = EditText(this).apply {
+            contentDescription = "Optional expected package name for historical-version cross-check"
+            hint = "Optional exact package ID (e.g. org.example.app)"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+            setSingleLine(true)
+            addTextChangedListener(object : TextWatcher {
+                override fun afterTextChanged(s: Editable?) {
+                    // A package change invalidates old manual references and signed consent.
+                    historicalReferences.clear()
+                    if (active != null || (::selectButton.isInitialized && !selectButton.isEnabled)) {
+                        invalidateCurrentImport("Requested package changed. Select and verify a new file.")
+                    }
+                    refreshHistoricalReferences()
+                }
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            })
+        }
+        column.addView(requestedPackage)
+        historicalReferencesStatus = label("Historical versions: no manually discovered references yet.")
+        historicalReferencesStatus.setTextIsSelectable(true)
+        column.addView(Button(this).apply {
+            text = "Record manual historical-version reference"
+            setOnClickListener { recordHistoricalReference() }
+        })
+        refreshHistoricalReferences()
+        label("Historical-version reference only: this does not search providers or prove availability. " +
+            "Enter an exact version code; the signed APK selected with Android's picker must match. " +
+            "No automatic download or historical-version installation occurs.")
         apkPureEnabled = CheckBox(this).apply {
             text = "Enable APKPure browser handoff (off by default)"
             isChecked = getSharedPreferences("artifact_source_preferences", MODE_PRIVATE)
@@ -278,13 +311,22 @@ class ArtifactImportActivity : AppCompatActivity() {
             setOnCheckedChangeListener { _, _ -> updateConsentState() }
         }
         downgradeConsent = CheckBox(this).apply {
-            text = "I separately approve requesting the older version. Android may refuse; no uninstall or data wipe"
+            text = "I separately approve the older version and acknowledge the risk to app data. " +
+                "I should back up important data first. Android may refuse; " +
+                "no automatic uninstall, data wipe, or root bypass."
             visibility = View.GONE
             setOnCheckedChangeListener { _, _ -> updateConsentState() }
         }
         column.addView(installConsent)
         column.addView(unknownPublisherConsent)
         column.addView(downgradeConsent)
+        dataRiskAcknowledgement = CheckBox(this).apply {
+            text = "I understand that downgrading can make app data inaccessible or cause data loss. " +
+                "AuroraStore has NOT verified a backup; I must check my own backups first."
+            visibility = View.GONE
+            setOnCheckedChangeListener { _, _ -> updateConsentState() }
+        }
+        column.addView(dataRiskAcknowledgement)
         consentHint = label("Consent options appear after verification.")
         installButton = Button(this).apply {
             text = "Request Android installation"
@@ -323,9 +365,76 @@ class ArtifactImportActivity : AppCompatActivity() {
         cancellation.cancel()
         active?.discard()
         active = null
+        activePreflight = null
         if (!preserveBrowserClaim) lastBrowserLaunch = null
         if (::selectButton.isInitialized) selectButton.isEnabled = true
         clearReview(message)
+    }
+
+    private fun recordHistoricalReference() {
+        // Do not invent historical versions or treat an opened provider page as evidence.
+        val claimSource = selectedProvider().source
+        if (claimSource == null) {
+            showStatus("Google Play listing is not a historical-version provider receipt.")
+            return
+        }
+        val pkg = requestedPackage.text.toString()
+        val code = requestedVersion.text.toString()
+        val claim = ArtifactHistoricalVersionPolicy.reference(pkg, code, claimSource)
+        if (claim == null) {
+            showStatus("Enter a valid exact package ID and positive version code to record a reference.")
+            return
+        }
+        if (historicalReferences.size >= 64 ||
+            historicalReferences.any { it.versionCode == claim.versionCode }) {
+            showStatus("Manual history list is full or contains a competing reference for this version.")
+            return
+        }
+        val next = ArtifactHistoricalVersionPolicy.shortlist(pkg, historicalReferences + claim)
+        if (next.size != historicalReferences.size + 1) {
+            showStatus("Manual version reference refused: package or source conflict.")
+            return
+        }
+        historicalReferences.add(claim)
+        refreshHistoricalReferences()
+        showStatus("Manual historical reference recorded (not provider-verified). No APK downloaded.")
+    }
+
+    private fun refreshHistoricalReferences() {
+        if (!::historicalReferencesStatus.isInitialized || !::requestedPackage.isInitialized) return
+        val pkg = requestedPackage.text.toString()
+        val entries = ArtifactHistoricalVersionPolicy.shortlist(pkg, historicalReferences)
+        historicalReferencesStatus.text = buildString {
+            append("Historical-version discovery: MANUAL REFERENCES ONLY. ")
+            append("No provider API queried; availability and publisher identity UNKNOWN.\n")
+            if (entries.isEmpty()) append("No manually recorded versions for this package.\n")
+            entries.forEach { reference ->
+                append(ArtifactHistoricalVersionPolicy.displayReference(pkg, reference))
+                append('\n')
+            }
+            append("Selected signed APK package/version must match the entered reference.")
+        }
+    }
+
+    private fun historicalPreflight(verified: ArtifactApkVerifier.VerifiedImport):
+        ArtifactHistoricalVersionPolicy.DevicePreflight {
+        // Only private, independently verified APKs enter this code path.
+        val baseIndex = verified.splitNames.indexOf(null)
+        val base = verified.files.getOrNull(baseIndex)
+        val archive = base?.let {
+            runCatching { packageManager.getPackageArchiveInfo(it.file.absolutePath, 0) }.getOrNull()
+        }
+        val declaredMin = archive?.takeIf {
+            it.packageName == verified.attempt.packageName
+        }?.applicationInfo?.minSdkVersion
+        val signedSplitCheck = runCatching {
+            ArtifactSplitCompatibilityPolicy.check(
+                verified.staged.format, verified.splitNames, android.os.Build.SUPPORTED_ABIS.toList())
+        }.getOrNull()
+        return ArtifactHistoricalVersionPolicy.preflight(
+            declaredMin, android.os.Build.VERSION.SDK_INT,
+            signedSplitCheck?.selectedAbiQualifier,
+            android.os.Build.SUPPORTED_ABIS.toList(), signedSplitCheck != null)
     }
 
     private fun selectedProvider(): ArtifactProviderDiscovery.Provider =
@@ -374,7 +483,8 @@ class ArtifactImportActivity : AppCompatActivity() {
             receipt.signingCertificateSha256,
             receipt.installedVersion,
             receipt.signerMatchesInstalled,
-            verified.trustTier
+            verified.trustTier,
+            activePreflight
         )
     }
 
@@ -384,9 +494,11 @@ class ArtifactImportActivity : AppCompatActivity() {
             installConsent.isChecked = false
             unknownPublisherConsent.isChecked = false
             downgradeConsent.isChecked = false
+            dataRiskAcknowledgement.isChecked = false
             installConsent.visibility = View.GONE
             unknownPublisherConsent.visibility = View.GONE
             downgradeConsent.visibility = View.GONE
+            dataRiskAcknowledgement.visibility = View.GONE
         }
         if (::review.isInitialized) review.text = "No verified files."
         if (::technicalReceipt.isInitialized) {
@@ -408,12 +520,16 @@ class ArtifactImportActivity : AppCompatActivity() {
         installConsent.isChecked = false
         unknownPublisherConsent.isChecked = false
         downgradeConsent.isChecked = false
+        dataRiskAcknowledgement.isChecked = false
         installConsent.visibility = View.VISIBLE
         unknownPublisherConsent.visibility = if (
             ArtifactReviewPresentation.consentNeedsUnknownPublisher(facts)
         ) View.VISIBLE else View.GONE
         downgradeConsent.visibility = if (
             ArtifactReviewPresentation.consentNeedsDowngrade(facts)
+        ) View.VISIBLE else View.GONE
+        dataRiskAcknowledgement.visibility = if (
+            ArtifactReviewPresentation.consentNeedsDataRisk(facts)
         ) View.VISIBLE else View.GONE
         updateConsentState()
     }
@@ -429,7 +545,8 @@ class ArtifactImportActivity : AppCompatActivity() {
                 trustedPublisherAnchor = false, // C04 never establishes this anchor.
                 userApprovedInstall = installConsent.isChecked,
                 userAcceptedUnknownPublisher = unknownPublisherConsent.isChecked,
-                userApprovedDowngrade = downgradeConsent.isChecked
+                userApprovedDowngrade = downgradeConsent.isChecked,
+                userAcknowledgedDataLossRisk = dataRiskAcknowledgement.isChecked
             )
         )
 
@@ -445,8 +562,17 @@ class ArtifactImportActivity : AppCompatActivity() {
         val blockers = decisionFor(verified)
         val versionMatches = ArtifactImportJourney.versionMatches(
             requestedVersion.text.toString(), verified.attempt.versionCode)
-        installButton.isEnabled = blockers.isEmpty() && versionMatches
-        consentHint.text = if (!versionMatches) {
+        val packageMatches = ArtifactHistoricalVersionPolicy.matchesVerifiedPackage(
+            requestedPackage.text.toString(), verified.attempt.packageName)
+        val preflight = activePreflight
+        installButton.isEnabled = blockers.isEmpty() && versionMatches && packageMatches &&
+            preflight != null &&
+            preflight.compatibility != ArtifactHistoricalVersionPolicy.Compatibility.INCOMPATIBLE
+        consentHint.text = if (!packageMatches) {
+            "Selected APK package does not match the manually requested package. Installation blocked."
+        } else if (preflight == null || preflight.compatibility == ArtifactHistoricalVersionPolicy.Compatibility.INCOMPATIBLE) {
+            ArtifactHistoricalVersionPolicy.displayPreflight(preflight)
+        } else if (!versionMatches) {
             ArtifactImportJourney.versionMessage(requestedVersion.text.toString(), verified.attempt.versionCode)
         } else ArtifactReviewPresentation.blockerDescription(blockers)
     }
@@ -524,6 +650,7 @@ class ArtifactImportActivity : AppCompatActivity() {
         cancellation = ticket
         active?.discard()
         active = null
+        activePreflight = null
         selectButton.isEnabled = false
         clearReview("Reading document metadata and copying privately. Nothing installed.")
         review.text = "Verification in progress — no APK approved yet."
@@ -550,12 +677,16 @@ class ArtifactImportActivity : AppCompatActivity() {
                     result.discard()
                     throw IllegalStateException("Import cancelled")
                 }
+                // Archive PackageManager metadata is parsed on the worker,
+                // never on the UI thread. It is derived from the verified staged bytes.
+                val preflight = historicalPreflight(result)
                 runOnUiThread {
                     if (serial != requestSerial || ticket.isCancelled() || isFinishing || isDestroyed) {
                         result.discard()
                     } else {
                         active?.discard()
                         active = result
+                        activePreflight = preflight
                         selectButton.isEnabled = true
                         refreshProviderPresentation()
                         val facts = verifiedFacts(result)
@@ -590,7 +721,17 @@ class ArtifactImportActivity : AppCompatActivity() {
         val approved = installConsent.isChecked
         val unknown = unknownPublisherConsent.isChecked
         val downgrade = downgradeConsent.isChecked
+        val dataRisk = dataRiskAcknowledgement.isChecked
         val decision = decisionFor(receipt)
+        // A disabled button alone is never an authorization boundary.
+        if (!ArtifactHistoricalVersionPolicy.matchesVerifiedPackage(
+                requestedPackage.text.toString(), receipt.attempt.packageName) ||
+            activePreflight == null ||
+            activePreflight?.compatibility ==
+                ArtifactHistoricalVersionPolicy.Compatibility.INCOMPATIBLE) {
+            showStatus("Requested package mismatch or known device incompatibility; installation blocked.")
+            return
+        }
         // Button disablement is presentation, not authorization. Guard the
         // actual install entry point against a mismatched version reference.
         if (!ArtifactImportJourney.versionMatches(
@@ -610,7 +751,7 @@ class ArtifactImportActivity : AppCompatActivity() {
         showStatus("Sending verified APK bytes to Android PackageInstaller")
         worker.execute {
             runCatching {
-                ArtifactInstallSession.install(this, receipt, approved, unknown, downgrade) { ticket.isCancelled() }
+                ArtifactInstallSession.install(this, receipt, approved, unknown, downgrade, dataRisk) { ticket.isCancelled() }
             }.onSuccess { session ->
                 runOnUiThread {
                     if (serial == requestSerial) {
