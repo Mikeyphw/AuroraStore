@@ -8,6 +8,8 @@ import android.database.MatrixCursor;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 import android.provider.OpenableColumns;
+import android.os.Process;
+import android.util.Log;
 import java.io.File;
 import java.io.FileNotFoundException;
 
@@ -17,11 +19,15 @@ import java.io.FileNotFoundException;
  * test APK process, not the target app's Kotlin-enabled class loader.
  */
 public final class R3C08GrantDataProvider extends ContentProvider {
-    @Override public boolean onCreate() { return true; }
+    private static final String TAG = "R3C08RemoteProvider";
+    @Override public boolean onCreate() {
+        Log.i(TAG, "R3C08_PROVIDER_START pid=" + Process.myPid());
+        return true;
+    }
 
     private File fixture(Uri uri) throws FileNotFoundException {
         if (!"com.aurora.store.r3c08.document".equals(uri.getAuthority())
-                || !"/signed.apk".equals(uri.getPath())) {
+                || !("/signed.apk".equals(uri.getPath()) || "/crash.apk".equals(uri.getPath()))) {
             throw new FileNotFoundException("Unknown isolated SAF test URI");
         }
         final android.content.Context ctx = getContext();
@@ -54,7 +60,16 @@ public final class R3C08GrantDataProvider extends ContentProvider {
     @Override public ParcelFileDescriptor openFile(Uri uri, String mode)
             throws FileNotFoundException {
         if (!"r".equals(mode)) throw new FileNotFoundException("Read-only test fixture");
-        return ParcelFileDescriptor.open(fixture(uri), ParcelFileDescriptor.MODE_READ_ONLY);
+        final File content = fixture(uri);
+        if ("/crash.apk".equals(uri.getPath())) {
+            // Test-APK-only remote process deliberately dies while serving the
+            // stream. The app, instrumentation runner and control provider
+            // live in DIFFERENT processes and must remain alive.
+            Log.e(TAG, "R3C08_PROVIDER_KILL pid=" + Process.myPid());
+            Process.killProcess(Process.myPid());
+            throw new FileNotFoundException("Remote test provider terminated");
+        }
+        return ParcelFileDescriptor.open(content, ParcelFileDescriptor.MODE_READ_ONLY);
     }
     @Override public Uri insert(Uri uri, ContentValues values) {
         throw new UnsupportedOperationException("Read-only fixture");

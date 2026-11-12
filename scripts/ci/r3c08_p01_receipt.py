@@ -44,11 +44,27 @@ def assess(raw: bytes, sha: str, run_id: str) -> dict:
                 'Process crashed', 'INSTRUMENTATION_STATUS_CODE: -1',
                 'INSTRUMENTATION_STATUS_CODE: -2'):
         require(bad not in log, 'Android failure in log: '+bad)
-    require(CLASS in log, 'wrong Android instrumentation class')
-    for name in METHODS:
-        marker = 'INSTRUMENTATION_STATUS: test='+name
-        require(len(re.findall('^'+re.escape(marker)+r'\s*$', log, re.M)) == 1,
-                'missing or duplicated actual device test: '+name)
+    require(CLASS in log,'wrong Android instrumentation class')
+    # AndroidJUnitRunner emits each test name twice: once with CODE 1 (start),
+    # once with CODE 0 (finish). The independent sendStatus(0, grant flags)
+    # contributes one additional successful code, but is NOT a test finish.
+    # Explicit paired ordering prevents a duplicate start or lost finish from
+    # being misrepresented as successful test evidence.
+    events = re.findall(
+        r'^INSTRUMENTATION_STATUS: test=([A-Za-z0-9_]+)\s*\n'
+        r'INSTRUMENTATION_STATUS_CODE: ([01])\s*$', log, re.M)
+    require(len(re.findall(r'^INSTRUMENTATION_STATUS: test=[A-Za-z0-9_]+\s*$',log,re.M))==6,
+            'unexpected Android test marker count')
+    require(len(events)==6,'R3C08 requires three test starts and three test finishes')
+    require(set(method for method,code in events)==set(METHODS),
+            'unexpected or missing actual Android test method')
+    for method in METHODS:
+        matching=[(i,code) for i,(name,code) in enumerate(events) if name==method]
+        require(len(matching)==2 and [code for _,code in matching]==['1','0']
+                and matching[0][0]<matching[1][0],
+                'missing ordered Android start/completion pair: '+method)
+    require(len(re.findall(r'^INSTRUMENTATION_STATUS_CODE: 1\s*$',log,re.M))==3,
+            'unexpected Android test start count')
     for name,value in FLAGS.items():
         marker = 'INSTRUMENTATION_STATUS: '+name+'='+value
         require(len(re.findall('^'+re.escape(marker)+r'\s*$', log, re.M)) == 1,
@@ -76,7 +92,8 @@ def assess(raw: bytes, sha: str, run_id: str) -> dict:
     }
 
 def example() -> bytes:
-    block = ''.join('INSTRUMENTATION_STATUS: test='+m+'\nINSTRUMENTATION_STATUS_CODE: 0\n'
+    block = ''.join('INSTRUMENTATION_STATUS: test='+m+'\nINSTRUMENTATION_STATUS_CODE: 1\n' +
+                    'INSTRUMENTATION_STATUS: test='+m+'\nINSTRUMENTATION_STATUS_CODE: 0\n'
                     for m in METHODS)
     flags = ''.join('INSTRUMENTATION_STATUS: '+k+'='+v+'\n' for k,v in FLAGS.items())
     return (('INSTRUMENTATION_STATUS: class='+CLASS+'\n'+block+flags+
@@ -90,7 +107,7 @@ def selftest() -> None:
         'wrong-source': (good,'A'*40,'123'),
         'wrong-run': (good,'a'*40,'0'),
         'missing-test': (good.replace(METHODS[1].encode(),b'wrongMethod'),'a'*40,'123'),
-        'duplicate-test': (good+('INSTRUMENTATION_STATUS: test='+METHODS[0]+'\n').encode(),'a'*40,'123'),
+        'duplicate-test': (good+('INSTRUMENTATION_STATUS: test='+METHODS[0]+'\nINSTRUMENTATION_STATUS_CODE: 1\n').encode(),'a'*40,'123'),
         'missing-grant-status': (good.replace(b'r3c08_grant_during=GRANTED',b'r3c08_grant_during=DENIED'),'a'*40,'123'),
         'duplicate-grant-status': (good+b'INSTRUMENTATION_STATUS: r3c08_grant_after=DENIED\n','a'*40,'123'),
         'wrong-count': (good.replace(b'OK (3 tests)',b'OK (2 tests)'),'a'*40,'123'),
@@ -100,6 +117,11 @@ def selftest() -> None:
         'failed-test': (good+b'FAILURES!!!\n','a'*40,'123'),
         'missing-status-code': (good.replace(b'INSTRUMENTATION_STATUS_CODE: 0',b'bad code',1),'a'*40,'123'),
         'malformed-utf8': (good+b'\xff','a'*40,'123'),
+        'missing-finish': (good.replace((b'INSTRUMENTATION_STATUS: test='+METHODS[0].encode()+b'\nINSTRUMENTATION_STATUS_CODE: 0'),b'INSTRUMENTATION_STATUS: test=other\nINSTRUMENTATION_STATUS_CODE: 0',1),'a'*40,'123'),
+        'duplicate-start': (good.replace((b'INSTRUMENTATION_STATUS: test='+METHODS[1].encode()+b'\nINSTRUMENTATION_STATUS_CODE: 0'),(b'INSTRUMENTATION_STATUS: test='+METHODS[1].encode()+b'\nINSTRUMENTATION_STATUS_CODE: 1'),1),'a'*40,'123'),
+        'finish-before-start': (good.replace((b'INSTRUMENTATION_STATUS: test='+METHODS[2].encode()+b'\nINSTRUMENTATION_STATUS_CODE: 1'),b'INSTRUMENTATION_STATUS: test='+METHODS[2].encode()+b'\nINSTRUMENTATION_STATUS_CODE: 0',1),'a'*40,'123'),
+        'duplicate-terminal-test': (good + (b'INSTRUMENTATION_STATUS: test='+METHODS[0].encode()+b'\nINSTRUMENTATION_STATUS_CODE: 0\n'),'a'*40,'123'),
+        'out-of-order-pair': (good.replace((b'INSTRUMENTATION_STATUS: test='+METHODS[0].encode()+b'\nINSTRUMENTATION_STATUS_CODE: 1\nINSTRUMENTATION_STATUS: test='+METHODS[0].encode()+b'\nINSTRUMENTATION_STATUS_CODE: 0'),(b'INSTRUMENTATION_STATUS: test='+METHODS[0].encode()+b'\nINSTRUMENTATION_STATUS_CODE: 0\nINSTRUMENTATION_STATUS: test='+METHODS[0].encode()+b'\nINSTRUMENTATION_STATUS_CODE: 1'),1),'a'*40,'123'),
     }
     for label,(raw,sha,run) in mutations.items():
         try:

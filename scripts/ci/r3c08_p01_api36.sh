@@ -55,3 +55,6 @@ grep -Fxq 'INSTRUMENTATION_CODE: -1' "$log" || { echo R3C08_P01_REFUSED_ANDROID_
 python3 -B scripts/ci/r3c08_p01_receipt.py --log "$log" --sha "$GITHUB_SHA" \
   --run-id "$GITHUB_RUN_ID" --output "$OUT/R3C08_P01_API36_REVOCATION_RECEIPT.json"
 echo R3C08_P01_API36_REAL_URI_GRANT_REVOKE_READ_ONLY_PASS
+# R3C08 P02-P04: nine independent adversarial Android checks in the same
+# existing emulator; no additional workflow, installs or network activity.
+bash scripts/ci/r3c08_p02_p04_api36.sh "$RUNNER" "$OUT"

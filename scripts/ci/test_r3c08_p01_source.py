@@ -95,7 +95,7 @@ need(ci.count('python3 -B scripts/ci/test_r3c08_p01_source.py')==1 and
      'targeted and inherited source tests must execute new contract')
 run=subprocess.run([sys.executable,'-B',str(RECEIPT),'--selftest'],
                    capture_output=True,text=True,timeout=20,cwd=ROOT)
-need(run.returncode==0 and '13 negatives' in run.stdout,
+need(run.returncode==0 and '18 negatives' in run.stdout,
      'receipt selftests failed: '+(run.stdout+run.stderr)[-1200:])
 # Mutate the actual checker controls, not a disconnected fake implementation.
 for label,source,needle,new in (
@@ -112,7 +112,7 @@ for label,source,needle,new in (
                                       'cancel-only mutation ineffective')
     elif label=='removed-private-read-permission':need('android:readPermission="com.aurora.store.r3c08.TEST_SAF_READ"' not in altered,
                                                        'manifest mutation ineffective')
-    elif label=='missing-revoke':need('ctx.revokeUriPermission(' not in altered,'revoke mutation ineffective')
+    elif label=='missing-revoke':need('ctx.revokeUriPermission(TARGET, DOCUMENT,' not in altered,'signed-document revoke mutation ineffective')
     elif label=='removed-uid-auth':need('Arrays.asList(packages).contains(TARGET)' not in altered,'UID mutation ineffective')
     elif label=='host-bypass-count':need("grep -Fxq 'OK (3 tests)'" not in altered,'host mutation ineffective')
     else:need('bash scripts/ci/r3c08_p01_api36.sh "$RUNNER" "$OUT"' not in altered,
@@ -185,8 +185,8 @@ for label,whole,old,new,required in (
         'return null','throw new SecurityException("Control endpoint cannot serve document bytes")'),
     ('allow-write-data',data,'if (!"r".equals(mode))','if (false)',
         'if (!"r".equals(mode))'),
-    ('remove-revoke',control,'ctx.revokeUriPermission(','ctx.grantUriPermission(',
-        'ctx.revokeUriPermission('),
+    ('remove-revoke',control,'ctx.revokeUriPermission(TARGET, DOCUMENT,','ctx.grantUriPermission(TARGET, DOCUMENT,',
+        'ctx.revokeUriPermission(TARGET, DOCUMENT,'),
     ('remove-validation-method',control,'throw new IllegalArgumentException("Unknown fixture control")',
         'return new Bundle()','throw new IllegalArgumentException("Unknown fixture control")'),
 ):
@@ -194,4 +194,10 @@ for label,whole,old,new,required in (
     need(mutated != whole and (required in mutated if label.startswith('reintroduce-') else required not in mutated),
          'HF03 negative mutation ineffective: '+label)
 print('R3C08_P01_HF03_JAVA_TEST_APK_CLASSLOADER_GUARD_PASS: 7 mutation cases')
-print('R3C08_P01_SOURCE_PASS: independent actual Android URI grant/revoke fixture, fail-closed cancel, 3 API36 cases, 13 receipt negatives and 6 source mutations')
+print('R3C08_P01_SOURCE_PASS: independent actual Android URI grant/revoke fixture, fail-closed cancel, 3 API36 cases, 18 receipt negatives and 6 source mutations')
+
+# R3C08 consolidated P02-P04: execute independently negative-tested contract,
+# not a marker-only phantom gate. No production Play/installer code is changed.
+p02p04=ROOT/'scripts/ci/test_r3c08_p02_p04_source.py'
+need(p02p04.is_file(),'P02-P04 adversarial source contract absent')
+exec(compile(p02p04.read_text(encoding='utf-8'),str(p02p04),'exec'))

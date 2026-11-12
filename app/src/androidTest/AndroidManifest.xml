@@ -7,6 +7,7 @@
     <application>
         <provider
             android:name="com.aurora.store.data.artifact.R3C08GrantDataProvider"
+            android:process=":r3c08_saf_document"
             android:authorities="com.aurora.store.r3c08.document"
             android:exported="true"
             android:grantUriPermissions="true"

@@ -21,6 +21,8 @@ public final class R3C08GrantControlProvider extends ContentProvider {
     private static final String TARGET = "com.aurora.store.debug";
     private static final Uri DOCUMENT = Uri.parse(
             "content://com.aurora.store.r3c08.document/signed.apk");
+    private static final Uri CRASH_DOCUMENT = Uri.parse(
+            "content://com.aurora.store.r3c08.document/crash.apk");
 
     @Override public boolean onCreate() { return true; }
 
@@ -37,6 +39,10 @@ public final class R3C08GrantControlProvider extends ContentProvider {
             ctx.grantUriPermission(TARGET, DOCUMENT, Intent.FLAG_GRANT_READ_URI_PERMISSION);
         } else if ("revoke".equals(method)) {
             ctx.revokeUriPermission(TARGET, DOCUMENT, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } else if ("grant_crash".equals(method)) {
+            ctx.grantUriPermission(TARGET, CRASH_DOCUMENT, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } else if ("revoke_crash".equals(method)) {
+            ctx.revokeUriPermission(TARGET, CRASH_DOCUMENT, Intent.FLAG_GRANT_READ_URI_PERMISSION);
         } else {
             throw new IllegalArgumentException("Unknown fixture control");
         }
