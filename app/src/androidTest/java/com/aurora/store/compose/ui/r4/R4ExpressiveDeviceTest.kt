@@ -4,9 +4,8 @@
  */
 package com.aurora.store.compose.ui.r4
 
+import android.graphics.Bitmap
 import androidx.compose.material3.Text
-import androidx.compose.ui.test.assertDoesNotExist
-import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
