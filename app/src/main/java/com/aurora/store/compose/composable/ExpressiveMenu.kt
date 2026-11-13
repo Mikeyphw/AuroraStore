@@ -11,14 +11,20 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.CheckableDropdownMenuItem
+import androidx.compose.foundation.background
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenuPopup
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MenuDefaults
-import androidx.compose.material3.SelectableDropdownMenuItem
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
@@ -78,7 +84,7 @@ fun ExpressiveMenuItem(
     )
 }
 
-/** A single-selection expressive menu item with the native selected color and shape motion. */
+/** API23-compatible selection using the existing expressive group shape and selected icon. */
 @Composable
 fun ExpressiveSelectableMenuItem(
     index: Int,
@@ -90,19 +96,23 @@ fun ExpressiveSelectableMenuItem(
     selectedLeadingIcon: (@Composable () -> Unit)? = null,
     enabled: Boolean = true
 ) {
-    SelectableDropdownMenuItem(
-        selected = selected,
+    val itemShape = menuItemShape(index, count)
+    DropdownMenuItem(
         onClick = onClick,
         text = text,
-        shapes = MenuDefaults.itemShape(index, count),
-        modifier = modifier,
-        selectedLeadingIcon = selectedLeadingIcon,
-        enabled = enabled,
-        colors = MenuDefaults.selectableItemVibrantColors()
+        shape = itemShape,
+        modifier = modifier
+            .background(
+                color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                shape = itemShape
+            )
+            .semantics { this.selected = selected },
+        leadingIcon = if (selected) selectedLeadingIcon else null,
+        enabled = enabled
     )
 }
 
-/** A toggleable expressive menu item with the native selected color and shape motion. */
+/** API23-compatible toggle with explicit checked semantics and a checked visual state. */
 @Composable
 fun ExpressiveCheckableMenuItem(
     index: Int,
@@ -115,16 +125,20 @@ fun ExpressiveCheckableMenuItem(
     checkedLeadingIcon: (@Composable () -> Unit)? = null,
     enabled: Boolean = true
 ) {
-    CheckableDropdownMenuItem(
-        checked = checked,
-        onCheckedChange = onCheckedChange,
+    val itemShape = menuItemShape(index, count)
+    DropdownMenuItem(
+        onClick = { onCheckedChange(!checked) },
         text = text,
-        shapes = MenuDefaults.itemShape(index, count),
-        modifier = modifier,
-        leadingIcon = leadingIcon,
-        checkedLeadingIcon = checkedLeadingIcon,
-        enabled = enabled,
-        colors = MenuDefaults.selectableItemVibrantColors()
+        shape = itemShape,
+        modifier = modifier
+            .background(
+                color = if (checked) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                shape = itemShape
+            )
+            .semantics { toggleableState = ToggleableState(checked) },
+        leadingIcon = if (checked) checkedLeadingIcon ?: leadingIcon else leadingIcon,
+        trailingIcon = { Checkbox(checked = checked, onCheckedChange = null) },
+        enabled = enabled
     )
 }
 
