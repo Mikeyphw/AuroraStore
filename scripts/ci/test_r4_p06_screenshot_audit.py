@@ -68,12 +68,12 @@ def run():
         root=Path(t)
         files=build(root)
         ok=audit.validate(root,SHA,RUN)
-        assert ok['real_device_tests']==43
+        assert ok['real_device_tests']==52
         assert len(ok['screenshots'])==25
         assert 'light/r4_update_downloading.png' in ok['screenshots']
         assert 'light/r4_settings.png' not in ok['screenshots']
         assert ok['screenshots_nonblank_validated']
-        print('R4_P07_SYNTHETIC_43_LOG_25_SCREENSHOT_THEME_RECEIPT_PASS')
+        print('R4_P09_SYNTHETIC_52_LOG_25_SCREENSHOT_THEME_RECEIPT_PASS')
         first=files[0]
         raw=first.read_bytes()
         first.write_bytes(png(99,blank=True))

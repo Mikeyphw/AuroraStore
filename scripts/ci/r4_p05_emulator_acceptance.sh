@@ -72,6 +72,11 @@ run_suite 'real-offline-worker' \
 run_suite 'download-ui-cancellation' \
   'com.aurora.store.compose.ui.downloads.DownloadFinalUiDeviceTest' \
   'app/src/androidTest/java/com/aurora/store/compose/ui/downloads/DownloadFinalUiDeviceTest.kt' 4
+# Real isolated Android preference tests with synthetic credentials only.
+# Original auth preferences are restored after every test; no Play login.
+run_suite 'r4-offline-account-session' \
+  'com.aurora.store.data.providers.R4OfflineAccountSessionDeviceTest' \
+  'app/src/androidTest/java/com/aurora/store/data/providers/R4OfflineAccountSessionDeviceTest.kt' 9
 
 # UI snapshots run on the actual emulator in both system light and dark modes.
 # No external app downloads or authentication are attempted.

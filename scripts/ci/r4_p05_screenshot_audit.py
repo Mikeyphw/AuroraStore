@@ -32,6 +32,7 @@ EXPECTED_LOGS = {
     'download-dao-cancellation': 9,
     'real-offline-worker': 8,
     'download-ui-cancellation': 4,
+    'r4-offline-account-session': 9,
     'r4-expressive-light': 5,
     'r4-expressive-dark': 5,
     'r4-activity-light': 6,
@@ -192,6 +193,9 @@ def validate(root: Path, source: str, run: str) -> dict:
         'expressive_popup_theme_canvas_validated': True,
         'physical_and_live_play_qualification_deferred':True,
         'offline_fixtures_only': True,
+        'offline_synthetic_account_preference_tests': 9,
+        'real_google_account_login_qualified': False,
+        'spoof_restart_ui_behavior_qualified': False,
         'external_google_play_update_verified':False,
         'real_installer_update_verified':False,
         'visual_manual_approved': False,
@@ -216,7 +220,7 @@ def main():
     a=p.parse_args()
     report=validate(a.root,a.source,a.run)
     a.out.write_text(json.dumps(report,indent=2,sort_keys=True)+'\n')
-    print('R4_P07_REAL_EMULATOR_43_TESTS_AND_25_SCREENSHOTS_NONBLANK_UNIQUE_THEME_PASS')
+    print('R4_P09_REAL_EMULATOR_52_TESTS_AND_25_SCREENSHOTS_NONBLANK_UNIQUE_THEME_PASS')
     print('R4_P06_MANUAL_EXPRESSIVE_UI_VISUAL_FIDELITY_PENDING')
 
 if __name__=='__main__':
