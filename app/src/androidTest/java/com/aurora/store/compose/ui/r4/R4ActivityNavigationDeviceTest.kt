@@ -2,7 +2,12 @@
 package com.aurora.store.compose.ui.r4
 
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Color
+import android.os.SystemClock
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -18,6 +23,10 @@ import com.aurora.store.R
 import com.aurora.store.compose.navigation.Screen
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import kotlin.math.abs
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -71,6 +80,80 @@ class R4ActivityNavigationDeviceTest {
         composeRule.waitForIdle()
     }
 
+    /**
+     * A Compose semantics assertion is not proof of a frame painted by Android's
+     * compositor. ModalBottomSheet is a separate dialog window; right after the
+     * click UiAutomation may return the previous fully-rendered Main frame.
+     * Require an actual large change in the lower body, not a hash difference
+     * caused by a clock, shimmer or Android status icon. No Play calls or writes.
+     */
+    private fun changedModalBodySamples(before: Bitmap, after: Bitmap): Int {
+        check(before.width == after.width && before.height == after.height) {
+            "R4_MORE_SCREENSHOT_DISPLAY_CHANGED"
+        }
+        val w = before.width
+        val h = before.height
+        var changed = 0
+        for (y in (h * 38 / 100) until (h * 91 / 100) step 12) {
+            for (x in (w / 9) until (w * 8 / 9) step 12) {
+                val a = before.getPixel(x, y)
+                val b = after.getPixel(x, y)
+                if (abs(Color.red(a) - Color.red(b)) +
+                    abs(Color.green(a) - Color.green(b)) +
+                    abs(Color.blue(a) - Color.blue(b)) >= 72
+                ) changed++
+            }
+        }
+        return changed
+    }
+
+    /** Screen-compositor fallback, read-only binary stdout; no public storage. */
+    private fun shellScreenFrame(): Bitmap? {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        return runCatching {
+            automation.executeShellCommand("screencap -p").use { descriptor ->
+                FileInputStream(descriptor.fileDescriptor).use { stream ->
+                    BitmapFactory.decodeStream(stream)
+                }
+            }
+        }.getOrNull()
+    }
+
+    private fun captureVisiblyDrawnMoreSheet(before: Bitmap) {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val filename = "r4_activity_more_sheet.png"
+        val output = File(context.filesDir, filename)
+        var maximumChange = 0
+        var nullCaptures = 0
+        // Eight UIAutomation frames, then four fixed-command shell screencaps.
+        // Never manufacture a screenshot or weaken the strict PNG auditor.
+        for (attempt in 1..12) {
+            composeRule.waitForIdle()
+            val frame = if (attempt <= 8) automation.takeScreenshot() else shellScreenFrame()
+            if (frame == null) {
+                nullCaptures++
+            } else {
+                try {
+                    val changed = changedModalBodySamples(before, frame)
+                    maximumChange = maxOf(maximumChange, changed)
+                    if (changed >= 200) {
+                        FileOutputStream(output).use { stream ->
+                            check(frame.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                                "R4_MORE_SCREENSHOT_ENCODE_FAILED"
+                            }
+                        }
+                        check(output.length() > 2048L) { "R4_MORE_SCREENSHOT_EMPTY" }
+                        return
+                    }
+                } finally {
+                    frame.recycle()
+                }
+            }
+            if (attempt < 12) SystemClock.sleep(350)
+        }
+        error("R4_MORE_SHEET_NOT_PAINTED_AFTER_12_FRAMES changed=$maximumChange null=$nullCaptures")
+    }
+
     @Test
     fun realSettingsNavigatesToUiPreferencesAndRetainsR3dImport() {
         launch(Screen.Settings).use {
@@ -90,10 +173,20 @@ class R4ActivityNavigationDeviceTest {
         // does not exercise the expressive More sheet or its navigation wiring.
         launch(Screen.Main(initialTab = 0)).use {
             expect(context.getString(R.string.title_apps))
-            composeRule.onNodeWithContentDescription(context.getString(R.string.title_more))
-                .performClick()
-            expect(context.getString(R.string.title_settings))
-            shot("r4_activity_more_sheet.png")
+            composeRule.waitForIdle()
+            val before = checkNotNull(
+                InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+            ) { "R4_MORE_BASELINE_SCREENSHOT_NULL" }
+            try {
+                composeRule.onNodeWithContentDescription(context.getString(R.string.title_more))
+                    .performClick()
+                expect(context.getString(R.string.title_settings))
+                composeRule.onNodeWithText(context.getString(R.string.title_settings))
+                    .assertIsDisplayed()
+                captureVisiblyDrawnMoreSheet(before)
+            } finally {
+                before.recycle()
+            }
             composeRule.onNodeWithText(context.getString(R.string.title_settings))
                 .performClick()
             expect("Import and verify APKs")
