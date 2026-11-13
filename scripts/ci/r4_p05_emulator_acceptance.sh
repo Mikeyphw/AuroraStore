@@ -85,7 +85,7 @@ for mode in light dark; do
     ACTIVITY_SOURCE='app/src/androidTest/java/com/aurora/store/compose/ui/r4/R4ActivityNavigationDeviceTest.kt'
     run_suite "r4-activity-$mode" "$ACTIVITY_CLASS" "$ACTIVITY_SOURCE" 5
     for screenshot in \
-        r4_settings.png r4_update_idle.png r4_update_verifying.png \
+        r4_update_downloading.png r4_update_idle.png r4_update_verifying.png \
         r4_update_installing.png r4_expressive_menu.png \
         r4_activity_settings.png r4_activity_ui_preferences.png \
         r4_activity_main.png r4_activity_search.png \

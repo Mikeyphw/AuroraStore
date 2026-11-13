@@ -18,7 +18,7 @@ import sys
 import zlib
 
 COMPONENT = (
-    'r4_settings.png', 'r4_update_idle.png', 'r4_update_verifying.png',
+    'r4_update_downloading.png', 'r4_update_idle.png', 'r4_update_verifying.png',
     'r4_update_installing.png', 'r4_expressive_menu.png',
 )
 ACTIVITY = (
@@ -149,8 +149,14 @@ def validate(root: Path, source: str, run: str) -> dict:
             path = root/'screenshots'/mode/name
             pngs[f'{mode}/{name}'] = load_pixels(path)
     pngs['light/r4_real_app_launch.png'] = load_pixels(root/'screenshots/light/r4_real_app_launch.png')
-    hashes = [p['sha256'] for p in pngs.values()]
-    require(len(set(hashes)) == len(hashes), 'IDENTICAL_SCREENSHOTS')
+    seen_hashes = {}
+    for name, evidence in pngs.items():
+        digest = evidence['sha256']
+        if digest in seen_hashes:
+            earlier = seen_hashes[digest]
+            require(False, 'IDENTICAL_SCREENSHOTS_' +
+                    earlier.replace('/', '_') + '__' + name.replace('/', '_'))
+        seen_hashes[digest] = name
     for name in EXPECTED:
         require(pngs[f'light/{name}']['sha256'] != pngs[f'dark/{name}']['sha256'],
                 'IDENTICAL_LIGHT_DARK_' + name)

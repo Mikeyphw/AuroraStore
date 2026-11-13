@@ -68,6 +68,8 @@ def run():
         ok=audit.validate(root,SHA,RUN)
         assert ok['real_device_tests']==41
         assert len(ok['screenshots'])==23
+        assert 'light/r4_update_downloading.png' in ok['screenshots']
+        assert 'light/r4_settings.png' not in ok['screenshots']
         assert ok['screenshots_nonblank_validated']
         print('R4_P06_SYNTHETIC_41_LOG_23_SCREENSHOT_RECEIPT_PASS')
         first=files[0]

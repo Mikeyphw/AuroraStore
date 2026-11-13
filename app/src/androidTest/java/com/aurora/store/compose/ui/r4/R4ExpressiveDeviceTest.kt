@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -45,7 +46,6 @@ class R4ExpressiveDeviceTest : IsolatedTest() {
         var destination: Destination? = null
         setContent { SettingsScreen(onNavigateTo = { destination = it }) }
         composeTestRule.onNodeWithText("Import and verify APKs").assertExists()
-        screenshot("r4_settings.png")
         composeTestRule.onNodeWithText(context.getString(R.string.pref_ui_title))
             .performScrollTo()
             .performClick()
@@ -58,10 +58,21 @@ class R4ExpressiveDeviceTest : IsolatedTest() {
     fun updateRowInvokesUpdateWithoutCallingCancellation() {
         var updates = 0
         var cancels = 0
+        val update = updateFixture()
+        val activeDownload = mutableStateOf<Download?>(null)
         setInsetContent {
             AppUpdateItem(
-                update = updateFixture(),
-                onUpdate = { updates++ },
+                update = update,
+                download = activeDownload.value,
+                onUpdate = {
+                    updates++
+                    // Offline visual fixture: show a real production update row's
+                    // in-progress presentation, without starting Play/download work.
+                    activeDownload.value = Download.fromUpdate(update).copy(
+                        status = DownloadStatus.DOWNLOADING,
+                        progress = 45
+                    )
+                },
                 onCancel = { cancels++ }
             )
         }
@@ -73,6 +84,11 @@ class R4ExpressiveDeviceTest : IsolatedTest() {
             assertThat(updates).isEqualTo(1)
             assertThat(cancels).isEqualTo(0)
         }
+        // The new state is distinct from the verified and installing captures.
+        // An isolated Settings shot duplicated the actual activity Settings image.
+        composeTestRule.onNodeWithText(context.getString(R.string.action_cancel)).assertExists()
+        composeTestRule.onNodeWithText(context.getString(R.string.action_update)).assertDoesNotExist()
+        screenshot("r4_update_downloading.png")
     }
 
     @Test
