@@ -32,7 +32,7 @@ from r3c06_bundletool_matrix import (
     single_signer as checked_single_signer,
 )
 
-REPO = 'Mikeyphw/AuroraStore-Standalone'
+REPO = 'Mikeyphw/AuroraStore'
 BRANCH = 'feature/r3c04-c02-c08-import-handoff-archives-20261109'
 WORKFLOW = '.github/workflows/aurora-targeted.yml'
 TEST_JOBS = frozenset({
@@ -170,6 +170,11 @@ def api(path: str) -> dict:
     ensure(os.environ.get('GH_TOKEN') or os.environ.get('GITHUB_TOKEN'),
            'GH_TOKEN/GITHUB_TOKEN required for GitHub Actions provenance')
     ensure(path.startswith('repos/'+REPO+'/'), 'out of repository API request')
+    # Do not let encoded/traversal paths escape the immutable repository identity.
+    uri_path = path.split('?', 1)[0]
+    ensure('\\' not in uri_path and '%' not in uri_path and
+           all(segment not in ('', '.', '..') for segment in uri_path.split('/')),
+           'invalid repository API path')
     reply=run(['gh','api',path],timeout=75,binary=True)
     ensure(len(reply)<2*1024*1024, 'oversized GitHub metadata response')
     try:

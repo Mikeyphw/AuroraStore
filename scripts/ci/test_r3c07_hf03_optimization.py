@@ -503,5 +503,107 @@ elif 'xmltree' in sys.argv:
         with mock.patch.dict(os.environ,{'GITHUB_REPOSITORY':'invalid/other'},clear=False):
             with self.assertRaises(ci.Refused):ci.exact_head(self.root,self.sha)
 
+
+class MigrationRepositoryIdentityNegative(unittest.TestCase):
+    """Offline identity and artifact tampering cases for native-fork migration."""
+
+    def test_repository_is_new_native_fork(self):
+        self.assertEqual(ci.REPO, 'Mikeyphw/AuroraStore')
+        self.assertNotIn('Standalone', ci.REPO)
+
+    def test_runtime_repository_identities_and_exact_sha(self):
+        with tempfile.TemporaryDirectory(prefix='r3d-migrated-identity-') as td:
+            root=Path(td)
+            subprocess.run(['git','init','-q',str(root)],check=True)
+            subprocess.run(['git','-C',td,'-c','user.name=Identity Test',
+                            '-c','user.email=identity@example.invalid',
+                            'commit','-q','--allow-empty','-m','fixture'],check=True)
+            head=subprocess.check_output(['git','-C',td,'rev-parse','HEAD'],text=True).strip()
+            for runtime,allowed in (
+                ('Mikeyphw/AuroraStore', True),
+                ('Mikeyphw/AuroraStore-Standalone', False),
+                ('someone/AuroraStore', False),
+                ('', False),
+            ):
+                with self.subTest(runtime=runtime), mock.patch.dict(
+                    os.environ,{'GITHUB_REPOSITORY':runtime},clear=False
+                ):
+                    if allowed:self.assertEqual(ci.exact_head(root,head),head)
+                    else:
+                        with self.assertRaises(ci.Refused):ci.exact_head(root,head)
+            with mock.patch.dict(os.environ,{'GITHUB_REPOSITORY':ci.REPO},clear=False):
+                with self.assertRaises(ci.Refused):ci.exact_head(root,'0'*40)
+                with self.assertRaises(ci.Refused):ci.exact_head(root,'not-a-sha')
+
+    def test_manifest_requires_new_repo_exact_source_run_attempt(self):
+        records={'app.apk':b'PK-application', 'androidTest.apk':b'PK-instrumentation'}
+        digest=lambda b: __import__('hashlib').sha256(b).hexdigest()
+        doc={'schema_version':1,'kind':'aurora-r3c07-hf03-targeted-apk-pair',
+             'repository':ci.REPO,'source_sha':'a'*40,'targeted_run_id':'123',
+             'targeted_run_attempt':'2','build_variant':'vanillaDebug',
+             'files':{
+                 k:{'filename':name,'size':len(records[name]),'sha256':digest(records[name]),
+                    'package':pkg,'signer_sha256':'b'*64}
+                 for k,name,pkg in (
+                     ('app','app.apk',ci.APP_PKG),
+                     ('androidTest','androidTest.apk',ci.TEST_PKG))},
+             'installation_qualified':False,'publisher_authenticated':False,
+             'physical_device_qualified':False,'release_qualified':False}
+        ci.verify_doc(doc,'a'*40,123,records,2)
+        mutations=[('repository','Mikeyphw/AuroraStore-Standalone'),
+                   ('repository','other/AuroraStore'),
+                   ('source_sha','c'*40),('targeted_run_id','124'),
+                   ('targeted_run_attempt','3'),('release_qualified',True)]
+        for key,value in mutations:
+            with self.subTest(key=key,value=value):
+                bad={**doc,key:value}
+                with self.assertRaises(ci.Refused):ci.verify_doc(bad,'a'*40,123,records,2)
+        with self.assertRaises(ci.Refused):
+            ci.verify_doc(doc,'a'*40,124,records,2)
+        with self.assertRaises(ci.Refused):
+            ci.verify_doc(doc,'c'*40,123,records,2)
+
+    def test_api_ignores_no_repository_override_or_forged_path(self):
+        with mock.patch.dict(os.environ,{'GH_TOKEN':'synthetic-offline'},clear=False), \
+             mock.patch.object(ci,'run',return_value=b'{}') as fake:
+            for path in ('repos/Mikeyphw/AuroraStore-Standalone/actions/runs/1',
+                         'repos/other/AuroraStore/actions/runs/1',
+                         'repos/Mikeyphw/AuroraStore/../other',
+                         'repos/Mikeyphw/AuroraStore/%2e%2e/other',
+                         'repos/Mikeyphw/AuroraStore//actions/runs/1'):
+                with self.subTest(path=path):
+                    with self.assertRaises(ci.Refused):ci.api(path)
+            self.assertEqual(fake.call_count,0)
+            self.assertEqual(ci.api('repos/Mikeyphw/AuroraStore/actions/runs/1'),{})
+            self.assertEqual(fake.call_count,1)
+
+    def test_eligible_workflow_run_refuses_foreign_repository_or_sha(self):
+        good={'head_sha':'a'*40,'head_branch':ci.BRANCH,'event':'pull_request',
+              'status':'completed','conclusion':'success','path':ci.WORKFLOW,
+              'repository':{'full_name':ci.REPO}}
+        self.assertTrue(ci.qualifies_run(good,'a'*40))
+        cases=[{'repository':{'full_name':'Mikeyphw/AuroraStore-Standalone'}},
+               {'repository':{'full_name':'attacker/AuroraStore'}},
+               {'head_sha':'d'*40}, {'head_branch':'master'},
+               {'event':'workflow_dispatch'},{'conclusion':'failure'}]
+        for mutation in cases:
+            with self.subTest(mutation=mutation):
+                self.assertFalse(ci.qualifies_run({**good,**mutation},'a'*40))
+
+    def test_artifact_identity_refuses_wrong_run_or_ambiguous_pair(self):
+        run={'id':123,'run_attempt':2}
+        name='aurora-targeted-apks-'+('a'*40)+'-123-2'
+        good={'name':name,'expired':False,'size_in_bytes':25,
+              'workflow_run':{'id':123}}
+        with mock.patch.object(ci,'api',return_value={'total_count':1,'artifacts':[good]}):
+            self.assertEqual(ci.matching_artifact(run,'a'*40),good)
+        for change in ({'workflow_run':{'id':999}}, {'size_in_bytes':0}):
+            with self.subTest(change=change), mock.patch.object(
+                ci,'api',return_value={'total_count':1,'artifacts':[{**good,**change}]}
+            ):
+                with self.assertRaises(ci.Refused):ci.matching_artifact(run,'a'*40)
+        with mock.patch.object(ci,'api',return_value={'total_count':2,'artifacts':[good,good]}):
+            with self.assertRaises(ci.Refused):ci.matching_artifact(run,'a'*40)
+
 if __name__=='__main__':
     unittest.main(verbosity=2)
