@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  actions: read # Consume only exact-source, signed targeted APK artifacts.
 
 concurrency:
   group: aurora-r4-p05-${{ github.ref }}
@@ -63,6 +64,8 @@ jobs:
           test "$(git ls-files -u | wc -l)" -eq 0
           bash -n scripts/ci/r4_p05_emulator_acceptance.sh
           python3 -B scripts/ci/test_r4_p06_screenshot_audit.py
+          python3 -B scripts/ci/test_r4_p06_apk_reuse.py
+          python3 -B scripts/ci/r4_p06_apk_reuse.py --help >/dev/null
           python3 -B scripts/ci/r4_p05_screenshot_audit.py --help >/dev/null
           git diff --check HEAD~1 HEAD
 
@@ -103,14 +106,57 @@ jobs:
               "$HOME/.android/cache"
             sleep "$((attempt*10))"
           done
+      - name: Probe signed exact-source targeted APKs (no fallback on invalid provenance)
+        id: apk_pair
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 -B scripts/ci/r4_p06_apk_reuse.py probe \
+            --root . --sha "$GITHUB_SHA" \
+            --tmp "$RUNNER_TEMP/aurora-r4-p05-targeted-pair" \
+            --github-output "$GITHUB_OUTPUT" --wait-seconds 240
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
+        if: steps.apk_pair.outputs.reused != 'true'
       - name: Compile exact-source real app and instrumentation APKs on GitHub only
+        if: steps.apk_pair.outputs.reused != 'true'
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           chmod +x gradlew
-          ./gradlew --no-daemon --max-workers=2 --stacktrace :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest
+          # Retry ONLY the exact known transient AGP repository-resolution failure.
+          # A Kotlin compiler, manifest or other Gradle failure remains immediate/fatal.
+          build_ok=false
+          for attempt in 1 2 3; do
+            log="$RUNNER_TEMP/aurora-r4-p05/gradle-attempt-${attempt}.log"
+            if ./gradlew --no-daemon --max-workers=2 --stacktrace \
+                :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest 2>&1 | tee "$log"; then
+              build_ok=true
+              break
+            fi
+            if ! grep -Fq "Plugin [id: 'com.android.application', version: '9.4.1', apply: false] was not found" "$log"; then
+              echo R4_P06_HF17_REFUSED_NON_TRANSIENT_GRADLE_FAILURE >&2
+              exit 1
+            fi
+            echo "R4_P06_HF17_TRANSIENT_PLUGIN_RESOLUTION_RETRY attempt=$attempt" >&2
+            if [[ "$attempt" == 3 ]]; then
+              echo R4_P06_HF17_REFUSED_PLUGIN_UNAVAILABLE_AFTER_BOUNDED_RETRIES >&2
+              exit 1
+            fi
+            sleep "$((attempt * 10))"
+          done
+          [[ "$build_ok" == true ]] || exit 1
+      - name: Verify exact-source signed APK input provenance regardless of build/reuse
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B scripts/ci/r4_p06_apk_reuse.py finalize \
+            --root . --sha "$GITHUB_SHA" \
+            --tmp "$RUNNER_TEMP/aurora-r4-p05-targeted-pair" \
+            --receipt "$RUNNER_TEMP/aurora-r4-p05/apk-input-provenance.json" \
+            --reused '${{ steps.apk_pair.outputs.reused }}'
       - name: Require KVM-backed ephemeral runner
         shell: bash
         run: |
