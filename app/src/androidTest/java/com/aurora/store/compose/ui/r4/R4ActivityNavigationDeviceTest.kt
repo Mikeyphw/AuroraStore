@@ -10,6 +10,8 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.work.Configuration
+import androidx.work.WorkManager
 import com.aurora.store.ComposeActivity
 import com.aurora.store.R
 import com.aurora.store.compose.navigation.Screen
@@ -29,7 +31,22 @@ class R4ActivityNavigationDeviceTest {
 
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
-    @Before fun setUp() { hiltRule.inject() }
+    @Before
+    fun setUp() {
+        hiltRule.inject()
+        // HiltTestApplication replaces AuroraApp, so the production
+        // Configuration.Provider is intentionally absent in instrumentation.
+        // Initialize the real WorkManager before any MainScreen ViewModel
+        // constructs UpdateHelper; do not change the production manifest.
+        try {
+            WorkManager.getInstance(context)
+        } catch (_: IllegalStateException) {
+            WorkManager.initialize(context, Configuration.Builder().build())
+        }
+        checkNotNull(WorkManager.getInstance(context)) {
+            "R4_WORK_MANAGER_TEST_INITIALIZATION_FAILED"
+        }
+    }
 
     private fun launch(screen: Screen): ActivityScenario<ComposeActivity> {
         val intent = Intent(context, ComposeActivity::class.java).apply {
