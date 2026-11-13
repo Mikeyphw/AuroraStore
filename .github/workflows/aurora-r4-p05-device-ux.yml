@@ -71,6 +71,8 @@ jobs:
           python3 -B scripts/ci/r4_p08_retained_decisions.py --repo .
           python3 -B scripts/ci/test_r4_p09_session_source_contract.py
           python3 -B scripts/ci/r4_p09_session_source_contract.py --root .
+          python3 -B scripts/ci/test_r4_p10_readiness_gate.py
+          python3 -B scripts/ci/r4_p10_readiness_gate.py --repo .
           python3 - <<'PYHF18'
           # Source-level regression guard: both provenance commands require the
           # read-only Actions token, never an empty/missing environment.
