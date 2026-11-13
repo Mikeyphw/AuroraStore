@@ -4,8 +4,13 @@
  */
 package com.aurora.store.compose.ui.r4
 
-import android.graphics.Bitmap
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -24,8 +29,6 @@ import com.aurora.store.data.model.DownloadStatus
 import com.aurora.store.data.room.download.Download
 import com.aurora.store.data.room.update.Update
 import com.google.common.truth.Truth.assertThat
-import java.io.File
-import java.io.FileOutputStream
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -55,7 +58,7 @@ class R4ExpressiveDeviceTest : IsolatedTest() {
     fun updateRowInvokesUpdateWithoutCallingCancellation() {
         var updates = 0
         var cancels = 0
-        setContent {
+        setInsetContent {
             AppUpdateItem(
                 update = updateFixture(),
                 onUpdate = { updates++ },
@@ -77,7 +80,7 @@ class R4ExpressiveDeviceTest : IsolatedTest() {
         val update = updateFixture()
         var updates = 0
         var cancels = 0
-        setContent {
+        setInsetContent {
             AppUpdateItem(
                 update = update,
                 download = Download.fromUpdate(update).copy(status = DownloadStatus.VERIFYING),
@@ -98,7 +101,7 @@ class R4ExpressiveDeviceTest : IsolatedTest() {
     @Test
     fun installingUpdateDoesNotOfferCancellationOrNewUpdate() {
         val update = updateFixture()
-        setContent {
+        setInsetContent {
             AppUpdateItem(
                 update = update,
                 download = Download.fromUpdate(update).copy(status = DownloadStatus.INSTALLING)
@@ -167,20 +170,23 @@ class R4ExpressiveDeviceTest : IsolatedTest() {
         sharedLibs = emptyList()
     )
 
-    private fun screenshot(name: String) {
-        composeTestRule.waitForIdle()
-        val bitmap = checkNotNull(
-            InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
-        ) { "R4_SCREENSHOT_NULL $name" }
-        check(bitmap.width >= 320 && bitmap.height >= 480) {
-            "R4_SCREENSHOT_BAD_DIMENSIONS $name ${bitmap.width}x${bitmap.height}"
-        }
-        val destination = File(context.filesDir, name)
-        FileOutputStream(destination).use {
-            check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) {
-                "R4_SCREENSHOT_ENCODE_FAILED $name"
+    // Component fixtures receive the insets their real Main/Downloads screens provide.
+    // This prevents test-only rows from rendering underneath the system status bar.
+    private fun setInsetContent(content: @Composable () -> Unit) {
+        setContent {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+                    content()
+                }
             }
         }
-        check(destination.length() > 2048L) { "R4_SCREENSHOT_MISSING_OR_EMPTY $name" }
+    }
+
+    private fun screenshot(name: String) {
+        R4ScreenshotEvidence.capture(
+            context = context,
+            filename = name,
+            waitForIdle = { composeTestRule.waitForIdle() }
+        )
     }
 }

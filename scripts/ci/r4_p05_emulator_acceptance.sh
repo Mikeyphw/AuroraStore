@@ -81,7 +81,15 @@ for mode in light dark; do
     if [[ "$mode" == 'light' ]]; then adb shell cmd uimode night no; else adb shell cmd uimode night yes; fi
     adb shell am force-stop "$TARGET" || true
     run_suite "r4-expressive-$mode" "$UI_CLASS" "$UI_SOURCE" 5
-    for screenshot in r4_settings.png r4_update_idle.png r4_update_verifying.png r4_update_installing.png r4_expressive_menu.png; do
+    ACTIVITY_CLASS='com.aurora.store.compose.ui.r4.R4ActivityNavigationDeviceTest'
+    ACTIVITY_SOURCE='app/src/androidTest/java/com/aurora/store/compose/ui/r4/R4ActivityNavigationDeviceTest.kt'
+    run_suite "r4-activity-$mode" "$ACTIVITY_CLASS" "$ACTIVITY_SOURCE" 5
+    for screenshot in \
+        r4_settings.png r4_update_idle.png r4_update_verifying.png \
+        r4_update_installing.png r4_expressive_menu.png \
+        r4_activity_settings.png r4_activity_ui_preferences.png \
+        r4_activity_main.png r4_activity_search.png \
+        r4_activity_downloads.png r4_activity_updates.png; do
         # A debug-only run-as copy keeps evidence private, not written to shared storage.
         adb exec-out run-as "$TARGET" cat "files/$screenshot" > "$OUT/screenshots/$mode/$screenshot" || {
             echo "R4_P05_REFUSED_SCREENSHOT_MISSING $mode/$screenshot" >&2
@@ -91,7 +99,8 @@ for mode in light dark; do
     echo "R4_P05_SCREENSHOTS_CAPTURED mode=$mode"
 done
 
-# Capture a real whole-app launch, without claiming onboarding/authenticated navigation.
+# Keep an independent cold-launch onboarding reference. Actual production Nav3
+# Main/Search/Downloads/Settings/Updates capture happens in the Hilt test suite above.
 adb shell am force-stop "$TARGET" || true
 adb shell cmd uimode night no
 adb shell am start -W -n "$TARGET/com.aurora.store.ComposeActivity" | tee "$OUT/logs/real-launch.txt"

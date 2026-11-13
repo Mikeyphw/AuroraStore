@@ -51,6 +51,8 @@ jobs:
           assert re.search(r'minSdk\s*\{\s*version\s*=\s*release\(23\)',gradle)
           for p in (
               'app/src/androidTest/java/com/aurora/store/compose/ui/r4/R4ExpressiveDeviceTest.kt',
+              'app/src/androidTest/java/com/aurora/store/compose/ui/r4/R4ActivityNavigationDeviceTest.kt',
+              'app/src/androidTest/java/com/aurora/store/compose/ui/r4/R4ScreenshotEvidence.kt',
               'scripts/ci/r4_p05_emulator_acceptance.sh',
               'scripts/ci/r4_p05_screenshot_audit.py',
           ):
@@ -60,6 +62,7 @@ jobs:
           PY
           test "$(git ls-files -u | wc -l)" -eq 0
           bash -n scripts/ci/r4_p05_emulator_acceptance.sh
+          python3 -B scripts/ci/test_r4_p06_screenshot_audit.py
           python3 -B scripts/ci/r4_p05_screenshot_audit.py --help >/dev/null
           git diff --check HEAD~1 HEAD
 
