@@ -134,7 +134,9 @@ class R4ExpressiveDeviceTest : IsolatedTest() {
         var selectedActions = 0
         var toggles = 0
         var lastToggle: Boolean? = null
-        setContent {
+        // A full-screen Material Surface is required for faithful dark-mode
+        // screenshots. AuroraTheme alone does not paint an isolated window.
+        setInsetContent {
             ExpressiveMenuPopup(expanded = true, onDismissRequest = {}) {
                 ExpressiveMenuGroup(index = 0, count = 1) {
                     ExpressiveSelectableMenuItem(

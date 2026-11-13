@@ -23,6 +23,7 @@ COMPONENT = (
 )
 ACTIVITY = (
     'r4_activity_settings.png', 'r4_activity_ui_preferences.png',
+    'r4_activity_more_sheet.png',
     'r4_activity_main.png', 'r4_activity_search.png',
     'r4_activity_downloads.png', 'r4_activity_updates.png',
 )
@@ -33,8 +34,8 @@ EXPECTED_LOGS = {
     'download-ui-cancellation': 4,
     'r4-expressive-light': 5,
     'r4-expressive-dark': 5,
-    'r4-activity-light': 5,
-    'r4-activity-dark': 5,
+    'r4-activity-light': 6,
+    'r4-activity-dark': 6,
 }
 
 
@@ -135,7 +136,8 @@ def load_pixels(path: Path):
     # Perceptual thumbnail retained for independent duplicate and compositing audits.
     return {'bytes': len(data), 'width': width, 'height': height,
             'sha256': hashlib.sha256(data).hexdigest(),
-            'non_background_samples': changed, 'sampled_colors': len(unique)}
+            'non_background_samples': changed, 'sampled_colors': len(unique),
+            'canvas_center_rgb': list(bg)}
 
 
 def validate(root: Path, source: str, run: str) -> dict:
@@ -149,6 +151,16 @@ def validate(root: Path, source: str, run: str) -> dict:
             path = root/'screenshots'/mode/name
             pngs[f'{mode}/{name}'] = load_pixels(path)
     pngs['light/r4_real_app_launch.png'] = load_pixels(root/'screenshots/light/r4_real_app_launch.png')
+    # Pixel integrity alone accepts a white canvas in a dark-mode popup.
+    # For this *isolated component fixture*, require that the unoccupied
+    # center background follows the device's actual light/dark appearance.
+    # Do not infer approval for the full product from these two pixels.
+    light_canvas = sum(pngs['light/r4_expressive_menu.png']['canvas_center_rgb'])
+    dark_canvas = sum(pngs['dark/r4_expressive_menu.png']['canvas_center_rgb'])
+    require(light_canvas >= 375,
+            'R4_P07_LIGHT_MENU_CANVAS_DARK_' + str(light_canvas))
+    require(dark_canvas <= 330,
+            'R4_P07_DARK_MENU_CANVAS_LIGHT_' + str(dark_canvas))
     seen_hashes = {}
     for name, evidence in pngs.items():
         digest = evidence['sha256']
@@ -174,8 +186,11 @@ def validate(root: Path, source: str, run: str) -> dict:
         'screenshots':pngs,
         'real_production_compose_activity_routes_tested':[x.removeprefix('r4_activity_').removesuffix('.png') for x in ACTIVITY],
         'full_app_navigation_qualified':True,
+        'main_more_to_settings_navigation_tested':True,
         'screenshots_nonblank_validated':True,
         'screenshots_unique_validated':True,
+        'expressive_popup_theme_canvas_validated': True,
+        'physical_and_live_play_qualification_deferred':True,
         'offline_fixtures_only': True,
         'external_google_play_update_verified':False,
         'real_installer_update_verified':False,
@@ -201,7 +216,7 @@ def main():
     a=p.parse_args()
     report=validate(a.root,a.source,a.run)
     a.out.write_text(json.dumps(report,indent=2,sort_keys=True)+'\n')
-    print('R4_P06_REAL_EMULATOR_41_TESTS_AND_23_SCREENSHOTS_NONBLANK_UNIQUE_PASS')
+    print('R4_P07_REAL_EMULATOR_43_TESTS_AND_25_SCREENSHOTS_NONBLANK_UNIQUE_THEME_PASS')
     print('R4_P06_MANUAL_EXPRESSIVE_UI_VISUAL_FIDELITY_PENDING')
 
 if __name__=='__main__':

@@ -3,6 +3,7 @@ package com.aurora.store.compose.ui.r4
 
 import android.content.Intent
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -80,6 +81,23 @@ class R4ActivityNavigationDeviceTest {
             expect(context.getString(R.string.pref_ui_theme))
             composeRule.onNodeWithText("Import and verify APKs").assertDoesNotExist()
             shot("r4_activity_ui_preferences.png")
+        }
+    }
+
+    @Test
+    fun realMainMoreSheetNavigatesToSettingsViaActualTap() {
+        // Follow the user's production route. A deep-link directly to Settings
+        // does not exercise the expressive More sheet or its navigation wiring.
+        launch(Screen.Main(initialTab = 0)).use {
+            expect(context.getString(R.string.title_apps))
+            composeRule.onNodeWithContentDescription(context.getString(R.string.title_more))
+                .performClick()
+            expect(context.getString(R.string.title_settings))
+            shot("r4_activity_more_sheet.png")
+            composeRule.onNodeWithText(context.getString(R.string.title_settings))
+                .performClick()
+            expect("Import and verify APKs")
+            composeRule.onNodeWithText(context.getString(R.string.pref_ui_title)).assertExists()
         }
     }
 

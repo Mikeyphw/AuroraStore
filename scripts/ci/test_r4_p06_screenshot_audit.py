@@ -16,9 +16,9 @@ SHA = '92dee5df82b874a4ca1d26a29c7a0b0694a197fa'
 RUN = '43442485755'
 
 
-def png(col: int, blank: bool = False) -> bytes:
+def png(col: int, blank: bool = False, background: tuple[int,int,int] = (250,250,250)) -> bytes:
     w,h=384,576
-    base=(250,250,250)
+    base=background
     fg=((col*29)%180+35,(col*47)%160+50,(col*67)%155+45)
     b=bytearray()
     for y in range(h):
@@ -46,7 +46,9 @@ def build(root:Path):
         for name in audit.EXPECTED:
             screens.append(d/name)
     screens.append(root/'screenshots/light/r4_real_app_launch.png')
-    for i,path in enumerate(screens): path.write_bytes(png(i+1))
+    for i,path in enumerate(screens):
+        background = (30, 32, 39) if path.parent.name == 'dark' and path.name == 'r4_expressive_menu.png' else (250,250,250)
+        path.write_bytes(png(i+1, background=background))
     (root/'logs').mkdir()
     for label,count in audit.EXPECTED_LOGS.items():
         (root/'logs'/f'{label}.txt').write_text(f'INSTRUMENTATION_CODE: -1\nOK ({count} tests)\n')
@@ -66,12 +68,12 @@ def run():
         root=Path(t)
         files=build(root)
         ok=audit.validate(root,SHA,RUN)
-        assert ok['real_device_tests']==41
-        assert len(ok['screenshots'])==23
+        assert ok['real_device_tests']==43
+        assert len(ok['screenshots'])==25
         assert 'light/r4_update_downloading.png' in ok['screenshots']
         assert 'light/r4_settings.png' not in ok['screenshots']
         assert ok['screenshots_nonblank_validated']
-        print('R4_P06_SYNTHETIC_41_LOG_23_SCREENSHOT_RECEIPT_PASS')
+        print('R4_P07_SYNTHETIC_43_LOG_25_SCREENSHOT_THEME_RECEIPT_PASS')
         first=files[0]
         raw=first.read_bytes()
         first.write_bytes(png(99,blank=True))
@@ -87,11 +89,23 @@ def run():
         refused(lambda:audit.validate(root,SHA,RUN),'PNG_CRC')
         files[4].write_bytes(png(5))
         log=root/'logs/r4-activity-dark.txt'
-        log.write_text('OK (5 tests)\n')
+        log.write_text('OK (6 tests)\n')
         refused(lambda:audit.validate(root,SHA,RUN),'DEVICE_LOG')
-        log.write_text('INSTRUMENTATION_CODE: -1\nOK (5 tests)\n')
+        log.write_text('INSTRUMENTATION_CODE: -1\nOK (6 tests)\n')
         refused(lambda:audit.validate(root,'f'*40,RUN),'SOURCE_MISMATCH')
-        print('R4_P06_6_MUTATION_NEGATIVES_PASS')
+        # Prior HF18 screenshots used a white canvas in *both* modes; prevent
+        # a rerun from being accepted merely because its PNG hashes differ.
+        menu = root/'screenshots/dark/r4_expressive_menu.png'
+        old = menu.read_bytes()
+        menu.write_bytes(png(50, background=(250,250,250)))
+        refused(lambda:audit.validate(root,SHA,RUN),'DARK_MENU_CANVAS_LIGHT')
+        menu.write_bytes(old)
+        menu = root/'screenshots/light/r4_expressive_menu.png'
+        old = menu.read_bytes()
+        menu.write_bytes(png(51, background=(30,32,39)))
+        refused(lambda:audit.validate(root,SHA,RUN),'LIGHT_MENU_CANVAS_DARK')
+        menu.write_bytes(old)
+        print('R4_P07_8_MUTATION_AND_THEME_NEGATIVES_PASS')
 
 if __name__=='__main__':
     run()

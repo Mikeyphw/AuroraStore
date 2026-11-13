@@ -65,6 +65,8 @@ jobs:
           bash -n scripts/ci/r4_p05_emulator_acceptance.sh
           python3 -B scripts/ci/test_r4_p06_screenshot_audit.py
           python3 -B scripts/ci/test_r4_p06_apk_reuse.py
+          python3 -B scripts/ci/test_r4_p07_source_parity.py
+          python3 -B scripts/ci/r4_p07_source_parity.py --repo .
           python3 - <<'PYHF18'
           # Source-level regression guard: both provenance commands require the
           # read-only Actions token, never an empty/missing environment.

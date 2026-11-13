@@ -83,12 +83,12 @@ for mode in light dark; do
     run_suite "r4-expressive-$mode" "$UI_CLASS" "$UI_SOURCE" 5
     ACTIVITY_CLASS='com.aurora.store.compose.ui.r4.R4ActivityNavigationDeviceTest'
     ACTIVITY_SOURCE='app/src/androidTest/java/com/aurora/store/compose/ui/r4/R4ActivityNavigationDeviceTest.kt'
-    run_suite "r4-activity-$mode" "$ACTIVITY_CLASS" "$ACTIVITY_SOURCE" 5
+    run_suite "r4-activity-$mode" "$ACTIVITY_CLASS" "$ACTIVITY_SOURCE" 6
     for screenshot in \
         r4_update_downloading.png r4_update_idle.png r4_update_verifying.png \
         r4_update_installing.png r4_expressive_menu.png \
         r4_activity_settings.png r4_activity_ui_preferences.png \
-        r4_activity_main.png r4_activity_search.png \
+        r4_activity_more_sheet.png r4_activity_main.png r4_activity_search.png \
         r4_activity_downloads.png r4_activity_updates.png; do
         # A debug-only run-as copy keeps evidence private, not written to shared storage.
         adb exec-out run-as "$TARGET" cat "files/$screenshot" > "$OUT/screenshots/$mode/$screenshot" || {
