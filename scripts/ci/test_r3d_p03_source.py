@@ -14,7 +14,7 @@ ROOT=Path(__file__).resolve().parents[2]
 CI=ROOT/'scripts/ci'
 sys.path.insert(0,str(CI))
 from r3d_p03_fixture import PACKAGE, verify, manifest
-from r3d_p03_disposable import execute, SERIAL, Refused, parse_device_inventory
+from r3d_p03_disposable import execute, SERIAL, Refused, parse_device_inventory, Android, fixture_present
 
 class FakeAndroid:
     def __init__(self, *, initial=None, cancel_changes=False, bad_upgrade_data=False,
@@ -92,6 +92,70 @@ class AndroidInventoryFormatContract(unittest.TestCase):
         for sample in ('emulator-5554 device\n',
                        'List of devices attached\n'+(' '*16400)):
             with self.assertRaises(Refused): parse_device_inventory(sample)
+
+class DisposablePackageInventoryContract(unittest.TestCase):
+    """Mock only the two unprivileged shell outputs; test the REAL guard."""
+    def inspect(self,path_rc,path_out,list_rc,list_out):
+        android=Android()
+        calls=[]
+        def stub(*args,allow_failure=False):
+            calls.append((args,allow_failure))
+            if args==('pm','path',PACKAGE):return path_rc,path_out
+            if args==('pm','list','packages','--user','0',PACKAGE):
+                return list_rc,list_out
+            raise AssertionError('unexpected shell call '+repr(args))
+        android.shell=stub
+        try:return android.installed()
+        finally:
+            self.assertEqual(calls,[
+                (('pm','path',PACKAGE),True),
+                (('pm','list','packages','--user','0',PACKAGE),True)])
+
+    def test_real_api36_empty_output_nonzero_path_means_absent_only_if_list_clean(self):
+        self.assertFalse(self.inspect(1,'',0,''))
+        self.assertFalse(self.inspect(0,'',0,''))
+        self.assertFalse(self.inspect(1,'Error: package not found',0,''))
+        self.assertFalse(self.inspect(1,'unable to find package',0,''))
+
+    def test_real_installed_and_split_package_paths(self):
+        for path_output in ('package:/data/app/base.apk',
+                            'package:/data/app/base.apk\npackage:/data/app/split.apk'):
+            self.assertTrue(self.inspect(0,path_output,0,'package:'+PACKAGE))
+
+    def test_path_and_inventory_contradictions_refused(self):
+        cases=(
+            (1,'',0,'package:'+PACKAGE),
+            (0,'',0,'package:'+PACKAGE),
+            (0,'Error: package not found',0,'package:'+PACKAGE),
+            (0,'package:/data/app/base.apk',0,''),
+            (1,'package:/data/app/base.apk',0,'package:'+PACKAGE),
+            (0,'package:/data/app/base.apk',0,'package:com.other.app'),
+            (0,'package:/data/app/base.apk\nError: partial failure',0,'package:'+PACKAGE),
+        )
+        for case in cases:
+            with self.subTest(case=case),self.assertRaises(Refused):self.inspect(*case)
+
+    def test_missing_or_malformed_package_inventory_refused(self):
+        cases=(
+            (1,'',1,''),(1,'',1,'permission denied'),
+            (1,'',0,'package:com.other.app'),
+            (1,'',0,'package:'+PACKAGE+'\npackage:'+PACKAGE),
+            (1,'',0,'package:'+PACKAGE+'.clone'),
+            (1,'',0,'garbled output'),
+            (0,'package:',0,'package:'+PACKAGE),
+            (0,'package:relative/path',0,'package:'+PACKAGE),
+            (1,'permission denied',0,''),
+            (127,'unknown package service',0,''),
+            (0,'warning: package manager unavailable',0,''),
+        )
+        for case in cases:
+            with self.subTest(case=case),self.assertRaises(Refused):self.inspect(*case)
+
+    def test_parser_rejects_unbounded_and_wrong_types(self):
+        for case in ((1,'',0,'X'*20000), (1,'X'*20000,0,''),
+                     ('1','',0,''), (1,b'',0,''), (1,'',None,'')):
+            with self.subTest(case=str(case)[:80]),self.assertRaises(Refused):
+                fixture_present(*case)
 
 class FixtureContract(unittest.TestCase):
     def test_honest_manifest_packages(self):

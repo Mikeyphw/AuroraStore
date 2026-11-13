@@ -163,15 +163,21 @@ def validate_adb_trace(trace: dict, receipt: dict, sha: str, run_id: str) -> dic
          'Success' in uninstalls[0][1]['output'],
          'successful disposable app teardown command not observed')
     need(uninstalls[0][0] > installs[-1][0], 'fixture removed before completion')
-    need(any(i > uninstalls[0][0] and 'package:' not in e['output'] and
-             (e['exit_code'] == 0 or 'not found' in e['output'].lower() or
-              'unable to find' in e['output'].lower())
-             for i,e in hits(['shell','pm','path',PACKAGE])),
-         'no post-cleanup device package-path absence observation')
-    need(any(i > uninstalls[0][0] and e['exit_code']==0 and
-             ('package:'+PACKAGE) not in e['output']
-             for i,e in hits(['shell','pm','list','packages','--user','0',PACKAGE])),
-         'no independent post-cleanup package inventory proving absence')
+    # ADB's `pm path` can fail silently for a genuinely absent package.
+    # Independently require a successful, empty *exact* user-0 package listing.
+    post_paths=[e for i,e in hits(['shell','pm','path',PACKAGE])
+                if i>uninstalls[0][0]]
+    post_lists=[e for i,e in hits(['shell','pm','list','packages','--user','0',PACKAGE])
+                if i>uninstalls[0][0]]
+    need(bool(post_paths) and bool(post_lists),
+         'missing post-cleanup independent package observations')
+    need(all(e['output'].strip().lower() in
+             ('','error: package not found','package not found',
+              'error: unable to find package','unable to find package')
+             for e in post_paths),
+         'post-cleanup package-path output indicates presence or ambiguity')
+    need(all(e['exit_code']==0 and not e['output'].strip() for e in post_lists),
+         'post-cleanup package listing failed or contains unexpected package output')
     absent = hits(['shell','ls','-ld','/data/local/tmp/r3d_p04_owned_partial.apk'])
     need(len(absent) >= 3 and all(e['exit_code'] != 0 and
           ('No such file' in e['output'] or 'not found' in e['output'].lower()) for _,e in absent),

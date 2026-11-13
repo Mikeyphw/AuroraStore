@@ -59,6 +59,35 @@ def parse_device_inventory(output):
          'exactly one online disposable emulator required; ADB inventory='+repr(records[:8]))
     return records
 
+def fixture_present(path_status, path_output, list_status, list_output):
+    """Corroborate the exact test package via independent unprivileged `pm` queries.
+
+    Ambiguous/mismatched/incomplete inventories are NEVER interpreted as absence.
+    No unrelated app name or package is accepted, modified, or uninstalled.
+    """
+    need(type(path_status) is int and type(list_status) is int and
+         isinstance(path_output,str) and isinstance(list_output,str) and
+         len(path_output)<=16384 and len(list_output)<=16384,
+         'malformed or unbounded package inventory response')
+    need(list_status==0,
+         'package list query failed rc='+str(list_status)+' output='+repr(list_output[-300:]))
+    names=[line.strip() for line in list_output.splitlines() if line.strip()]
+    need(names==[] or names==['package:'+PACKAGE],
+         'package list ambiguous/unexpected: '+repr(names[:5]))
+    paths=[line.strip() for line in path_output.splitlines() if line.strip()]
+    if paths and all(re.fullmatch(r'package:/\S+',item) is not None for item in paths):
+        need(path_status==0 and names==['package:'+PACKAGE],
+             'package path/list contradiction (installed package or failed path command)')
+        return True
+    need(names==[], 'package listed as installed but path did not verify it')
+    message=path_output.strip().lower()
+    # Empty output with a nonzero `pm path` status is legitimate only when
+    # the independent exact user-0 inventory has succeeded AND is empty.
+    need(message in ('','error: package not found','package not found',
+                     'error: unable to find package','unable to find package'),
+         'package path query ambiguous rc='+str(path_status)+' output='+repr(path_output[-300:]))
+    return False
+
 class Android:
     def __init__(self, serial=SERIAL):
         need(serial==SERIAL, 'only private emulator-5554 is allowed')
@@ -87,16 +116,13 @@ class Android:
         need(secure.strip() == '1', 'insecure emulator image refused')
 
     def installed(self):
-        status,out = self.shell('pm','path',PACKAGE,allow_failure=True)
-        if re.search(r'(?m)^package:',out):return True
-        _, inventory = self.shell('pm','list','packages','--user','0',PACKAGE)
-        packages={line.removeprefix('package:').strip() for line in inventory.splitlines()
-                  if line.startswith('package:')}
-        if PACKAGE in packages:return True
-        need(status == 0 or 'not found' in out.lower() or
-             'unable to find' in out.lower(),
-             'could not independently establish fixture absence: '+out[-300:])
-        return False
+        # Never infer absence from the exit status of `pm path` alone. Some
+        # Android 16 images return a nonzero status and EMPTY output for an
+        # absent package. A *successful* user-0 list query must corroborate it.
+        path_status, path_output = self.shell('pm','path',PACKAGE,allow_failure=True)
+        list_status, list_output = self.shell(
+            'pm','list','packages','--user','0',PACKAGE,allow_failure=True)
+        return fixture_present(path_status,path_output,list_status,list_output)
 
     def version(self):
         need(self.installed(), 'fixture absent when version required')

@@ -258,6 +258,44 @@ class P04AdversarialTests(unittest.TestCase):
             with self.subTest(mutation=mutation),self.assertRaises(SignoffRefused):
                 validate_adb_trace(bad,report,SHA,RUN)
 
+    def test_29_post_cleanup_independent_empty_inventory_accepts_silent_pm_path_failure(self):
+        report,fixture=self.good()
+        trace=synthetic_adb_transcript(report)
+        report['adb_trace_commands']=len(trace['commands'])
+        original=next(e for e in trace['commands'] if
+            e['args']==['shell','pm','path',PACKAGE])
+        self.assertEqual(original['exit_code'],1)
+        good=copy.deepcopy(trace)
+        next(e for e in good['commands'] if e['args']==['shell','pm','path',PACKAGE]).update(
+            exit_code=1,output='')
+        validate_adb_trace(good,report,SHA,RUN)
+        for rc in (0,1,127):
+            allowed=copy.deepcopy(good)
+            next(e for e in allowed['commands'] if e['args']==['shell','pm','path',PACKAGE]).update(
+                exit_code=rc,output='')
+            validate_adb_trace(allowed,report,SHA,RUN)
+
+    def test_30_post_cleanup_contradictions_and_list_failure_veto_signoff(self):
+        report,fixture=self.good()
+        trace=synthetic_adb_transcript(report)
+        report['adb_trace_commands']=len(trace['commands'])
+        for which,output,rc in (
+            ('path','package:/data/app/still-installed.apk',0),
+            ('path','permission denied',1),
+            ('path','unrelated command output',0),
+            ('list','package:'+PACKAGE,0),
+            ('list','package:com.other.app',0),
+            ('list','',1),
+            ('list','permission denied',1),
+        ):
+            mutant=copy.deepcopy(trace)
+            args=(['shell','pm','path',PACKAGE] if which=='path' else
+                  ['shell','pm','list','packages','--user','0',PACKAGE])
+            next(e for e in mutant['commands'] if e['args']==args).update(
+                exit_code=rc,output=output)
+            with self.subTest(which=which,output=output),self.assertRaises(SignoffRefused):
+                validate_adb_trace(mutant,report,SHA,RUN)
+
     def test_26_p04_workflow_requires_transcript_on_both_write_and_signoff(self):
         path=Path(__file__).parents[2]/'.github/workflows/aurora-r3d-p04-recovery.yml'
         workflow=path.read_text()
