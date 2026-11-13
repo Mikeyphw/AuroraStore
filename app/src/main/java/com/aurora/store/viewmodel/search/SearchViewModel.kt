@@ -31,6 +31,9 @@ import com.aurora.store.data.providers.AuthProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,6 +53,7 @@ class SearchViewModel @Inject constructor(
 
     private val _suggestions = MutableStateFlow<List<SearchSuggestion>>(emptyList())
     val suggestions = _suggestions.asStateFlow()
+    private var suggestionsJob: Job? = null
 
     private val searchFilter = MutableStateFlow(SearchFilter())
     private val _apps = MutableStateFlow<PagingData<App>>(PagingData.empty())
@@ -115,10 +119,26 @@ class SearchViewModel @Inject constructor(
     }
 
     fun fetchSuggestions(query: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _suggestions.value = webPlayClient.search.suggestions(query)
-                .filter { it.title.isNotBlank() }
-                .take(5)
+        val normalized = query.trim()
+        suggestionsJob?.cancel()
+        if (normalized.isBlank()) {
+            _suggestions.value = emptyList()
+            return
+        }
+        suggestionsJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val latest = webPlayClient.search.suggestions(normalized)
+                    .filter { it.title.isNotBlank() }
+                    .take(5)
+                ensureActive() // stale response must not replace newer input
+                _suggestions.value = latest
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (exception: PlayException.Unauthorized) {
+                AuroraApp.events.send(AuthEvent.SessionExpired())
+            } catch (exception: Exception) {
+                Log.w(TAG, "Suggestions failed for current query", exception)
+            }
         }
     }
 

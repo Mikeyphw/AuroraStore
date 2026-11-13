@@ -211,7 +211,7 @@ private fun AppHeader(update: Update, onShowDetails: () -> Unit) {
             contentDescription = null,
             modifier = Modifier
                 .requiredSize(dimensionResource(R.dimen.icon_size_medium))
-                .clip(RoundedCornerShape(dimensionResource(R.dimen.radius_medium)))
+                .clip(RoundedCornerShape(dimensionResource(R.dimen.app_icon_radius)))
         )
 
         Column(modifier = Modifier.weight(1f)) {
@@ -287,11 +287,13 @@ private fun AccountAccordion(
             text = stringResource(R.string.action_switch_account),
             style = MaterialTheme.typography.bodyLarge
         )
-        Icon(
+        ArrowIconBox(
             painter = painterResource(
                 if (expanded) R.drawable.ic_keyboard_arrow_up else R.drawable.ic_keyboard_arrow_down
             ),
-            contentDescription = null
+            contentDescription = null,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 
