@@ -121,7 +121,7 @@ fun MainSearchButton(
 ) {
     val colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors()
     FloatingActionButton(
-        onClick = { onNavigateTo(Destination.Search) },
+        onClick = { onNavigateTo(Destination.Search()) },
         modifier = Modifier.size(FloatingToolbarDefaults.ContainerSize),
         shape = FloatingActionButtonDefaults.shape,
         containerColor = colors.fabContainerColor,

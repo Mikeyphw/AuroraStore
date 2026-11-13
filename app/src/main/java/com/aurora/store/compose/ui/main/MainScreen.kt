@@ -469,7 +469,7 @@ fun MainScreen(
                                     }
                                     if (heldBack.isNotEmpty()) {
                                         context.toast(
-                                            resources.getQuantityString(
+                                            context.resources.getQuantityString(
                                                 R.plurals.updates_skipped_new_permissions,
                                                 heldBack.size,
                                                 heldBack.size

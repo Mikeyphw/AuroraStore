@@ -52,6 +52,7 @@ import androidx.paging.compose.itemKey
 import com.aurora.extensions.adaptiveNavigationIcon
 import com.aurora.extensions.emptyPagingItems
 import com.aurora.extensions.isWindowCompact
+import com.aurora.gplayapi.model.Rating
 import com.aurora.gplayapi.model.Review
 import com.aurora.store.R
 import com.aurora.store.compose.composable.ContainedLoadingIndicator
