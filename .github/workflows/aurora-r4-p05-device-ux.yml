@@ -65,6 +65,24 @@ jobs:
           bash -n scripts/ci/r4_p05_emulator_acceptance.sh
           python3 -B scripts/ci/test_r4_p06_screenshot_audit.py
           python3 -B scripts/ci/test_r4_p06_apk_reuse.py
+          python3 - <<'PYHF18'
+          # Source-level regression guard: both provenance commands require the
+          # read-only Actions token, never an empty/missing environment.
+          from pathlib import Path
+          w = Path('.github/workflows/aurora-r4-p05-device-ux.yml').read_text()
+          assert '  actions: read # Consume only exact-source, signed targeted APK artifacts.' in w
+          labels = (
+              'Probe signed exact-source targeted APKs (no fallback on invalid provenance)',
+              'Verify exact-source signed APK input provenance regardless of build/reuse',
+          )
+          for label in labels:
+              marker = '      - name: ' + label + '\n'
+              assert w.count(marker) == 1, f'R4_P06_HF18_STEP_AMBIGUOUS {label}'
+              step = w.split(marker, 1)[1].split('      - name:', 1)[0]
+              assert '\n        env:\n          GH_TOKEN: ' in step, f'R4_P06_HF18_TOKEN_BINDING_MISSING {label}'
+              assert 'scripts/ci/r4_p06_apk_reuse.py ' in step
+          print('R4_P06_HF18_BOTH_PROVENANCE_TOKEN_BINDINGS_SOURCE_PASS')
+          PYHF18
           python3 -B scripts/ci/r4_p06_apk_reuse.py --help >/dev/null
           python3 -B scripts/ci/r4_p05_screenshot_audit.py --help >/dev/null
           git diff --check HEAD~1 HEAD
@@ -150,6 +168,8 @@ jobs:
           [[ "$build_ok" == true ]] || exit 1
       - name: Verify exact-source signed APK input provenance regardless of build/reuse
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           python3 -B scripts/ci/r4_p06_apk_reuse.py finalize \
