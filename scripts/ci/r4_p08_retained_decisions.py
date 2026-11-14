@@ -19,6 +19,7 @@ import r4_p07_source_parity as parity
 
 LEDGER = Path('docs/r4/R4_P08_RETAINED_DECISIONS.json')
 REVIEW_HEAD = 'de3a9441eff1524b53fb8560385cdf9a4f7e0b9e'
+P11_SOURCE_CHECKPOINT = '9632c29bc19248bb905d1aaa257469118576312d'
 EXPECTED = frozenset(parity.BASE_RETAINED_REVIEW)
 BEHAVIOR_FOLLOWUPS = frozenset({
     parity.PREFIX + 'ui/accounts/GoogleLoginScreen.kt',
@@ -105,10 +106,15 @@ def verify(root:Path) -> dict:
     need(subprocess.run(['git','merge-base','--is-ancestor',REVIEW_HEAD,head],
                         cwd=root,capture_output=True).returncode==0,
          'UNREVIEWED_COMMIT_HISTORY')
-    changed=command(root,'diff','--name-only',REVIEW_HEAD,head,'--',parity.PREFIX)
+    # P08 source review is historical. Do not pretend that a later, explicitly
+    # isolated P12 contrast fix was covered by the P08 Compose audit.
+    need(subprocess.run(['git','merge-base','--is-ancestor',P11_SOURCE_CHECKPOINT,head],
+                        cwd=root,capture_output=True).returncode==0,
+         'P11_SOURCE_CHECKPOINT_NOT_ANCESTOR')
+    changed=command(root,'diff','--name-only',REVIEW_HEAD,P11_SOURCE_CHECKPOINT,'--',parity.PREFIX)
     need(not changed,'UNREVIEWED_COMPOSE_SOURCE_CHANGE_'+changed)
     # P07 validates both genuine merge parents and protected R3D Git blobs.
-    current=parity.review(root)
+    current=parity.review(root, at=P11_SOURCE_CHECKPOINT)
     groups=current['classification']
     need(len(groups['author_changed'])==100 and len(groups['exact_author'])==33 and
          len(groups['adapted'])==48 and len(groups['base_retained'])==19,
@@ -116,17 +122,19 @@ def verify(root:Path) -> dict:
     need(set(groups['base_retained'])==set(records),'MISSING_OR_EXTRA_RETAINED_DECISIONS')
     base=parity.tree(root,parity.BASE)
     upstream=parity.tree(root,parity.AUTHOR)
-    now=parity.tree(root,head)
-    def content(path):return command(root,'show','HEAD:'+path)
+    now=parity.tree(root,P11_SOURCE_CHECKPOINT)
+    def content(path):return command(root,'show',P11_SOURCE_CHECKPOINT+':'+path)
     verify_retained_blobs(records,base,upstream,now,content)
     return {
         'kind':'aurora-r4-p08-source-review-receipt','schema':1,
-        'reviewed_at_source_sha':REVIEW_HEAD,'audited_head_sha':head,
+        'reviewed_at_source_sha':REVIEW_HEAD,'audited_head_sha':P11_SOURCE_CHECKPOINT,
+        'current_execution_head_sha':head,'historical_p11_review_only':True,
         'author_changed_compose_paths':100,'author_exact':33,'r3d_adapted':48,
         'r3d_retained_reviewed':19,
         'requires_behavior_followup':sorted(BEHAVIOR_FOLLOWUPS),
         'hosted_43_test_25_screenshot_prior_success_sha':REVIEW_HEAD,
-        'no_production_compose_modifications_since_review':True,
+        'no_production_compose_modifications_since_review':False,
+        'later_p12_compose_changes_require_fresh_hosted_emulator':True,
         'source_ledger_validated':True,
         'source_diff_review_only':True,
         'manual_upstream_visual_parity_approved':False,

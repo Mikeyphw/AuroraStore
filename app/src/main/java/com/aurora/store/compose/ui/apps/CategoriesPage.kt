@@ -73,7 +73,7 @@ internal fun CategoriesContent(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun CategoriesBody(
+internal fun CategoriesBody(
     list: List<Category>?,
     onCategoryClick: (Category) -> Unit = {},
     bottomContentPadding: Dp = 0.dp

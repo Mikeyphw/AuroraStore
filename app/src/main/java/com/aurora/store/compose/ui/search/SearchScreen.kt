@@ -467,7 +467,7 @@ private fun MainSearchResults(
 private const val SUGGESTION_DEBOUNCE_MILLIS = 180L
 
 @Composable
-private fun SearchResultListItem(
+internal fun SearchResultListItem(
     modifier: Modifier = Modifier,
     app: App,
     onClick: () -> Unit = {}

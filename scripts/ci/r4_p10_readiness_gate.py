@@ -17,6 +17,7 @@ import subprocess
 import sys
 
 P09='ecb9c4db5d347f5073ceacc4ef0555f9d6e52608'
+P10_SOURCE_CHECKPOINT='a21f81a03ea618dcd2fe97d3725343f81449b715'
 R3D='4afa0a40815da035547d7b62460d56bc6d0e26bc'
 AUTHOR='8ff1cbc8d252cee26507372b8ead59d72872c9da'
 MERGE='340ecef9ffd8235a6e721ca37604fc380728fbf4'
@@ -180,7 +181,9 @@ def verify(root:Path):
   '.github/workflows/aurora-targeted.yml',
   'gradle/libs.versions.toml', 'app/build.gradle.kts',
  ):
-  need(not git(root,'diff','--name-only',P09,'HEAD','--',prefix),
+  # P10 certifies only its own frozen source snapshot; newer changes are
+  # constrained by the downstream P11/P12 guards and fresh hosted emulator.
+  need(not git(root,'diff','--name-only',P09,P10_SOURCE_CHECKPOINT,'--',prefix),
        'UNTESTED_POST_P09_APP_CHANGE_'+prefix)
  # Existing P08 and P09 audits preserve the genuine author/R3D decisions
  # and the nine live emulator account test source contracts respectively.

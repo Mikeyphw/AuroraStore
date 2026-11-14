@@ -27,7 +27,12 @@ ACTIVITY = (
     'r4_activity_main.png', 'r4_activity_search.png',
     'r4_activity_downloads.png', 'r4_activity_updates.png',
 )
-EXPECTED = COMPONENT + ACTIVITY
+POPULATED = (
+    'r4_populated_for_you.png', 'r4_populated_search.png',
+    'r4_populated_details.png', 'r4_populated_charts.png',
+    'r4_populated_categories.png', 'r4_populated_install_controls.png',
+)
+EXPECTED = COMPONENT + ACTIVITY + POPULATED
 EXPECTED_LOGS = {
     'download-dao-cancellation': 9,
     'real-offline-worker': 8,
@@ -37,6 +42,8 @@ EXPECTED_LOGS = {
     'r4-expressive-dark': 5,
     'r4-activity-light': 6,
     'r4-activity-dark': 6,
+    'r4-populated-light': 6,
+    'r4-populated-dark': 6,
 }
 
 
@@ -94,6 +101,10 @@ def load_pixels(path: Path):
     last_y = height*9//10
     xs = range(first_x, last_x, 8)
     ys = set(range(first_y, last_y, 8)) | {center_y}
+    # P12 V-01: inspect the actual dark Updates empty-state message band.
+    # The prior P09 screenshot contained black text on #121318, so PNG-unique
+    # checks alone did not detect its near-invisible 1.13:1 contrast.
+    p12_dark_updates_label_bright_samples = 0
     prev = bytearray(stride)
     idx = 0
     for y in range(height):
@@ -122,6 +133,15 @@ def load_pixels(path: Path):
                 lookup[('bg', y)] = tuple(row[loc:loc+3])
             if first_y <= y < last_y and (y-first_y) % 8 == 0:
                 lookup[y] = [tuple(row[x*bpp:x*bpp+3]) for x in xs]
+        if path.name == 'r4_activity_updates.png' and path.parent.name == 'dark':
+            # Only the text line: below the blue update icon, above the button.
+            # Relative bounds accommodate typical emulator resolutions without
+            # treating the high-contrast icon/button as evidence for the label.
+            if height * 515 // 1000 <= y < height * 555 // 1000:
+                for x in range(width * 29 // 100, width * 71 // 100, 4):
+                    rgb = row[x*bpp:x*bpp+3]
+                    if min(rgb) >= 110 and max(rgb) >= 155:
+                        p12_dark_updates_label_bright_samples += 1
         prev = row
     bg = lookup[('bg',center_y)]
     changed = 0
@@ -136,6 +156,7 @@ def load_pixels(path: Path):
             f'BLANK_SCREENSHOT_{path.parent.name}_{path.name}_changed={changed}_colors={len(unique)}')
     # Perceptual thumbnail retained for independent duplicate and compositing audits.
     return {'bytes': len(data), 'width': width, 'height': height,
+            'p12_dark_updates_label_bright_samples': p12_dark_updates_label_bright_samples,
             'sha256': hashlib.sha256(data).hexdigest(),
             'non_background_samples': changed, 'sampled_colors': len(unique),
             'canvas_center_rgb': list(bg)}
@@ -152,6 +173,11 @@ def validate(root: Path, source: str, run: str) -> dict:
             path = root/'screenshots'/mode/name
             pngs[f'{mode}/{name}'] = load_pixels(path)
     pngs['light/r4_real_app_launch.png'] = load_pixels(root/'screenshots/light/r4_real_app_launch.png')
+    # A genuinely readable dark Updates message must contribute bright text
+    # pixels in the text-only band. The archived P09 black-on-dark capture fails.
+    require(pngs['dark/r4_activity_updates.png'].get(
+        'p12_dark_updates_label_bright_samples', 0) >= 50,
+        'R4_P12_DARK_UPDATES_EMPTY_LABEL_LOW_CONTRAST')
     # Pixel integrity alone accepts a white canvas in a dark-mode popup.
     # For this *isolated component fixture*, require that the unoccupied
     # center background follows the device's actual light/dark appearance.
@@ -194,6 +220,10 @@ def validate(root: Path, source: str, run: str) -> dict:
         'physical_and_live_play_qualification_deferred':True,
         'offline_fixtures_only': True,
         'offline_synthetic_account_preference_tests': 9,
+        'offline_populated_catalog_test_executions': 12,
+        'offline_populated_catalog_screenshots': 12,
+        'populated_catalog_component_only': True,
+        'full_network_backed_routes_qualified': False,
         'real_google_account_login_qualified': False,
         'spoof_restart_ui_behavior_qualified': False,
         'external_google_play_update_verified':False,
@@ -220,7 +250,8 @@ def main():
     a=p.parse_args()
     report=validate(a.root,a.source,a.run)
     a.out.write_text(json.dumps(report,indent=2,sort_keys=True)+'\n')
-    print('R4_P09_REAL_EMULATOR_52_TESTS_AND_25_SCREENSHOTS_NONBLANK_UNIQUE_THEME_PASS')
+    # Historical P09 receipt: R4_P09_REAL_EMULATOR_52_TESTS_AND_25_SCREENSHOTS_NONBLANK_UNIQUE_THEME_PASS
+    print('R4_P12_REAL_EMULATOR_64_TESTS_AND_37_SCREENSHOTS_NONBLANK_UNIQUE_THEME_PASS')
     print('R4_P06_MANUAL_EXPRESSIVE_UI_VISUAL_FIDELITY_PENDING')
 
 if __name__=='__main__':

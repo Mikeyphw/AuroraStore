@@ -16,10 +16,11 @@ SHA = '92dee5df82b874a4ca1d26a29c7a0b0694a197fa'
 RUN = '43442485755'
 
 
-def png(col: int, blank: bool = False, background: tuple[int,int,int] = (250,250,250)) -> bytes:
+def png(col: int, blank: bool = False, background: tuple[int,int,int] = (250,250,250),
+        foreground: tuple[int,int,int] | None = None) -> bytes:
     w,h=384,576
     base=background
-    fg=((col*29)%180+35,(col*47)%160+50,(col*67)%155+45)
+    fg=foreground if foreground is not None else ((col*29)%180+35,(col*47)%160+50,(col*67)%155+45)
     b=bytearray()
     for y in range(h):
         b.append(0)
@@ -47,8 +48,11 @@ def build(root:Path):
             screens.append(d/name)
     screens.append(root/'screenshots/light/r4_real_app_launch.png')
     for i,path in enumerate(screens):
-        background = (30, 32, 39) if path.parent.name == 'dark' and path.name == 'r4_expressive_menu.png' else (250,250,250)
-        path.write_bytes(png(i+1, background=background))
+        is_dark_updates = (path.parent.name == 'dark' and path.name == 'r4_activity_updates.png')
+        is_dark_menu = (path.parent.name == 'dark' and path.name == 'r4_expressive_menu.png')
+        background = (18,19,24) if is_dark_updates else ((30,32,39) if is_dark_menu else (250,250,250))
+        path.write_bytes(png(i+1, background=background,
+                             foreground=(222,224,238) if is_dark_updates else None))
     (root/'logs').mkdir()
     for label,count in audit.EXPECTED_LOGS.items():
         (root/'logs'/f'{label}.txt').write_text(f'INSTRUMENTATION_CODE: -1\nOK ({count} tests)\n')
@@ -68,12 +72,13 @@ def run():
         root=Path(t)
         files=build(root)
         ok=audit.validate(root,SHA,RUN)
-        assert ok['real_device_tests']==52
-        assert len(ok['screenshots'])==25
+        assert ok['real_device_tests']==64
+        assert len(ok['screenshots'])==37
+        assert ok['offline_populated_catalog_test_executions']==12
         assert 'light/r4_update_downloading.png' in ok['screenshots']
         assert 'light/r4_settings.png' not in ok['screenshots']
         assert ok['screenshots_nonblank_validated']
-        print('R4_P09_SYNTHETIC_52_LOG_25_SCREENSHOT_THEME_RECEIPT_PASS')
+        print('R4_P12_SYNTHETIC_64_LOG_37_SCREENSHOT_THEME_RECEIPT_PASS')
         first=files[0]
         raw=first.read_bytes()
         first.write_bytes(png(99,blank=True))
@@ -105,7 +110,15 @@ def run():
         menu.write_bytes(png(51, background=(30,32,39)))
         refused(lambda:audit.validate(root,SHA,RUN),'LIGHT_MENU_CANVAS_DARK')
         menu.write_bytes(old)
-        print('R4_P07_8_MUTATION_AND_THEME_NEGATIVES_PASS')
+        # A dark valid PNG with visible button/icon but a black message must fail.
+        update = root/'screenshots/dark/r4_activity_updates.png'
+        prior = update.read_bytes()
+        update.write_bytes(png(24, background=(18,19,24), foreground=(0,0,0)))
+        refused(lambda:audit.validate(root,SHA,RUN),
+                'R4_P12_DARK_UPDATES_EMPTY_LABEL_LOW_CONTRAST')
+        update.write_bytes(prior)
+        assert audit.validate(root,SHA,RUN)['real_device_tests'] == 64
+        print('R4_P12_DARK_UPDATES_CONTRAST_NEGATIVE_AND_PRIOR_EIGHT_MUTATIONS_PASS')
 
 if __name__=='__main__':
     run()

@@ -22,6 +22,7 @@ BRANCH = 'feature/r4-p03-pr113-expressive-v4-20261113'
 BASE = '4afa0a40815da035547d7b62460d56bc6d0e26bc'
 P09 = 'ecb9c4db5d347f5073ceacc4ef0555f9d6e52608'
 P10 = 'a21f81a03ea618dcd2fe97d3725343f81449b715'
+P11_SOURCE_CHECKPOINT = '9632c29bc19248bb905d1aaa257469118576312d'
 AUTHOR = '8ff1cbc8d252cee26507372b8ead59d72872c9da'
 MERGE = '340ecef9ffd8235a6e721ca37604fc380728fbf4'
 STATUS = Path('docs/r4/R4_P11_PR_REVIEW_STATUS.json')
@@ -216,10 +217,22 @@ def verify(root: Path) -> dict:
     need(not git(root,'diff','--name-only','HEAD','--').strip() and
          not git(root,'diff','--cached','--name-only','--').strip(),
          'DIRTY_TRACKED_TREE')
+    need(subprocess.run(['git','merge-base','--is-ancestor',P11_SOURCE_CHECKPOINT,head],
+                        cwd=root).returncode == 0, 'P11_SOURCE_CHECKPOINT_NOT_ANCESTOR')
     names = parse_names_z(git(root,'diff','--name-status','--no-renames','-z',BASE,P10))
     report = inventory(names)
-    post_p10 = parse_names_z(git(root,'diff','--name-status','--no-renames','-z',P10,head))
+    # First freeze the original P11 five-file audit at its own commit.
+    post_p10 = parse_names_z(git(root,'diff','--name-status','--no-renames','-z',P10,P11_SOURCE_CHECKPOINT))
     check_post_p10({path for _, path in post_p10})
+    # Later UI changes cannot be covered silently by the historical P09/P11
+    # receipts: P12's explicit allowlist and exact source patch are mandatory.
+    import r4_p12_visual_contrast_gate as p12
+    post_p11 = parse_names_z(git(root,'diff','--name-status','--no-renames','-z',P11_SOURCE_CHECKPOINT,head))
+    need({path for _,path in post_p11} == p12.ALLOWED,
+         'POST_P11_UNQUALIFIED_CHANGE_SET')
+    original = git(root,'show',P11_SOURCE_CHECKPOINT+':'+p12.PLACEHOLDER).decode('utf-8').strip()
+    current = (root/p12.PLACEHOLDER).read_text(encoding='utf-8').strip()
+    p12.check_patch(original,current)
     # Inherit the full P08/P09/P10 source/evidence verification, not a weaker substitute.
     import r4_p10_readiness_gate as p10
     inherited = p10.verify(root)

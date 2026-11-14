@@ -180,7 +180,7 @@ private fun TopChartAppCard(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun TopChartsBody(
+internal fun TopChartsBody(
     state: ViewState,
     cluster: StreamCluster?,
     chartIndex: Int = 0,

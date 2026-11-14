@@ -89,12 +89,19 @@ for mode in light dark; do
     ACTIVITY_CLASS='com.aurora.store.compose.ui.r4.R4ActivityNavigationDeviceTest'
     ACTIVITY_SOURCE='app/src/androidTest/java/com/aurora/store/compose/ui/r4/R4ActivityNavigationDeviceTest.kt'
     run_suite "r4-activity-$mode" "$ACTIVITY_CLASS" "$ACTIVITY_SOURCE" 6
+    # Six real Aurora Compose component journeys with offline, deterministic models.
+    run_suite "r4-populated-$mode" \
+      'com.aurora.store.compose.ui.r4.R4PopulatedCatalogDeviceTest' \
+      'app/src/androidTest/java/com/aurora/store/compose/ui/r4/R4PopulatedCatalogDeviceTest.kt' 6
     for screenshot in \
         r4_update_downloading.png r4_update_idle.png r4_update_verifying.png \
         r4_update_installing.png r4_expressive_menu.png \
         r4_activity_settings.png r4_activity_ui_preferences.png \
         r4_activity_more_sheet.png r4_activity_main.png r4_activity_search.png \
-        r4_activity_downloads.png r4_activity_updates.png; do
+        r4_activity_downloads.png r4_activity_updates.png \
+        r4_populated_for_you.png r4_populated_search.png \
+        r4_populated_details.png r4_populated_charts.png \
+        r4_populated_categories.png r4_populated_install_controls.png; do
         # A debug-only run-as copy keeps evidence private, not written to shared storage.
         adb exec-out run-as "$TARGET" cat "files/$screenshot" > "$OUT/screenshots/$mode/$screenshot" || {
             echo "R4_P05_REFUSED_SCREENSHOT_MISSING $mode/$screenshot" >&2

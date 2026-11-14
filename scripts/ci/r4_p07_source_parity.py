@@ -88,8 +88,9 @@ def check_classification(result:dict, *, expect_author_count=100,
     # A later reviewed adaptation may intentionally reduce this backlog.
     need(len(result['base_retained'])<=len(allowed_retained),'BACKLOG_INCREASED')
 
-def review(repo:Path) -> dict:
-    head=git(repo,'rev-parse','HEAD')
+def review(repo:Path, at: str = 'HEAD') -> dict:
+    # P08 may audit the exact historical P11 tree instead of inheriting post-P11 UI edits.
+    head=git(repo,'rev-parse',at)
     need(re.fullmatch('[a-f0-9]{40}',head) is not None,'HEAD_NOT_SHA')
     need(git(repo,'rev-list','--parents','-n','1',MERGE).split()==[MERGE,BASE,AUTHOR],
          'PR113_MERGE_PARENTS_CHANGED')

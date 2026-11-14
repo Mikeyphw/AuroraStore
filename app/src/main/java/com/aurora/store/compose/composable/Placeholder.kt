@@ -60,6 +60,7 @@ fun Placeholder(
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center
         )
         if (actionLabel != null && onAction != null) {
