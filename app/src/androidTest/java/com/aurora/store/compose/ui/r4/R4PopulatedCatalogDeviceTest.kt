@@ -123,7 +123,7 @@ class R4PopulatedCatalogDeviceTest : IsolatedTest() {
         composeTestRule.onNodeWithText("P12 Offline Beacon").assertExists()
         capture("r4_populated_for_you.png")
         composeTestRule.onAllNodesWithText(context.getString(R.string.action_install))
-            .onFirst().performClick()
+            .get(0).performClick()
         composeTestRule.runOnIdle { assertThat(actionCount).isEqualTo(1) }
     }
 
