@@ -12,6 +12,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -119,8 +120,9 @@ class R4PopulatedCatalogDeviceTest : IsolatedTest() {
                 )
             }
         }
-        composeTestRule.onNodeWithText("P12 Offline Atlas").assertExists()
-        composeTestRule.onNodeWithText("P12 Offline Beacon").assertExists()
+        // Both carousel clusters intentionally reuse these offline fixture cards.
+        composeTestRule.onAllNodesWithText("P12 Offline Atlas").assertCountEquals(2)
+        composeTestRule.onAllNodesWithText("P12 Offline Beacon").assertCountEquals(2)
         capture("r4_populated_for_you.png")
         composeTestRule.onAllNodesWithText(context.getString(R.string.action_install))
             .get(0).performClick()
