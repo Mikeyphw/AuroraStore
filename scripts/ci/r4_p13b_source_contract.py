@@ -106,6 +106,10 @@ def check_runner(s):
    'width=1080; height=2400; density=420',
    'width=720; height=1600; density=320',
    'adb shell wm size','adb shell wm density',
+   'effective_wm_value() {', 'verify_display() {',
+   'verify_display "$profile" "${width}x${height}" "$density"',
+   'P13B_DISPLAY_PROBE_PASS','P13B_REFUSED_DISPLAY_READBACK',
+   'P13B_DISPLAY_PROBE_ATTEMPTS', 'metadata/${profile}-display-readback.log',
    'trap restore_display EXIT','R4P13BProductionNav3DeviceTest',
    'timeout 840 adb shell am instrument',
    'run_class "$profile" "$mode" p13b-integrated "$INTEGRATED" 3',
@@ -114,6 +118,8 @@ def check_runner(s):
    'python3 -B scripts/ci/r4_p13b_screenshot_audit.py',*IMAGES):
   need(marker in s,'RUNNER_MARKER_'+marker)
  need(s.count('timeout 840 adb shell am instrument')==1,'RUNNER_INSTRUMENTATION_BOUND')
+ need('grep -Fq "Override size:' not in s and
+      'grep -Fq "Override density:' not in s,'RUNNER_OVERRIDE_ONLY_GUARD')
  return True
 
 def check_audit(s):

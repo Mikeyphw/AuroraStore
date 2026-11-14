@@ -55,6 +55,56 @@ restore_display() {
 }
 trap restore_display EXIT
 
+# Verify EFFECTIVE geometry, not an "Override" label: wm may report only
+# Physical size/density when the requested full profile is already native.
+# The 48 PNG auditor independently checks the captured image dimensions.
+effective_wm_value() {
+  local kind="$1" response="$2"
+  printf '%s\n' "$response" | awk -v kind="$kind" '
+    { gsub(/\r/, "") }
+    $0 ~ "^Physical " kind ":" {
+      physical=$0; sub(/^[^:]*:[[:space:]]*/, "", physical)
+    }
+    $0 ~ "^Override " kind ":" {
+      override=$0; sub(/^[^:]*:[[:space:]]*/, "", override)
+    }
+    END {
+      if (override != "") print override
+      else if (physical != "") print physical
+    }
+  '
+}
+
+verify_display() {
+  local profile="$1" requested_size="$2" requested_density="$3"
+  local attempts="${P13B_DISPLAY_PROBE_ATTEMPTS:-6}"
+  [[ "$attempts" =~ ^[1-9][0-9]?$ ]] || {
+    echo "P13B_REFUSED_PROBE_ATTEMPTS" >&2; return 1;
+  }
+  local readback="$OUT/metadata/${profile}-display-readback.log"
+  local attempt size_raw density_raw size density
+  mkdir -p "$OUT/metadata"
+  : > "$readback"
+  for ((attempt=1;attempt<=attempts;attempt++)); do
+    # Persist raw stdout AND stderr. This distinguishes emulator startup,
+    # no override (valid on native size), and actual wrong geometry.
+    size_raw="$(adb shell wm size 2>&1)" || size_raw="ADB_WM_SIZE_FAILED: $size_raw"
+    density_raw="$(adb shell wm density 2>&1)" || density_raw="ADB_WM_DENSITY_FAILED: $density_raw"
+    size="$(effective_wm_value size "$size_raw")"
+    density="$(effective_wm_value density "$density_raw")"
+    printf 'attempt=%s\nrequested=%s density=%s\nwm_size=%s\nwm_density=%s\neffective=%s density=%s\n' \
+      "$attempt" "$requested_size" "$requested_density" "$size_raw" "$density_raw" \
+      "${size:-unknown}" "${density:-unknown}" >> "$readback"
+    if [[ "$size" == "$requested_size" && "$density" == "$requested_density" ]]; then
+      echo "P13B_DISPLAY_PROBE_PASS profile=$profile size=$size density=$density attempt=$attempt"
+      return 0
+    fi
+    if ((attempt < attempts)); then sleep 1; fi
+  done
+  echo "P13B_REFUSED_DISPLAY_READBACK profile=$profile expected=$requested_size/$requested_density observed=${size:-unknown}/${density:-unknown} evidence=$readback" >&2
+  return 1
+}
+
 run_class() {
   local profile="$1" mode="$2" label="$3" klass="$4" count="$5"
   local log="$OUT/logs/$profile/$label-$mode.txt"
@@ -88,12 +138,7 @@ for profile in full compact; do
   esac
   adb shell wm size "${width}x${height}"
   adb shell wm density "$density"
-  adb shell wm size | tr -d '\r' | grep -Fq "Override size: ${width}x${height}" || {
-    echo "P13B_REFUSED_DISPLAY_SIZE $profile" >&2; exit 1;
-  }
-  adb shell wm density | tr -d '\r' | grep -Fq "Override density: $density" || {
-    echo "P13B_REFUSED_DISPLAY_DENSITY $profile" >&2; exit 1;
-  }
+  verify_display "$profile" "${width}x${height}" "$density" || exit 1
   mkdir -p "$OUT/logs/$profile"
   printf '%s\n' "${width}x${height} density=$density" > "$OUT/metadata/$profile.txt"
   for mode in light dark; do
