@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -31,6 +30,9 @@ import androidx.compose.ui.tooling.preview.PreviewWrapper
 import androidx.core.content.getSystemService
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.aurora.store.R
+import com.aurora.store.compose.ui.preferences.PreferenceListItem
+import com.aurora.store.compose.ui.preferences.PreferenceRowPosition
+import com.aurora.store.compose.ui.preferences.PreferenceSectionHeader
 import com.aurora.store.compose.composable.TopAppBar
 import com.aurora.store.compose.navigation.Destination
 import com.aurora.store.compose.preview.ThemePreviewProvider
@@ -113,20 +115,20 @@ private fun ScreenContent(
                 .fillMaxSize()
         ) {
             item {
-                ListItem(
+                PreferenceListItem(
                     modifier = Modifier.clickable { onNavigateTo(Destination.Installer) },
                     headlineContent = { Text(stringResource(R.string.pref_install_mode_title)) },
                     supportingContent = { Text(stringResource(installerTitle)) }
                 )
             }
-            item { HorizontalDivider() }
+            item { PreferenceSectionHeader(stringResource(R.string.pref_common_extra)) }
             item {
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.pref_common_extra)) }
-                )
-            }
-            item {
-                ListItem(
+                PreferenceListItem(
+                    position = if (isDeviceOwner) {
+                        PreferenceRowPosition.First
+                    } else {
+                        PreferenceRowPosition.Single
+                    },
                     modifier = Modifier.clickable {
                         autoDelete = !autoDelete
                         context.save(PREFERENCE_AUTO_DELETE, autoDelete)
@@ -171,7 +173,8 @@ private fun ScreenContent(
             }
             if (isDeviceOwner) {
                 item {
-                    ListItem(
+                    PreferenceListItem(
+                        position = PreferenceRowPosition.Last,
                         modifier = Modifier.clickable { showClearOwnerDialog = true },
                         headlineContent = {
                             Text(stringResource(R.string.pref_clear_device_owner_title))

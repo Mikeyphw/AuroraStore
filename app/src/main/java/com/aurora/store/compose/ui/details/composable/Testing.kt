@@ -51,7 +51,10 @@ fun Testing(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(dimensionResource(R.dimen.spacing_medium)),
+            .padding(
+                horizontal = dimensionResource(R.dimen.spacing_large),
+                vertical = dimensionResource(R.dimen.spacing_medium)
+            ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(dimensionResource(R.dimen.spacing_small))
     ) {
@@ -65,7 +68,8 @@ fun Testing(
                     stringResource(R.string.details_beta_available)
                 }
             ),
-            description = AnnotatedString(text = stringResource(R.string.details_beta_description))
+            description = AnnotatedString(text = stringResource(R.string.details_beta_description)),
+            horizontalPadding = 0.dp
         )
         FilledTonalButton(
             enabled = !isUpdating,

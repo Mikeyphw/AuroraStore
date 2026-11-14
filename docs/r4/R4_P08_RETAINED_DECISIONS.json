@@ -1,0 +1,172 @@
+{
+  "author_changed_compose_paths": 100,
+  "automatic_merge_allowed": false,
+  "decisions": [
+    {
+      "category": "download_state_safety",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/composable/DownloadListItem.kt",
+      "reason": "R3D download status UI handles UNAVAILABLE, installer states and avoids negative speed/ETA placeholders.",
+      "required_source_anchor": "DownloadUiPolicy.showTransferStats",
+      "source_diff_disposition": "source_retention"
+    },
+    {
+      "category": "api23_permission_safety",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/composable/PermissionList.kt",
+      "reason": "Keeps SDK-gated storage-management link and explicit permission/link handling for the API23 floor.",
+      "required_source_anchor": "Build.VERSION.SDK_INT >= Build.VERSION_CODES.R",
+      "source_diff_disposition": "source_retention"
+    },
+    {
+      "category": "gplayapi_v4",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/preview/AppPreviewProvider.kt",
+      "reason": "Model import uses GPlayAPI v4 public model package, not the older upstream data.models namespace.",
+      "required_source_anchor": "com.aurora.gplayapi.model.App",
+      "source_diff_disposition": "source_retention"
+    },
+    {
+      "category": "gplayapi_v4",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/preview/ReviewPreviewProvider.kt",
+      "reason": "Review preview uses the supported GPlayAPI v4 Review model.",
+      "required_source_anchor": "com.aurora.gplayapi.model.Review",
+      "source_diff_disposition": "source_retention"
+    },
+    {
+      "category": "session_api_v4",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/ui/accounts/GoogleLoginScreen.kt",
+      "reason": "Uses TokenType.AAS and v4 session/account result semantics; visual/source difference alone cannot qualify login behavior.",
+      "required_source_anchor": "TokenType.AAS",
+      "source_diff_disposition": "behavior_followup"
+    },
+    {
+      "category": "gplayapi_v4",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/ui/commons/CategoryBrowseScreen.kt",
+      "reason": "Uses the v4 StreamBundle browseUrl member rather than obsolete clusterBrowseUrl.",
+      "required_source_anchor": "cluster.browseUrl",
+      "source_diff_disposition": "source_retention"
+    },
+    {
+      "category": "api23_resources",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/ui/commons/PermissionRationaleScreen.kt",
+      "reason": "Uses explicit singular/plural string resources instead of upstream pluralStringResource.",
+      "required_source_anchor": "R.string.permissions_required",
+      "source_diff_disposition": "source_retention"
+    },
+    {
+      "category": "compatible_comparator",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/ui/commons/SortFilter.kt",
+      "reason": "Uses reversed comparator via compare(b,a), retaining R3D sorting behavior.",
+      "required_source_anchor": "comparator.compare(b, a)",
+      "source_diff_disposition": "source_retention"
+    },
+    {
+      "category": "gplayapi_v4",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/ui/details/ScreenshotScreen.kt",
+      "reason": "Screenshot images use GPlayAPI v4 Artwork model.",
+      "required_source_anchor": "com.aurora.gplayapi.model.Artwork",
+      "source_diff_disposition": "source_retention"
+    },
+    {
+      "category": "gplayapi_v4",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/ui/details/composable/DeveloperDetails.kt",
+      "reason": "Developer links use the GPlayAPI v4 App model.",
+      "required_source_anchor": "com.aurora.gplayapi.model.App",
+      "source_diff_disposition": "source_retention"
+    },
+    {
+      "category": "download_state_safety",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/ui/downloads/DownloadsScreen.kt",
+      "reason": "Keeps protected clear-all warning/confirmation path; do not replace with upstream shortcut.",
+      "required_source_anchor": "R.string.r1f_download_clear_all_warning",
+      "source_diff_disposition": "source_retention"
+    },
+    {
+      "category": "resources_compat",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/ui/favourite/FavouriteScreen.kt",
+      "reason": "Uses LocalResources for favourite-install enqueue toast; unchanged visible UI behavior.",
+      "required_source_anchor": "LocalResources.current",
+      "source_diff_disposition": "source_retention"
+    },
+    {
+      "category": "gplayapi_v4",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/ui/installed/InstalledScreen.kt",
+      "reason": "Installed-app listing uses GPlayAPI v4 App model.",
+      "required_source_anchor": "com.aurora.gplayapi.model.App",
+      "source_diff_disposition": "source_retention"
+    },
+    {
+      "category": "gplayapi_v4",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/ui/notifications/NotificationsScreen.kt",
+      "reason": "Notifications use GPlayAPI v4 App model. This import preserves the R3D v4 model contract.",
+      "required_source_anchor": "com.aurora.gplayapi.model.App",
+      "source_diff_disposition": "source_retention"
+    },
+    {
+      "category": "installer_safety",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/ui/preferences/installation/InstallerScreen.kt",
+      "reason": "Reads available installers from lifecycle-bound ViewModel flow instead of direct installer enumeration.",
+      "required_source_anchor": "availableInstallers.collectAsStateWithLifecycle",
+      "source_diff_disposition": "source_retention"
+    },
+    {
+      "category": "download_state_safety",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/ui/sheets/DownloadActionsSheet.kt",
+      "reason": "Keeps retry/export conditions and filesystem checks, including unavailable and installing states.",
+      "required_source_anchor": "DownloadUiPolicy.canRetry",
+      "source_diff_disposition": "source_retention"
+    },
+    {
+      "category": "history_safety",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/ui/sheets/VersionPickerSheet.kt",
+      "reason": "Keeps historical-version parsing and availability controls rather than claiming legacy reports are installable.",
+      "required_source_anchor": "HistoricalVersionPolicy.parseVersionCode",
+      "source_diff_disposition": "source_retention"
+    },
+    {
+      "category": "session_api_v4",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/ui/splash/SplashScreen.kt",
+      "reason": "Builds MicroG session data through the v4 ViewModel; legacy AuthHelper token handling must not be restored.",
+      "required_source_anchor": "viewModel.buildMicroGAuthData",
+      "source_diff_disposition": "source_retention"
+    },
+    {
+      "category": "session_restart_behavior",
+      "manual_behavior_qualified": false,
+      "path": "app/src/main/java/com/aurora/store/compose/ui/spoof/SpoofScreen.kt",
+      "reason": "Upstream explicitly logs out on spoof restart; R3D navigates to Splash without that logout. Source comparison does not establish equivalence; preserve v4 until dedicated behavior test.",
+      "required_source_anchor": "onNavigateTo(Destination.Splash())",
+      "source_diff_disposition": "behavior_followup"
+    }
+  ],
+  "genuine_merge": "340ecef9ffd8235a6e721ca37604fc380728fbf4",
+  "kind": "aurora-r4-pr113-r3d-retained-source-decision-ledger",
+  "live_google_play_qualified": false,
+  "manual_upstream_visual_parity_approved": false,
+  "physical_arm64_qualified": false,
+  "r3d_base": "4afa0a40815da035547d7b62460d56bc6d0e26bc",
+  "real_installer_qualified": false,
+  "release_qualified": false,
+  "repository": "Mikeyphw/AuroraStore",
+  "retained_r3d_paths": 19,
+  "review_head": "de3a9441eff1524b53fb8560385cdf9a4f7e0b9e",
+  "schema": 1,
+  "source_diff_review_only": true,
+  "upstream_author": "8ff1cbc8d252cee26507372b8ead59d72872c9da"
+}

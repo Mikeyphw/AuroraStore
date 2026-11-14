@@ -1,0 +1,220 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# R4 acceptance ONLY: hosted API36, private synthetic fixtures, no release signing.
+name: Aurora R4 P05 — API36 Real Device UX and Expressive Screenshots
+
+on:
+  push:
+    branches:
+      - feature/r4-p03-pr113-expressive-v4-20261113
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read # Consume only exact-source, signed targeted APK artifacts.
+
+concurrency:
+  group: aurora-r4-p05-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    name: Exact author merge, R3D security and offline test contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify ancestry, API23, GPlayAPI4, Material3 alpha23 and real tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 - <<'PY'
+          import pathlib
+          import re
+          import subprocess
+          BASE='4afa0a40815da035547d7b62460d56bc6d0e26bc'
+          MERGE='340ecef9ffd8235a6e721ca37604fc380728fbf4'
+          AUTHOR='8ff1cbc8d252cee26507372b8ead59d72872c9da'
+          def git(*args):
+              return subprocess.check_output(['git',*args],text=True).strip()
+          assert git('rev-list','--parents','-n','1',MERGE).split()==[MERGE,BASE,AUTHOR]
+          subprocess.run(['git','merge-base','--is-ancestor',MERGE,'HEAD'],check=True)
+          for p in ('scripts/ci/r3c07_hf03_apk_pair.py','scripts/ci/test_r3c07_hf03_optimization.py'):
+              assert git('rev-parse',f'HEAD:{p}')==git('rev-parse',f'{BASE}:{p}'),p
+          txt=pathlib.Path('gradle/libs.versions.toml').read_text()
+          assert re.search(r'^gplayapi\s*=\s*"4\.0\.0"\s*$',txt,re.M)
+          assert re.search(r'^composeMaterial\s*=\s*"1\.5\.0-alpha23"\s*$',txt,re.M)
+          gradle=pathlib.Path('app/build.gradle.kts').read_text()
+          assert re.search(r'minSdk\s*\{\s*version\s*=\s*release\(23\)',gradle)
+          for p in (
+              'app/src/androidTest/java/com/aurora/store/compose/ui/r4/R4ExpressiveDeviceTest.kt',
+              'app/src/androidTest/java/com/aurora/store/compose/ui/r4/R4ActivityNavigationDeviceTest.kt',
+              'app/src/androidTest/java/com/aurora/store/compose/ui/r4/R4ScreenshotEvidence.kt',
+              'scripts/ci/r4_p05_emulator_acceptance.sh',
+              'scripts/ci/r4_p05_screenshot_audit.py',
+          ):
+              assert pathlib.Path(p).is_file(),p
+          assert 'r4_p05_emulator_acceptance.sh' in pathlib.Path('.github/workflows/aurora-r4-p05-device-ux.yml').read_text()
+          print('R4_P05_PINNED_R3D_AUTHOR_API23_AND_REAL_ANDROID_TEST_SOURCE_PASS')
+          PY
+          test "$(git ls-files -u | wc -l)" -eq 0
+          bash -n scripts/ci/r4_p05_emulator_acceptance.sh
+          python3 -B scripts/ci/test_r4_p06_screenshot_audit.py
+          python3 -B scripts/ci/test_r4_p06_apk_reuse.py
+          python3 -B scripts/ci/test_r4_p07_source_parity.py
+          python3 -B scripts/ci/r4_p07_source_parity.py --repo .
+          python3 -B scripts/ci/test_r4_p08_retained_decisions.py
+          python3 -B scripts/ci/r4_p08_retained_decisions.py --repo .
+          python3 -B scripts/ci/test_r4_p09_session_source_contract.py
+          python3 -B scripts/ci/r4_p09_session_source_contract.py --root .
+          python3 -B scripts/ci/test_r4_p10_readiness_gate.py
+          python3 -B scripts/ci/r4_p10_readiness_gate.py --repo .
+          python3 -B scripts/ci/test_r4_p11_pr_review_gate.py
+          python3 -B scripts/ci/r4_p11_pr_review_gate.py --root .
+          python3 -B scripts/ci/test_r4_p12_visual_contrast_gate.py
+          python3 -B scripts/ci/r4_p12_visual_contrast_gate.py --root .
+          python3 - <<'PYHF18'
+          # Source-level regression guard: both provenance commands require the
+          # read-only Actions token, never an empty/missing environment.
+          from pathlib import Path
+          w = Path('.github/workflows/aurora-r4-p05-device-ux.yml').read_text()
+          assert '  actions: read # Consume only exact-source, signed targeted APK artifacts.' in w
+          labels = (
+              'Probe signed exact-source targeted APKs (no fallback on invalid provenance)',
+              'Verify exact-source signed APK input provenance regardless of build/reuse',
+          )
+          for label in labels:
+              marker = '      - name: ' + label + '\n'
+              assert w.count(marker) == 1, f'R4_P06_HF18_STEP_AMBIGUOUS {label}'
+              step = w.split(marker, 1)[1].split('      - name:', 1)[0]
+              assert '\n        env:\n          GH_TOKEN: ' in step, f'R4_P06_HF18_TOKEN_BINDING_MISSING {label}'
+              assert 'scripts/ci/r4_p06_apk_reuse.py ' in step
+          print('R4_P06_HF18_BOTH_PROVENANCE_TOKEN_BINDINGS_SOURCE_PASS')
+          PYHF18
+          python3 -B scripts/ci/r4_p06_apk_reuse.py --help >/dev/null
+          python3 -B scripts/ci/r4_p05_screenshot_audit.py --help >/dev/null
+          git diff --check HEAD~1 HEAD
+
+  real-api36-device:
+    name: Real API36 offline downloads, Room, cancellation, navigation and screenshots
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 95
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Create fail-closed receipt before building
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p "$RUNNER_TEMP/aurora-r4-p05"
+          printf '%s\n' '{"result":"NOT_RUN","release_qualified":false,"visual_manual_approved":false}' > "$RUNNER_TEMP/aurora-r4-p05/receipt.json"
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+      - name: Install exact Android compilation SDK and API36 system image
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install 'platforms;android-37.0'
+          test -s "$ANDROID_SDK_ROOT/platforms/android-37.0/android.jar"
+          for attempt in 1 2 3 4; do
+            if sdkmanager --install 'system-images;android-36;google_apis;x86_64'; then break; fi
+            if [[ "$attempt" -eq 4 ]]; then exit 1; fi
+            rm -rf -- "$ANDROID_SDK_ROOT/.temp" \
+              "$ANDROID_SDK_ROOT/system-images/android-36/google_apis/x86_64" \
+              "$HOME/.android/cache"
+            sleep "$((attempt*10))"
+          done
+      - name: Probe signed exact-source targeted APKs (no fallback on invalid provenance)
+        id: apk_pair
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 -B scripts/ci/r4_p06_apk_reuse.py probe \
+            --root . --sha "$GITHUB_SHA" \
+            --tmp "$RUNNER_TEMP/aurora-r4-p05-targeted-pair" \
+            --github-output "$GITHUB_OUTPUT" --wait-seconds 240
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
+        if: steps.apk_pair.outputs.reused != 'true'
+      - name: Compile exact-source real app and instrumentation APKs on GitHub only
+        if: steps.apk_pair.outputs.reused != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          chmod +x gradlew
+          # Retry ONLY the exact known transient AGP repository-resolution failure.
+          # A Kotlin compiler, manifest or other Gradle failure remains immediate/fatal.
+          build_ok=false
+          for attempt in 1 2 3; do
+            log="$RUNNER_TEMP/aurora-r4-p05/gradle-attempt-${attempt}.log"
+            if ./gradlew --no-daemon --max-workers=2 --stacktrace \
+                :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest 2>&1 | tee "$log"; then
+              build_ok=true
+              break
+            fi
+            if ! grep -Fq "Plugin [id: 'com.android.application', version: '9.4.1', apply: false] was not found" "$log"; then
+              echo R4_P06_HF17_REFUSED_NON_TRANSIENT_GRADLE_FAILURE >&2
+              exit 1
+            fi
+            echo "R4_P06_HF17_TRANSIENT_PLUGIN_RESOLUTION_RETRY attempt=$attempt" >&2
+            if [[ "$attempt" == 3 ]]; then
+              echo R4_P06_HF17_REFUSED_PLUGIN_UNAVAILABLE_AFTER_BOUNDED_RETRIES >&2
+              exit 1
+            fi
+            sleep "$((attempt * 10))"
+          done
+          [[ "$build_ok" == true ]] || exit 1
+      - name: Verify exact-source signed APK input provenance regardless of build/reuse
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 -B scripts/ci/r4_p06_apk_reuse.py finalize \
+            --root . --sha "$GITHUB_SHA" \
+            --tmp "$RUNNER_TEMP/aurora-r4-p05-targeted-pair" \
+            --receipt "$RUNNER_TEMP/aurora-r4-p05/apk-input-provenance.json" \
+            --reused '${{ steps.apk_pair.outputs.reused }}'
+      - name: Require KVM-backed ephemeral runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm
+          if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then sudo chmod a+rw /dev/kvm; fi
+          test -r /dev/kvm && test -w /dev/kvm
+      - name: Run real API36 lifecycle, Compose interactions and light/dark screenshots
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 2048M
+          disk-size: 3072M
+          force-avd-creation: true
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: bash scripts/ci/r4_p05_emulator_acceptance.sh
+      - name: Publish fail-closed real-device receipt, screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: aurora-r4-p05-api36-real-ux-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/aurora-r4-p05/
+          if-no-files-found: warn
+          retention-days: 14
