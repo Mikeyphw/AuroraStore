@@ -29,6 +29,24 @@ def main():
                    (g.check_references,(ref,))): assert call(*args)
  negatives=[
   (lambda:g.check_test(test.replace('    @Test\n','',1)),'INTEGRATED_THREE_TESTS'),
+  # HF03 emulator regression: one-cluster carousel has no header;
+  # synthetic category state must be checked via the back control + cards.
+  (lambda:g.check_test(test.replace(
+   'composeTestRule.onNodeWithText("P13 Back to categories").assertExists()',
+   'composeTestRule.onNodeWithText("P13 Selected Art").assertExists()',1)),
+   'CATEGORY_SINGLE_CLUSTER_FALSE_HEADER'),
+  (lambda:g.check_test(test.replace(
+   'composeTestRule.onNodeWithText("P13 Back to categories").performClick()',
+   'composeTestRule.onNodeWithText("P13 Back to categories").assertExists()',1)),
+   'CATEGORY_BACK_ROUTE_'),
+  (lambda:g.check_test(test.replace(
+   'composeTestRule.onNodeWithText("P13 Back to categories").assertDoesNotExist()',
+   'composeTestRule.onNodeWithText("P13 Back to categories").assertExists()',1)),
+   'CATEGORY_BACK_ROUTE_'),
+  (lambda:g.check_test(test.replace(
+   'composeTestRule.onNodeWithText("P13 Back to categories").performClick()\n        composeTestRule.onNodeWithText("P13 Art").assertExists()',
+   'composeTestRule.onNodeWithText("P13 Back to categories").performClick()\n        composeTestRule.onNodeWithText("P13 Business").assertExists()',1)),
+   'CATEGORY_RETURN_TO_BROWSER'),
   (lambda:g.check_test(test.replace('Screenshots(screenshots = inputArt)','Screenshots(screenshots = emptyList())')),'INTEGRATED_MARKER_'),
   (lambda:g.check_test(test+'\n// PackageInstaller('),'INTEGRATED_UNSAFE_'),
   (lambda:g.check_test('import androidx.compose.ui.test.assertExists\n'+test),

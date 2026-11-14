@@ -275,8 +275,14 @@ class R4P13BIntegratedVisualDeviceTest : IsolatedTest() {
         composeTestRule.onNodeWithText("P13 Art").assertExists()
         shot("r4_p13b_category_selection.png")
         composeTestRule.onNodeWithText("P13 Art").performClick()
-        composeTestRule.onNodeWithText("P13 Selected Art").assertExists()
+        // StreamCarousel intentionally omits its cluster title when only one
+        // cluster is present. Verify the selected state and actual app cards,
+        // never an unrendered header such as "P13 Selected Art".
+        composeTestRule.onNodeWithText("P13 Back to categories").assertExists()
         composeTestRule.onNodeWithText("P13 Offline Atlas").assertExists()
         shot("r4_p13b_category_collection.png")
+        composeTestRule.onNodeWithText("P13 Back to categories").performClick()
+        composeTestRule.onNodeWithText("P13 Art").assertExists()
+        composeTestRule.onNodeWithText("P13 Back to categories").assertDoesNotExist()
     }
 }

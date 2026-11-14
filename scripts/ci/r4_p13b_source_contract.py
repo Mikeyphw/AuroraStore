@@ -79,6 +79,24 @@ def check_test(s):
               '                                    onClick = {})')==1,
       'DETAILS_PORTAL_REQUIRED_ONCLICK')
  need(s.count('onPrimaryAction = { actions++ }')==1,'CALLBACK_ISOLATION')
+ # HF03: A single-cluster StreamCarousel renders flat app cards without its
+ # cluster title, so asserting that title falsely fails genuine API36 UI.
+ need('composeTestRule.onNodeWithText("P13 Selected Art").assertExists()' not in s,
+      'CATEGORY_SINGLE_CLUSTER_FALSE_HEADER')
+ category=s.split('fun selectedCategoryShowsLocalAppsWithoutPlayCall()',1)[-1]
+ for statement in (
+   'composeTestRule.onNodeWithText("P13 Back to categories").assertExists()',
+   'composeTestRule.onNodeWithText("P13 Offline Atlas").assertExists()',
+   'shot("r4_p13b_category_collection.png")',
+   'composeTestRule.onNodeWithText("P13 Back to categories").performClick()',
+   'composeTestRule.onNodeWithText("P13 Back to categories").assertDoesNotExist()',
+ ):
+  need(category.count(statement)==1,'CATEGORY_BACK_ROUTE_'+statement)
+ need(category.count('composeTestRule.onNodeWithText("P13 Art").assertExists()')==2,
+      'CATEGORY_RETURN_TO_BROWSER')
+ need(category.index('shot("r4_p13b_category_collection.png")') <
+      category.index('composeTestRule.onNodeWithText("P13 Back to categories").performClick()'),
+      'CATEGORY_SCREENSHOT_BEFORE_RETURN')
  return True
 
 def check_nav(s):
