@@ -52,3 +52,8 @@ require(tests.count('@Test') >= 12 and 'noPublicVerifiedApkSetConstructorOrFacto
         'negative JVM tests missing')
 require('C04-03' in doc and 'not an installer' in doc.lower(), 'roadmap disclaimer missing')
 print('R3C04_C01_SOURCE_BOUNDARY_PASS: non-Play model, unmintable proof, stale-generation and provenance tests')
+
+# C04-01 HF06: the old unmintable placeholder is not the real C04-03 producer.
+# Audit the actual verifier/import path rather than trusting an old comment.
+exec(compile((ROOT / "scripts/ci/test_r3c04_c01_origin.py").read_text(),
+             "test_r3c04_c01_origin.py", "exec"))

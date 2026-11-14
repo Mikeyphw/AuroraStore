@@ -120,6 +120,16 @@
             </intent-filter>
         </activity>
 
+        <!-- C04 local import: internal Settings route only, no third-party privileges. -->
+        <activity
+            android:name=".data.artifact.ArtifactImportActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
+
+        <receiver
+            android:name=".data.artifact.ArtifactInstallStatusReceiver"
+            android:exported="false" />
+
         <!-- Notification Action (Download Complete) -->
         <activity
             android:name=".data.activity.InstallActivity"

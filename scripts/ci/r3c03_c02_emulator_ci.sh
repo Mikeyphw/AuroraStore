@@ -89,3 +89,285 @@ Path(sys.argv[1]).write_text(json.dumps({
 }, indent=2, sort_keys=True) + '\n')
 PYR3C03C03
 echo 'R3C03_C03_API36_MIGRATION_PASS: 1 on-device migration; generated schema preserved in artifact'
+
+# R3C-04: bounded local SAF and archive staging on the same API36 hosted emulator.
+# Source and JVM contracts run in targeted CI; this device lane runs only at full gates.
+python3 -B scripts/ci/test_r3c04_full_import.py
+IMPORT_CLASS='com.aurora.store.data.artifact.ArtifactPrivateStagerDeviceTest'
+timeout 300 adb shell am instrument -w -r -e class "$IMPORT_CLASS" "$RUNNER" |
+  tee "$OUT/c04_private_import.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]'   "$OUT/c04_private_import.txt"; then
+  echo 'R3C04_EMULATOR_REFUSED: private import tests failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(17 tests\)' "$OUT/c04_private_import.txt" || {
+  echo 'R3C04_EMULATOR_REFUSED: expected seventeen real staging device tests' >&2
+  exit 1
+}
+echo 'R3C04_API36_STAGING_PASS: seventeen bounded archive and cancellation tests'
+
+# C04-03 HF01: real APK signer verification on the same periodic API36 gate.
+SIGNER_CLASS='com.aurora.store.data.artifact.ArtifactApkVerifierDeviceTest'
+timeout 300 adb shell am instrument -w -r -e class "$SIGNER_CLASS" "$RUNNER" |
+  tee "$OUT/c04_real_apk_signer.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/c04_real_apk_signer.txt"; then
+  echo 'R3C04_HF01_SIGNER_REFUSED: real APK verification tests failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(7 tests\)' "$OUT/c04_real_apk_signer.txt" || {
+  echo 'R3C04_HF01_SIGNER_REFUSED: expected seven signed/identity APK device cases' >&2
+  exit 1
+}
+echo 'R3C04_HF01_API36_SIGNER_PASS: signed APK, tampering and exact identity safeguards'
+
+
+# C04-04 HF02: verify *real* signed APK session revalidation and consent refusal.
+# Additive API36 tests; never run full gate on each PR.
+SESSION_CLASS='com.aurora.store.data.artifact.ArtifactInstallSessionDeviceTest'
+timeout 300 adb shell am instrument -w -r -e class "$SESSION_CLASS" "$RUNNER" |
+  tee "$OUT/c04_real_session_consent.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/c04_real_session_consent.txt"; then
+  echo 'R3C04_HF02_SESSION_REFUSED: real API36 consent/recheck tests failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(5 tests\)' "$OUT/c04_real_session_consent.txt" || {
+  echo 'R3C04_HF02_SESSION_REFUSED: five real non-installing API36 tests missing' >&2
+  exit 1
+}
+echo 'R3C04_HF02_SESSION_PASS: fresh signer, consent and staged-byte mutation'
+
+# C04-07 HF08 — read-only UI/consent/insets test; no Android install performed.
+UI_CLASS='com.aurora.store.data.artifact.ArtifactImportActivityDeviceTest'
+timeout 300 adb shell am instrument -w -r -e class "$UI_CLASS" "$RUNNER" |
+  tee "$OUT/c04_07_review_ui.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/c04_07_review_ui.txt"; then
+  echo 'R3C04_HF06_REVIEW_UI_REFUSED: API36 UI instrumentation failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(3 tests\)' "$OUT/c04_07_review_ui.txt" || {
+  echo 'R3C04_HF06_REVIEW_UI_REFUSED: three actual Android UI test cases missing' >&2
+  exit 1
+}
+echo 'R3C04_HF06_API36_REVIEW_UI_PASS: three read-only tests'
+
+# R3C-05: three explicit provider-choice and manual-consent UI cases.
+# Read-only tests; no browser, APK download or installation is performed.
+PROVIDER_CLASS='com.aurora.store.data.artifact.ArtifactProviderDiscoveryDeviceTest'
+timeout 300 adb shell am instrument -w -r -e class "$PROVIDER_CLASS" "$RUNNER" |
+  tee "$OUT/r3c05_provider_discovery_ui.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/r3c05_provider_discovery_ui.txt"; then
+  echo 'R3C05_PROVIDER_UI_REFUSED: API36 tests failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(3 tests\)' "$OUT/r3c05_provider_discovery_ui.txt" || {
+  echo 'R3C05_PROVIDER_UI_REFUSED: three real UI tests missing' >&2
+  exit 1
+}
+echo 'R3C05_API36_PROVIDER_UI_PASS: three manual provider tests'
+
+# R3C06: four read-only split-targeting tests on the periodic API36 gate.
+# Complements, never replaces, earlier C04 signing/session/zip tests.
+SPLIT_TARGET_CLASS='com.aurora.store.data.artifact.ArtifactSplitCompatibilityDeviceTest'
+timeout 300 adb shell am instrument -w -r -e class "$SPLIT_TARGET_CLASS" "$RUNNER" |
+  tee "$OUT/r3c06_split_targeting.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/r3c06_split_targeting.txt"; then
+  echo 'R3C06_SPLIT_API36_REFUSED: targeted splits failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(4 tests\)' "$OUT/r3c06_split_targeting.txt" || {
+  echo 'R3C06_SPLIT_API36_REFUSED: four actual Android tests missing' >&2
+  exit 1
+}
+echo 'R3C06_API36_SPLIT_TARGETING_PASS: four read-only compatibility tests'
+
+# R3C06 phase 2: six read-only APKM/XAPK metadata and staging tests on API36.
+# Additive: no Play evidence, publisher trust, privileged install, or source fallback.
+ARCHIVE_DESCRIPTOR_CLASS='com.aurora.store.data.artifact.ArtifactArchiveDescriptorDeviceTest'
+timeout 300 adb shell am instrument -w -r -e class "$ARCHIVE_DESCRIPTOR_CLASS" "$RUNNER" |
+  tee "$OUT/r3c06_archive_descriptors.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/r3c06_archive_descriptors.txt"; then
+  echo 'R3C06_P2_API36_REFUSED: APKM/XAPK tests failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(6 tests\)' "$OUT/r3c06_archive_descriptors.txt" || {
+  echo 'R3C06_P2_API36_REFUSED: six actual archive-format tests missing' >&2
+  exit 1
+}
+echo 'R3C06_P2_API36_ARCHIVE_DESCRIPTOR_PASS: six bounded archive-format tests'
+
+
+# R3C06 phase 3: actual signed debug APK bytes in APKM/XAPK wrappers.
+# These cases are READ-ONLY; no installer session is submitted by this suite.
+REAL_SIGNED_CLASS='com.aurora.store.data.artifact.ArtifactRealSignedArchiveDeviceTest'
+timeout 360 adb shell am instrument -w -r -e class "$REAL_SIGNED_CLASS" "$RUNNER" |
+  tee "$OUT/r3c06_real_signed_archives.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/r3c06_real_signed_archives.txt"; then
+  echo 'R3C06_P3_SIGNED_ARCHIVES_REFUSED: actual signed APKM/XAPK tests failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(6 tests\)' "$OUT/r3c06_real_signed_archives.txt" || {
+  echo 'R3C06_P3_SIGNED_ARCHIVES_REFUSED: six actual signed-APK tests missing' >&2
+  exit 1
+}
+echo 'R3C06_P3_SIGNED_ARCHIVES_PASS: six API36 signed APKM/XAPK import tests'
+
+# R3C06 P4: exact-SHA, measured, READ-ONLY API36 instrumentation receipt.
+# Never claim a live install or bundletool qualification from these logs.
+python3 -B scripts/ci/r3c06_readonly_receipt.py \
+  --logs "$OUT" --receipt "$OUT/R3C06_P4_API36_READONLY_RECEIPT.json"
+echo 'R3C06_P4_API36_READONLY_EVIDENCE_PASS: 51 actually executed tests'
+
+# REAL OS installation is explicitly opt-in: this never runs on ordinary PR CI.
+# It creates and deletes ONLY an isolated synthetic fixture package on API36 emulator.
+if [[ "${R3C06_ALLOW_LIVE_INSTALL:-no}" == yes ]]; then
+  python3 -B scripts/ci/r3c06_api36_live_install.py \
+    --receipt "$OUT/R3C06_P3_LIVE_OS_INSTALL_RECEIPT.json"
+else
+  echo 'R3C06_P3_LIVE_OS_INSTALL_NOT_QUALIFIED: explicit opt-in required'
+fi
+
+# A SHA256-pinned official bundletool binary AND a real fixture AAB are required.
+# Never silently certify a dimension or use untrusted toc.pb as publisher proof.
+if [[ -n "${R3C06_BUNDLETOOL_JAR:-}" && -n "${R3C06_BUNDLETOOL_SHA256:-}" && -n "${R3C06_AAB_FIXTURE:-}" ]]; then
+  python3 -B scripts/ci/r3c06_bundletool_matrix.py \
+    --bundle "$R3C06_AAB_FIXTURE" \
+    --bundletool-jar "$R3C06_BUNDLETOOL_JAR" \
+    --bundletool-sha256 "$R3C06_BUNDLETOOL_SHA256" \
+    --receipt "$OUT/R3C06_P3_BUNDLETOOL_MATRIX_RECEIPT.json"
+else
+  echo 'R3C06_P3_BUNDLETOOL_NOT_QUALIFIED: signed AAB and pinned bundletool required'
+fi
+
+# P6: second *independent* real AAB, never relabel Aurora's production AAB.
+# This block is reachable only after the existing 51-case read-only gate and
+# the production matrix have completed on this same emulator/source/run.
+if [[ -n "${R3C06_P6_FEATURE_AAB:-}" ]]; then
+  [[ -s "$R3C06_P6_FEATURE_AAB" && -s "${R3C06_AAB_FIXTURE:-}" &&
+     -s "${R3C06_BUNDLETOOL_JAR:-}" && -n "${R3C06_BUNDLETOOL_SHA256:-}" ]] || {
+    echo R3C06_P6_FEATURE_INPUTS_MISSING >&2
+    exit 1
+  }
+  python3 -B scripts/ci/r3c06_p6_feature_aab.py \
+    --bundle "$R3C06_P6_FEATURE_AAB" \
+    --bundletool-jar "$R3C06_BUNDLETOOL_JAR" \
+    --receipt "$OUT/R3C06_P6_FIXTURE_MANIFEST_RECEIPT.json"
+  python3 -B scripts/ci/r3c06_bundletool_matrix.py \
+    --bundle "$R3C06_P6_FEATURE_AAB" \
+    --bundletool-jar "$R3C06_BUNDLETOOL_JAR" \
+    --bundletool-sha256 "$R3C06_BUNDLETOOL_SHA256" \
+    --feature featureproof \
+    --receipt "$OUT/R3C06_P6_FEATURE_MATRIX_RECEIPT.json"
+fi
+
+
+# R3C07 P01: independent read-only import review accessibility/rotation tests.
+# This is not part of the historical 51-test R3C06 P4 receipt and never
+# submits a PackageInstaller session, browser handoff or SAF data transfer.
+R3C07_UX_CLASS='com.aurora.store.data.artifact.ArtifactReviewUxDeviceTest'
+timeout 240 adb shell am instrument -w -r -e class "$R3C07_UX_CLASS" "$RUNNER" |
+  tee "$OUT/r3c07_p01_review_ux.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/r3c07_p01_review_ux.txt"; then
+  echo 'R3C07_P01_API36_UX_REFUSED: read-only review tests failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(5 tests\)' "$OUT/r3c07_p01_review_ux.txt" || {
+  echo 'R3C07_P01_API36_UX_REFUSED: five actual Android tests missing' >&2
+  exit 1
+}
+echo 'R3C07_P01_API36_UX_PASS: five read-only review and lifecycle tests'
+python3 -B - "$OUT/R3C07_P01_API36_UX_RECEIPT.json" <<'R3C07_RECEIPT_PY'
+import json,os,pathlib,sys
+sha=os.environ.get('GITHUB_SHA','')
+run_id=os.environ.get('GITHUB_RUN_ID','')
+assert len(sha)==40 and all(c in '0123456789abcdef' for c in sha), 'no exact GitHub source SHA'
+assert run_id.isdecimal(), 'no exact hosted run id'
+receipt={'overall':'PASS','source_sha':sha,'run_id':run_id,'android_api':36,
+         'actual_instrumentation_tests':5,'read_only_ui':True,
+         'installation_qualified':False,'publisher_authenticated':False,
+         'physical_device_qualified':False,'release_qualified':False}
+pathlib.Path(sys.argv[1]).write_text(json.dumps(receipt,sort_keys=True,indent=2)+'\n',encoding='utf-8')
+R3C07_RECEIPT_PY
+
+# R3C07 P02A: actually signed debug APK via a private content:// stream and
+# production picker/verifier/review UI. No install button click or network.
+# Independent of the R3C06 51/51 and R3C07 P01 5/5 historical receipts.
+R3C07_P02A_CLASS='com.aurora.store.data.artifact.ArtifactReviewP02DeviceTest'
+timeout 420 adb shell am instrument -w -r -e class "$R3C07_P02A_CLASS" "$RUNNER" |
+  tee "$OUT/r3c07_p02a_signed_document_ui.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/r3c07_p02a_signed_document_ui.txt"; then
+  echo 'R3C07_P02A_API36_UI_REFUSED: real signed-file review tests failed' >&2
+  exit 1
+fi
+grep -Eq '^OK \(4 tests\)' "$OUT/r3c07_p02a_signed_document_ui.txt" || {
+  echo 'R3C07_P02A_API36_UI_REFUSED: four actual Android UI tests missing' >&2
+  exit 1
+}
+grep -Eq '^INSTRUMENTATION_CODE: -1' "$OUT/r3c07_p02a_signed_document_ui.txt" || {
+  echo 'R3C07_P02A_API36_UI_REFUSED: Android instrumentation did not succeed' >&2
+  exit 1
+}
+python3 -B scripts/ci/r3c07_p02_receipt.py --log "$OUT/r3c07_p02a_signed_document_ui.txt" \
+  --output "$OUT/R3C07_P02A_API36_UX_RECEIPT.json"
+
+# R3C07 P02B: consolidated API36 actual large-font + genuine process stop,
+# accessibility node semantics and accurate (non-installing) outcome labels.
+# Not actual TalkBack activation, user approval or publisher proof.
+bash scripts/ci/r3c07_p02b_api36.sh "$RUNNER" "$OUT"
+
+# R3C07 P03B: real content URI, provider/retry/rotation, screenshots, source receipt.
+# Read-only: no installed package mutation or browser-side network I/O.
+bash scripts/ci/r3c07_p03b_api36.sh "$RUNNER" "$OUT"
+
+# R3C08 P01: real Android-owned SAF grant/revoke and importer refusal.
+# Default read-only API36 test: no Play state writes or installer session.
+bash scripts/ci/r3c08_p01_api36.sh "$RUNNER" "$OUT"
+
+# R3C07 P03: never activate TalkBack by default or claim live traversal from
+# the read-only P01/P02 UX tests. Actual Android service must be installed.
+if [[ "${R3C07_ALLOW_LIVE_TALKBACK:-no}" == yes ]]; then
+  python3 -B scripts/ci/r3c07_p03_talkback.py --run --runner "$RUNNER" --out "$OUT"
+else
+  echo 'R3C07_P03_ACTUAL_TALKBACK_NOT_QUALIFIED: explicit workflow opt-in required'
+fi
+
+# R3D P04: exactly four actual API36 receipt/callback race cases; NO OS install.
+R3D_P04_CLASS='com.aurora.store.data.artifact.ArtifactR3DRecoveryDeviceTest'
+timeout 300 adb shell am instrument -w -r -e class "$R3D_P04_CLASS" "$RUNNER" |
+  tee "$OUT/r3d_p04_readonly_callback_races.txt"
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[12]' \
+  "$OUT/r3d_p04_readonly_callback_races.txt"; then
+  echo R3D_P04_CALLBACK_DEVICE_REFUSED >&2
+  exit 1
+fi
+grep -Eq '^OK \(4 tests\)' "$OUT/r3d_p04_readonly_callback_races.txt" || {
+  echo R3D_P04_CALLBACK_TEST_COUNT_REFUSED >&2
+  exit 1
+}
+grep -Eq '^INSTRUMENTATION_CODE: -1' "$OUT/r3d_p04_readonly_callback_races.txt" || {
+  echo R3D_P04_CALLBACK_INSTRUMENTATION_REFUSED >&2
+  exit 1
+}
+python3 -B - "$OUT/R3D_P04_READONLY_RACE_DEVICE_RECEIPT.json" <<'R3D_P04_RECEIPT_PY'
+import json, os, pathlib, sys
+sha=os.environ.get('GITHUB_SHA','')
+run=os.environ.get('GITHUB_RUN_ID','')
+assert len(sha)==40 and all(c in '0123456789abcdef' for c in sha)
+assert run.isdecimal() and int(run)>0
+pathlib.Path(sys.argv[1]).write_text(json.dumps({
+  'overall':'PASS_READONLY_ONLY','source_sha':sha,'run_id':run,
+  'android_api':36,'actual_readonly_race_device_tests':4,
+  'installer_session_created':False,'real_os_installation':False,
+  'physical_device_qualified':False,'release_qualified':False,
+  'final_security_signoff':False,
+},indent=2,sort_keys=True)+'\n',encoding='utf-8')
+R3D_P04_RECEIPT_PY
+echo R3D_P04_API36_READONLY_CALLBACK_RACE_PASS: four noninstalling device tests

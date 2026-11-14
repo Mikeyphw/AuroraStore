@@ -4,6 +4,23 @@ set -euo pipefail
 OUT="${RUNNER_TEMP:?}/aurora-r1d2-emulator"
 mkdir -p "$OUT"
 
+# HF05: snapshot cache restoration must NEVER carry a preinstalled Aurora
+# app or instrumentation package. Fail closed before the historical installer.
+[[ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" == '36' ]] || {
+  echo R3C07_HF05_AVD_REFUSED_NOT_API36 >&2
+  exit 1
+}
+R3C07_PREINSTALL_PACKAGE_INVENTORY="$(adb shell pm list packages --user 0 | tr -d '\r')"
+if [[ -z "$R3C07_PREINSTALL_PACKAGE_INVENTORY" || "$R3C07_PREINSTALL_PACKAGE_INVENTORY" != *'package:'* ]]; then
+  echo R3C07_HF05_AVD_REFUSED_EMPTY_PACKAGE_INVENTORY >&2
+  exit 1
+fi
+if printf '%s\n' "$R3C07_PREINSTALL_PACKAGE_INVENTORY" | \
+  grep -Eq '^package:com\.aurora\.store\.debug(\.test)?$'; then
+  echo R3C07_HF03_AVD_REFUSED_STALE_AURORA_PREINSTALL >&2
+  exit 1
+fi
+
 # Retain the previously qualified 14-case R1D gate in the same hosted emulator.
 bash scripts/ci/r1d_emulator_ci.sh
 [[ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" == '36' ]] || {

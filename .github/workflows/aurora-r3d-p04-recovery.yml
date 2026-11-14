@@ -1,13 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# INERT DEFAULT-BRANCH REGISTRATION ONLY: this workflow NEVER installs anything.
-# To run the real P04 workflow, explicitly dispatch the trusted feature ref.
+# P04 never runs automatically; only explicit, fresh, disposable API36 emulator.
 name: Aurora R3D P04 — Disposable Recovery and Adversarial Signoff
 
 on:
   workflow_dispatch:
     inputs:
       authorization:
-        description: 'Only the feature branch can run disposable OS recovery tests'
+        description: 'Authorize live OS modifications ONLY to a NEW disposable test APK on a clean API36 emulator'
         required: true
         type: choice
         default: DO_NOT_RUN
@@ -15,11 +14,112 @@ on:
           - DO_NOT_RUN
           - I_AUTHORIZE_R3D_P04_DISPOSABLE_API36_RECOVERY
 
-permissions: {}
+permissions:
+  contents: read
+
+concurrency:
+  group: aurora-r3d-p04-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  registration-only:
-    if: ${{ false }}
-    runs-on: ubuntu-latest
+  offline-contracts:
+    name: P04 non-installing security and adversarial source checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
-      - run: echo 'This master workflow is inert; dispatch the feature ref.'
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Exact-source read-only checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -B scripts/ci/test_r3d_p01_p02_source.py
+          python3 -B scripts/ci/test_r3d_p03_source.py
+          python3 -B scripts/ci/test_r3d_p04_source.py
+          echo R3D_P04_OFFLINE_CONTRACTS_PASS_NO_INSTALL
+
+  actual-disposable-recovery:
+    name: P04 actual unprivileged API36 recovery (explicit opt-in only)
+    needs: offline-contracts
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.authorization == 'I_AUTHORIZE_R3D_P04_DISPOSABLE_API36_RECOVERY' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+      - name: Exact SHA, explicit authorization and fixed SDK components
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test '${{ inputs.authorization }}' = I_AUTHORIZE_R3D_P04_DISPOSABLE_API36_RECOVERY
+          sdkmanager --install 'platforms;android-36' 'build-tools;35.0.0' 'system-images;android-36;google_apis;x86_64'
+      - name: Build ephemeral same-signer and hostile-signer disposable fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B scripts/ci/r3d_p03_fixture.py build --out "$RUNNER_TEMP/r3d-p04-fixtures"
+          python3 -B scripts/ci/r3d_p03_fixture.py verify --dir "$RUNNER_TEMP/r3d-p04-fixtures"
+      - name: Require isolated hosted emulator KVM
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm
+          if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then sudo chmod a+rw /dev/kvm; fi
+          test -r /dev/kvm && test -w /dev/kvm
+      - name: Actually run P04 interrupted sessions, rejection, fixture restart and test-only recovery
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 2048M
+          disk-size: 3072M
+          force-avd-creation: true
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: >-
+            python3 -B scripts/ci/r3d_p04_recovery.py run
+            --fixture-dir "$RUNNER_TEMP/r3d-p04-fixtures"
+            --sha "$GITHUB_SHA"
+            --run-id "$GITHUB_RUN_ID"
+            --serial emulator-5554
+            --authorize I_AUTHORIZE_R3D_P04_DISPOSABLE_API36_RECOVERY
+            --report "$RUNNER_TEMP/R3D_P04_ACTUAL_DISPOSABLE_RECEIPT.json"
+            --trace "$RUNNER_TEMP/R3D_P04_AS_RUN_ADB_TRANSCRIPT.json"
+      - name: Independently validate as-run disposable receipt (NEVER full release signoff)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B scripts/ci/r3d_p04_signoff.py \
+            --receipt "$RUNNER_TEMP/R3D_P04_ACTUAL_DISPOSABLE_RECEIPT.json" \
+            --fixture "$RUNNER_TEMP/r3d-p04-fixtures/fixtures.json" \
+            --trace "$RUNNER_TEMP/R3D_P04_AS_RUN_ADB_TRANSCRIPT.json" \
+            --sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" \
+            --out "$RUNNER_TEMP/R3D_P04_INDEPENDENT_LIMITED_SIGNOFF.json"
+      - name: Preserve all available as-run evidence including refusals
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: aurora-r3d-p04-disposable-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/R3D_P04_ACTUAL_DISPOSABLE_RECEIPT.json
+            ${{ runner.temp }}/R3D_P04_AS_RUN_ADB_TRANSCRIPT.json
+            ${{ runner.temp }}/R3D_P04_INDEPENDENT_LIMITED_SIGNOFF.json
+            ${{ runner.temp }}/r3d-p04-fixtures/fixtures.json
+          if-no-files-found: warn
+          retention-days: 14

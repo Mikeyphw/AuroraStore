@@ -3,9 +3,36 @@ name: Aurora R1D — API 36 Emulator Download Recovery
 
 on:
   workflow_dispatch:
+    inputs:
+      r3c06_live_install:
+        description: 'R3C06 opt-in: real synthetic fixture installation, system denial and cleanup'
+        type: boolean
+        required: true
+        default: false
+      r3c06_bundletool_matrix:
+        description: 'R3C06 opt-in: source-pinned official bundletool + real Aurora AAB targeting matrix'
+        type: boolean
+        required: true
+        default: false
+      r3c06_feature_matrix:
+        description: 'R3C06 P6 manual: isolated on-demand dynamic feature AAB plus production targeting; NO live install'
+        type: boolean
+        required: true
+        default: false
+      r3c07_live_talkback:
+        description: 'R3C07 P03 explicit opt-in: actual installed TalkBack service, focus events and secure-setting restoration; refuses if unavailable'
+        type: boolean
+        required: true
+        default: false
+      r3c07_live_installer:
+        description: 'R3C07 P04 explicit opt-in: isolated signed-fixture Android system DENY then ACCEPT and cleanup'
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
+  actions: read # Download only exact-source, completed, signed targeted artifacts.
 
 concurrency:
   group: aurora-r1d-${{ github.ref }}
@@ -35,6 +62,17 @@ jobs:
           python3 -B scripts/ci/check_r1e.py
           python3 -B scripts/ci/check_r1f.py
           python3 -B scripts/ci/check_r1g.py
+          # Execute the real R3C07 receipt heredoc before any SDK/Gradle work.
+          python3 -B scripts/ci/test_r3c07_hf02_receipt.py scripts/ci/r3c03_c02_emulator_ci.sh
+          # P03 and P04 are independent manual gates. Never mutate OS
+          # accessibility and PackageInstaller state in the same workflow run.
+          if [[ '${{ inputs.r3c07_live_talkback }}' == 'true' && '${{ inputs.r3c07_live_installer }}' == 'true' ]]; then
+            echo R3C07_P03_P04_REFUSED_CONCURRENT_LIVE_GATES >&2
+            exit 1
+          fi
+          python3 -B scripts/ci/test_r3c07_hf03_optimization.py
+          python3 -B scripts/ci/test_r3c07_p03_p04_source.py
+          python3 -B scripts/ci/test_r3c07_p03b_source.py
 
   emulator:
     name: R1D production Room DAO + watchdog + process restart on API 36
@@ -93,13 +131,90 @@ jobs:
               "$HOME/.android/cache"
             sleep "$(( attempt * 10 ))"
           done
+      - name: Reuse successful exact-SHA targeted APKs only after signed manifest verification
+        id: apk_reuse
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 -B scripts/ci/r3c07_hf03_apk_pair.py consume \
+            --root . --sha "$GITHUB_SHA" \
+            --tmp "$RUNNER_TEMP/aurora-r3c07-apk-reuse" --github-output "$GITHUB_OUTPUT"
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
+        if: steps.apk_reuse.outputs.reused != 'true'
       - name: Build vanillaDebug application and instrumentation APKs on GitHub
+        if: steps.apk_reuse.outputs.reused != 'true'
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
           ./gradlew --no-daemon --max-workers=2 :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest
+      - name: Seal actual APK bytes, matched signing identity and exact source/run provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B scripts/ci/r3c07_hf03_apk_pair.py finalize \
+            --root . --sha "$GITHUB_SHA" \
+            --tmp "$RUNNER_TEMP/aurora-r3c07-apk-reuse" \
+            --receipt "$RUNNER_TEMP/aurora-r3c03-c02/R3C07_HF03_APK_SOURCE_RECEIPT.json" \
+            --reused '${{ steps.apk_reuse.outputs.reused }}'
+      - name: Provision Android 36 platform for opt-in signed fixture (manual only)
+        if: ${{ inputs.r3c06_live_install == true || inputs.r3c07_live_installer == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install 'platforms;android-36'
+          test -s "$ANDROID_SDK_ROOT/platforms/android-36/android.jar"
+      - name: R3C06 P6 refuse feature qualification without production matrix
+        if: ${{ inputs.r3c06_feature_matrix == true }}
+        env:
+          R3C06_P6_PRODUCTION_REQUESTED: ${{ inputs.r3c06_bundletool_matrix == true && 'yes' || 'no' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$R3C06_P6_PRODUCTION_REQUESTED" = yes || {
+            echo R3C06_P6_MATRIX_REQUIRED >&2
+            exit 1
+          }
+      - name: Prepare optional real AAB + SHA256-pinned official bundletool (manual only)
+        if: ${{ inputs.r3c06_bundletool_matrix == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          chmod +x gradlew
+          ./gradlew --no-daemon --max-workers=2 :app:bundleVanillaDebug
+          mapfile -d '' bundles < <(find app/build/outputs/bundle/vanillaDebug -maxdepth 1 -type f -name '*.aab' -print0)
+          [[ "${#bundles[@]}" -eq 1 ]] || { echo R3C06_P5_AAB_AMBIGUOUS >&2; exit 1; }
+          jar="$RUNNER_TEMP/r3c06-bundletool-all-1.18.3.jar"
+          curl --fail --location --show-error --silent --retry 3 \
+            'https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar' -o "$jar"
+          echo "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  $jar" | sha256sum --check --status
+          echo "R3C06_AAB_FIXTURE=$(realpath -- "${bundles[0]}")" >> "$GITHUB_ENV"
+          echo "R3C06_BUNDLETOOL_JAR=$jar" >> "$GITHUB_ENV"
+          echo 'R3C06_BUNDLETOOL_SHA256=a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29' >> "$GITHUB_ENV"
+          echo 'R3C06_P5_OFFICIAL_BUNDLETOOL_PIN_VERIFIED'
+      - name: Build independent on-demand feature AAB (P6 manual only)
+        if: ${{ inputs.r3c06_feature_matrix == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -s "$R3C06_BUNDLETOOL_JAR"
+          sdkmanager --install 'platforms;android-36'
+          test -s "$ANDROID_SDK_ROOT/platforms/android-36/android.jar"
+          chmod +x gradlew
+          ./gradlew --no-daemon --max-workers=2 \
+            --project-dir scripts/ci/fixtures/r3c06_feature_bundle :app:bundleDebug
+          mapfile -d '' fixture_bundles < <(find scripts/ci/fixtures/r3c06_feature_bundle/app/build/outputs/bundle/debug \
+            -maxdepth 1 -type f -name '*.aab' -print0)
+          [[ "${#fixture_bundles[@]}" -eq 1 ]] || {
+            echo R3C06_P6_FIXTURE_AAB_NOT_UNIQUE >&2
+            exit 1
+          }
+          echo "R3C06_P6_FEATURE_AAB=$(realpath -- "${fixture_bundles[0]}")" >> "$GITHUB_ENV"
+          echo R3C06_P6_INDEPENDENT_FEATURE_AAB_BUILT
       - name: Require KVM-enabled ephemeral Linux runner
         shell: bash
         run: |
@@ -107,7 +222,25 @@ jobs:
           test -c /dev/kvm || { echo R1D_KVM_UNAVAILABLE >&2; exit 1; }
           if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then sudo chmod a+rw /dev/kvm; fi
           test -r /dev/kvm && test -w /dev/kvm
-      - name: Execute 40 R1D through R1G Android device tests and screenshots (KVM/API 36)
+      - name: Fingerprint the installed API36 image, emulator and clean AVD configuration
+        id: avd_identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="$ANDROID_SDK_ROOT/system-images/android-36/google_apis/x86_64/source.properties"
+          emulator="$ANDROID_SDK_ROOT/emulator/emulator"
+          test -s "$image" && test -x "$emulator"
+          key="$({ cat "$image"; "$emulator" -version; printf '%s\n' 'api36-google_apis-x86_64-pixel_6-2cores-2048M-3072M'; } | sha256sum | cut -d' ' -f1)"
+          [[ "$key" =~ ^[a-f0-9]{64}$ ]] || exit 1
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - name: Restore immutable, clean pre-install API36 AVD snapshot
+        id: avd-cache
+        uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2, Node.js 24
+        with:
+          path: ~/.android/avd/*
+          key: AVD_SNAPSHOT_CACHE_V2-${{ runner.os }}-${{ runner.arch }}-${{ steps.avd_identity.outputs.key }}
+      - name: Generate pre-install AVD snapshot only on cache miss
+        if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: 36
@@ -117,9 +250,74 @@ jobs:
           cores: 2
           ram-size: 2048M
           disk-size: 3072M
-          disable-animations: true
+          force-avd-creation: false
+          disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          # HF07 single /bin/sh -c command; control flow is inside the reviewed
+          # bash file. Historical HF05 marker: echo R3C07_HF03_PREINSTALL_AVD_SNAPSHOT_INITIALIZED
+          script: bash scripts/ci/r3c07_hf07_avd_snapshot.sh
+      - name: Save clean pre-install snapshot BEFORE running any Android tests
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2, Node.js 24
+        with:
+          path: ~/.android/avd/*
+          key: AVD_SNAPSHOT_CACHE_V2-${{ runner.os }}-${{ runner.arch }}-${{ steps.avd_identity.outputs.key }}
+      - name: Execute 40 R1D through R1G Android device tests and screenshots (KVM/API 36)
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        env:
+          # The same old workflow defaults to non-destructive, read-only behavior.
+          # Never infer consent from a branch push or periodic router dispatch.
+          R3C06_ALLOW_LIVE_INSTALL: ${{ github.event_name == 'workflow_dispatch' && (inputs.r3c06_live_install == true || inputs.r3c07_live_installer == true) && 'yes' || 'no' }}
+          R3C07_ALLOW_LIVE_TALKBACK: ${{ github.event_name == 'workflow_dispatch' && inputs.r3c07_live_talkback == true && 'yes' || 'no' }}
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 2048M
+          disk-size: 3072M
+          force-avd-creation: false
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: bash scripts/ci/r1d2_emulator_ci.sh
+      - name: Verify explicitly opted-in R3C06 P5 evidence (no auto-qualification)
+        if: ${{ inputs.r3c06_live_install == true || inputs.r3c07_live_installer == true || inputs.r3c06_bundletool_matrix == true }}
+        shell: bash
+        env:
+          R3C06_P5_EXPECT_LIVE: ${{ (inputs.r3c06_live_install == true || inputs.r3c07_live_installer == true) && 'yes' || 'no' }}
+          R3C06_P5_EXPECT_MATRIX: ${{ inputs.r3c06_bundletool_matrix == true && 'yes' || 'no' }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -B scripts/ci/r3c06_p5_manual_receipt.py \
+            --logs "$RUNNER_TEMP/aurora-r3c03-c02" \
+            --receipt "$RUNNER_TEMP/aurora-r3c03-c02/R3C06_P5_MANUAL_RECEIPT.json" \
+            --sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" \
+            --expect-live "$R3C06_P5_EXPECT_LIVE" \
+            --expect-bundletool "$R3C06_P5_EXPECT_MATRIX"
+      - name: R3C07 P04 certify actual OS deny/accept from the isolated P5 fixture (manual only)
+        if: ${{ inputs.r3c07_live_installer == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -B scripts/ci/r3c07_p04_os_receipt.py \
+            --logs "$RUNNER_TEMP/aurora-r3c03-c02" \
+            --output "$RUNNER_TEMP/aurora-r3c03-c02/R3C07_P04_ACTUAL_OS_OUTCOMES_RECEIPT.json" \
+            --sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID"
+      - name: R3C06 P6 validate independent feature + production targeting (manual only)
+        if: ${{ inputs.r3c06_feature_matrix == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -B scripts/ci/r3c06_p6_composite_receipt.py \
+            --production "$RUNNER_TEMP/aurora-r3c03-c02/R3C06_P3_BUNDLETOOL_MATRIX_RECEIPT.json" \
+            --feature "$RUNNER_TEMP/aurora-r3c03-c02/R3C06_P6_FEATURE_MATRIX_RECEIPT.json" \
+            --manifest "$RUNNER_TEMP/aurora-r3c03-c02/R3C06_P6_FIXTURE_MANIFEST_RECEIPT.json" \
+            --receipt "$RUNNER_TEMP/aurora-r3c03-c02/R3C06_P6_COMPOSITE_RECEIPT.json" \
+            --sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID"
       - name: Upload source-bound emulator receipt and offline test logs
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4

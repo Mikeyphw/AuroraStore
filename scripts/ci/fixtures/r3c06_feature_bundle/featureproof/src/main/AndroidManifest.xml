@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:dist="http://schemas.android.com/apk/distribution">
+    <dist:module dist:title="@string/r3c06_feature_title">
+        <dist:delivery><dist:on-demand /></dist:delivery>
+        <dist:fusing dist:include="false" />
+    </dist:module>
+    <application />
+</manifest>

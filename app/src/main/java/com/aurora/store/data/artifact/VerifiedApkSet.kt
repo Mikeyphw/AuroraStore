@@ -7,10 +7,12 @@ package com.aurora.store.data.artifact
  * Reserved C04-03 verification capability. Intentionally unmintable in C04-01:
  * no constructor or factory is exposed to picker, provenance or source adapters.
  *
- * The future real verifier must validate immutable private staged bytes with Android's
- * verified archive-signing API, split topology, exact package/version, and installed
- * signer continuity before it can add a tightly scoped factory here. Signing validity
- * is not an anchored developer identity; Play evidence remains a distinct subsystem.
+ * As of C04-03, the *actual* proof producer returns
+ * ArtifactApkVerifier.VerifiedImport after Android API36 signature validation,
+ * split checks and exact staged-byte revalidation; that capability is already
+ * consumed by the independent PackageInstaller path. This historical type is
+ * deliberately still unmintable and is NOT the production proof capability.
+ * Signing validity is not anchored publisher identity; Play evidence is separate.
  */
 internal class VerifiedApkSet private constructor(
     val attempt: ArtifactAttempt,
