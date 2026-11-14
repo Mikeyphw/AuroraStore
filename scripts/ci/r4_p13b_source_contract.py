@@ -97,6 +97,33 @@ def check_test(s):
  need(category.index('shot("r4_p13b_category_collection.png")') <
       category.index('composeTestRule.onNodeWithText("P13 Back to categories").performClick()'),
       'CATEGORY_SCREENSHOT_BEFORE_RETURN')
+ # HF04: Compose lazy carousel must work at both full/compact widths; mounted
+ # semantics count is not a stable proxy for two fixture clusters.
+ need('assertCountEquals(2)' not in s,'LAZY_CAROUSEL_FIXED_VISIBLE_COUNT')
+ for marker in (
+   'val visibleAtlas = composeTestRule.onAllNodesWithText("P13 Offline Atlas")',
+   '.fetchSemanticsNodes().size',
+   'assertThat(visibleAtlas).isAtLeast(1)',
+   'assertThat(visibleAtlas).isAtMost(2)',
+ ):
+  need(marker in s,'LAZY_VIEWPORT_SEMANTICS_'+marker)
+ # HF04: screenshot evidence must be a different *painted body* from preceding
+ # view, not a cached compositor image or status clock repaint.
+ for marker in (
+   'private var previousBodySignature: IntArray? = null',
+   'private fun bodySignature(bitmap: Bitmap): IntArray',
+   'private fun changedBodySamples(before: IntArray, after: IntArray): Int',
+   'if (difference >= 32) changed++',
+   'for (attempt in 1..12)',
+   'R4ScreenshotEvidence.capture(context, filename)',
+   'BitmapFactory.decodeFile(',
+   'if (before == null || lastChangeCount >= 12)',
+   'P13B_REFUSED_STALE_BODY_FRAME',
+ ):
+  need(marker in s,'FRESH_FRAME_GUARD_'+marker)
+ need('previousBodySignature = candidate' in s and
+      'if (attempt < 12) SystemClock.sleep(250)' in s,
+      'FRESH_FRAME_STATE_OR_BOUNDED_RETRY')
  return True
 
 def check_nav(s):

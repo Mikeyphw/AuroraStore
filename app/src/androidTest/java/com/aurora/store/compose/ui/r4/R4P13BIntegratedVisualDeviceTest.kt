@@ -2,6 +2,7 @@
 package com.aurora.store.compose.ui.r4
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -28,7 +29,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -62,6 +62,7 @@ import com.aurora.store.data.model.ViewState
 import com.google.common.truth.Truth.assertThat
 import java.io.File
 import java.io.FileOutputStream
+import kotlin.math.abs
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -96,8 +97,56 @@ class R4P13BIntegratedVisualDeviceTest : IsolatedTest() {
             Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) { content() }
         }
     }
+    // Only *newly painted* content is evidence. On API36, UIAutomation may return
+    // a complete but stale preceding frame even after Compose semantics update.
+    // Do not accept a changed clock/status bar or merely distinct PNG bytes.
+    private var previousBodySignature: IntArray? = null
+
+    private fun bodySignature(bitmap: Bitmap): IntArray {
+        val pixels = IntArray(27 * 40)
+        var offset = 0
+        for (row in 0 until 40) {
+            val y = (bitmap.height * (12 + 2 * row) / 100).coerceIn(0, bitmap.height - 1)
+            for (column in 0 until 27) {
+                val x = (bitmap.width * (10 + 3 * column) / 100).coerceIn(0, bitmap.width - 1)
+                pixels[offset++] = bitmap.getPixel(x, y)
+            }
+        }
+        return pixels
+    }
+
+    private fun changedBodySamples(before: IntArray, after: IntArray): Int {
+        check(before.size == after.size) { "P13B_SCREENSHOT_SAMPLE_GEOMETRY_MISMATCH" }
+        var changed = 0
+        for (i in before.indices) {
+            val a = before[i]
+            val b = after[i]
+            val difference = abs(Color.red(a) - Color.red(b)) +
+                abs(Color.green(a) - Color.green(b)) +
+                abs(Color.blue(a) - Color.blue(b))
+            if (difference >= 32) changed++
+        }
+        return changed
+    }
+
     private fun shot(filename: String) {
-        R4ScreenshotEvidence.capture(context, filename) { composeTestRule.waitForIdle() }
+        val before = previousBodySignature
+        var lastChangeCount = 0
+        for (attempt in 1..12) {
+            R4ScreenshotEvidence.capture(context, filename) { composeTestRule.waitForIdle() }
+            val screenshot = checkNotNull(
+                BitmapFactory.decodeFile(File(context.filesDir, filename).absolutePath)
+            ) { "P13B_SCREENSHOT_DECODE_FAILED $filename" }
+            val candidate = try { bodySignature(screenshot) } finally { screenshot.recycle() }
+            lastChangeCount = if (before == null) candidate.size
+                else changedBodySamples(before, candidate)
+            if (before == null || lastChangeCount >= 12) {
+                previousBodySignature = candidate
+                return
+            }
+            if (attempt < 12) SystemClock.sleep(250)
+        }
+        error("P13B_REFUSED_STALE_BODY_FRAME $filename body_samples_changed=$lastChangeCount attempts=12")
     }
 
     /** These three files are *input app artwork*, not evidence screenshots. */
@@ -150,7 +199,13 @@ class R4P13BIntegratedVisualDeviceTest : IsolatedTest() {
                 }
             }
         }
-        composeTestRule.onAllNodesWithText("P13 Offline Atlas").assertCountEquals(2)
+        // LazyColumn mounts only the visible cluster row on a compact screen.
+        // Two fixture clusters remain present, but 1 or 2 Atlas semantics nodes
+        // may be mounted depending on viewport size; both must be accepted.
+        val visibleAtlas = composeTestRule.onAllNodesWithText("P13 Offline Atlas")
+            .fetchSemanticsNodes().size
+        assertThat(visibleAtlas).isAtLeast(1)
+        assertThat(visibleAtlas).isAtMost(2)
         shot("r4_p13b_home.png")
         composeTestRule.onAllNodesWithText(context.getString(R.string.action_install))
             .get(0).performClick()

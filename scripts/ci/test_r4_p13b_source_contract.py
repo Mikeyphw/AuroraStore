@@ -29,6 +29,26 @@ def main():
                    (g.check_references,(ref,))): assert call(*args)
  negatives=[
   (lambda:g.check_test(test.replace('    @Test\n','',1)),'INTEGRATED_THREE_TESTS'),
+  # HF04: hard count(2) fails at compact viewport due LazyColumn recycling.
+  (lambda:g.check_test(test.replace(
+   'assertThat(visibleAtlas).isAtLeast(1)',
+   'composeTestRule.onAllNodesWithText("P13 Offline Atlas").assertCountEquals(2)',1)),
+   'LAZY_CAROUSEL_FIXED_VISIBLE_COUNT'),
+  (lambda:g.check_test(test.replace('assertThat(visibleAtlas).isAtMost(2)',
+                                'assertThat(visibleAtlas).isAtMost(1)',1)),
+   'LAZY_VIEWPORT_SEMANTICS_'),
+  # Stale compositor screens are visually valid PNGs but never valid evidence.
+  (lambda:g.check_test(test.replace('P13B_REFUSED_STALE_BODY_FRAME',
+                                'P13B_ACCEPT_STALE_FRAME',1)),'FRESH_FRAME_GUARD_'),
+  (lambda:g.check_test(test.replace('if (before == null || lastChangeCount >= 12)',
+                                'if (true)',1)),'FRESH_FRAME_GUARD_'),
+  (lambda:g.check_test(test.replace('for (attempt in 1..12)',
+                                'for (attempt in 1..100000)',1)),'FRESH_FRAME_GUARD_'),
+  (lambda:g.check_test(test.replace('if (difference >= 32) changed++',
+                                'if (difference >= 0) changed++',1)),'FRESH_FRAME_GUARD_'),
+  (lambda:g.check_test(test.replace('if (attempt < 12) SystemClock.sleep(250)',
+                                'if (attempt < 12) SystemClock.sleep(0)',1)),
+   'FRESH_FRAME_STATE_OR_BOUNDED_RETRY'),
   # HF03 emulator regression: one-cluster carousel has no header;
   # synthetic category state must be checked via the back control + cards.
   (lambda:g.check_test(test.replace(
