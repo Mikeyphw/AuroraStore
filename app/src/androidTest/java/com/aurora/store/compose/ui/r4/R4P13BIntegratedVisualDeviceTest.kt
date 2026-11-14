@@ -29,8 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertExists
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -228,7 +226,8 @@ class R4P13BIntegratedVisualDeviceTest : IsolatedTest() {
                                 RatingAndReviews(rating = app.rating, featuredReviews = listOf(review))
                                 DetailsPortalCard(title = "P13 More about app",
                                     description = "Deterministic in-memory metadata",
-                                    icon = painterResource(R.drawable.ic_apps))
+                                    icon = painterResource(R.drawable.ic_apps),
+                                    onClick = {})
                             }
                         }
                     }

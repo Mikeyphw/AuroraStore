@@ -69,6 +69,15 @@ def check_test(s):
  for forbidden in ('HttpURLConnection(', 'OkHttpClient(', 'PackageInstaller(', 'adb install',
                    'Runtime.getRuntime()', 'su -c', 'https://', 'http://'):
   need(forbidden not in s,'INTEGRATED_UNSAFE_'+forbidden)
+ # SemanticsNodeInteraction owns assertExists/assertDoesNotExist as members in
+ # this Compose test artifact. Importing them as top-level functions fails K2.
+ for forbidden_import in ('import androidx.compose.ui.test.assertExists\n',
+                          'import androidx.compose.ui.test.assertDoesNotExist\n'):
+  need(forbidden_import not in s, 'INVALID_COMPOSE_TEST_IMPORT')
+ # DetailsPortalCard requires the onClick lambda: no default exists.
+ need(s.count('icon = painterResource(R.drawable.ic_apps),\n'
+              '                                    onClick = {})')==1,
+      'DETAILS_PORTAL_REQUIRED_ONCLICK')
  need(s.count('onPrimaryAction = { actions++ }')==1,'CALLBACK_ISOLATION')
  return True
 
@@ -84,6 +93,8 @@ def check_nav(s):
   'fun actualMainMoreSettingsAndCustomizationRoute()',
   'R4ScreenshotEvidence.capture(',*IMAGES[8:]):
   need(marker in s,'NAV3_MARKER_'+marker)
+ need('import androidx.compose.ui.test.assertExists\n' not in s,
+      'INVALID_COMPOSE_TEST_IMPORT')
  for forbidden in ('MockNavHost', 'FakeNavigator', 'HttpURLConnection(',
                   'OkHttpClient(', 'PackageInstaller(', 'su -c'):
   need(forbidden not in s,'NAV3_UNSAFE_'+forbidden)
