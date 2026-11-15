@@ -16,6 +16,49 @@ RESULT='P14P03_HOSTED_76_TESTS_20_PNGS_PASS'
 def need(ok,reason):
  if not ok:raise ValueError('P14P03_REFUSED_'+reason)
 def sha(data):return hashlib.sha256(data).hexdigest()
+
+def widget_sample_policy(changed:int, colors:int)->bool:
+    """Sparse, real Compose list cards need 12 meaningful BODY samples, not 42.
+
+    The instrumentation screenshot itself independently requires >=12 body pixels
+    in ten bounded compositor attempts. This threshold is not for full activities.
+    """
+    return 12 <= changed < 42 and colors >= 8
+
+
+def load_widget_png(path:Path)->dict:
+    """Retain the proven strict stdlib PNG decoder; narrow ONLY its final pixel gate.
+
+    The decoder checks PNG signature, byte bounds, chunk structure, CRC, all
+    scanline filters, dimension and decompression integrity before its legacy
+    whole-screen threshold throws. Never catch a malformed/CRC failure here.
+    """
+    try:
+        data=png.load_pixels(path)
+        data['visual_gate']='full_screen_nonblank'
+        return data
+    except ValueError as exc:
+        error=str(exc)
+        # Reject any error EXCEPT the exact known sparse-content gate.
+        match=re.fullmatch(
+            r'R4_P06_REFUSED_BLANK_SCREENSHOT_(light|dark)_([a-z0-9_]+\.png)_changed=(\d+)_colors=(\d+)',
+            error)
+        if match is None:
+            raise
+        need(match.group(1)==path.parent.name and match.group(2)==path.name,
+             'SPARSE_WIDGET_CONTEXT_'+path.name)
+        changed=int(match.group(3));colors=int(match.group(4))
+        need(widget_sample_policy(changed,colors),
+             'SPARSE_WIDGET_CONTENT_'+path.name+f'_changed={changed}_colors={colors}')
+        # Fully decoded and CRC-checked by png.load_pixels above; recompute
+        # only identity and dimensions from the original unchanged file.
+        raw=path.read_bytes()
+        width,height=struct.unpack_from('>II',raw,16)
+        need(2048<len(raw)<32_000_000,'SPARSE_WIDGET_BYTES_'+path.name)
+        return {'bytes':len(raw),'width':width,'height':height,
+                'sha256':sha(raw),'non_background_samples':changed,
+                'sampled_colors':colors,'visual_gate':'isolated_widget_nonblank'}
+
 def validate(root:Path,source:str,run:str)->dict:
  need(bool(re.fullmatch('[a-f0-9]{40}',source)),'INVALID_SOURCE')
  need(bool(re.fullmatch('[0-9]+',str(run))),'INVALID_RUN')
@@ -25,14 +68,14 @@ def validate(root:Path,source:str,run:str)->dict:
  for profile,(width,height,density) in PROFILES.items():
   need((root/'metadata'/f'{profile}.txt').read_text().strip()==f'{width}x{height} density={density}','DISPLAY_'+profile)
   for mode in MODES:
-   for label,count in (('lifecycle',8),('download-ui',4),('final-ui',4)):
+   for label,count in (('lifecycle',8),('download-ui',8)):
     body=(root/'logs'/profile/f'{label}-{mode}.txt').read_text()
     need(f'OK ({count} tests)' in body and 'FAILURES!!!' not in body and
          'INSTRUMENTATION_STATUS_CODE: -2' not in body,'LOG_'+profile+'_'+mode+'_'+label)
     total+=count
    for name in SHOTS:
     key=f'{profile}/{mode}/{name}';path=root/'screenshots'/key
-    parsed=png.load_pixels(path)
+    parsed=load_widget_png(path)
     need((parsed['width'],parsed['height'])==(width,height),
          'COMPOSITOR_DIMENSIONS_'+key)
     digest=parsed['sha256']

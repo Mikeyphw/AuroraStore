@@ -44,7 +44,8 @@ class R4P14P03DownloadUiDeviceTest : IsolatedTest() {
 
     private fun screenshot(filename: String) {
         check(filename in setOf(
-            "r4_p14p03_queued.png", "r4_p14p03_downloading.png", "r4_p14p03_failed.png"
+            "r4_p14p03_queued.png", "r4_p14p03_downloading.png", "r4_p14p03_failed.png",
+            "r1g_awaiting_retry.png", "r1g_cancelled.png"
         )) { "P14P03_REFUSED_SCREENSHOT_NAME" }
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         var accepted: Bitmap? = null
@@ -130,5 +131,70 @@ class R4P14P03DownloadUiDeviceTest : IsolatedTest() {
         composeTestRule.onNodeWithText(context.getString(R.string.r1f_download_retry))
             .assertExists().performClick()
         composeTestRule.runOnIdle { assertThat(retries).isEqualTo(1) }
+    }
+
+    /** A verifying download must permit cancellation before the installer handoff. */
+    @Test
+    fun verifyingDownloadStillAllowsCancellation() {
+        var cancellations = 0
+        setContent {
+            DownloadActionsSheet(
+                download = fixture(DownloadStatus.VERIFYING),
+                onDismiss = {}, onShowDetails = {},
+                onCancel = { cancellations++ }, onRetry = {},
+                onInstall = {}, onExport = {}, onClear = {}
+            )
+        }
+        composeTestRule.onNodeWithText(context.getString(R.string.action_cancel))
+            .assertExists().performClick()
+        composeTestRule.runOnIdle { assertThat(cancellations).isEqualTo(1) }
+    }
+
+    /** Never offer Install when the APK cache is missing after an interrupted install. */
+    @Test
+    fun missingCachedApkShowsRetryWithoutInstallation() {
+        var retries = 0
+        setContent {
+            DownloadActionsSheet(
+                download = fixture(DownloadStatus.AWAITING_INSTALL),
+                onDismiss = {}, onShowDetails = {}, onCancel = {},
+                onRetry = { retries++ }, onInstall = {}, onExport = {}, onClear = {}
+            )
+        }
+        composeTestRule.onNodeWithText(context.getString(R.string.r1f_download_retry))
+            .assertExists()
+        composeTestRule.onNodeWithText(context.getString(R.string.action_install))
+            .assertDoesNotExist()
+        screenshot("r1g_awaiting_retry.png")
+        composeTestRule.onNodeWithText(context.getString(R.string.r1f_download_retry))
+            .performClick()
+        composeTestRule.runOnIdle { assertThat(retries).isEqualTo(1) }
+    }
+
+    /** Installation is already OS-owned, so no stale cancel or retry is offered. */
+    @Test
+    fun installingDoesNotExposeCancelOrRetry() {
+        setContent {
+            DownloadActionsSheet(
+                download = fixture(DownloadStatus.INSTALLING),
+                onDismiss = {}, onShowDetails = {}, onCancel = {},
+                onRetry = {}, onInstall = {}, onExport = {}, onClear = {}
+            )
+        }
+        composeTestRule.onNodeWithText(context.getString(R.string.action_cancel))
+            .assertDoesNotExist()
+        composeTestRule.onNodeWithText(context.getString(R.string.r1f_download_retry))
+            .assertDoesNotExist()
+    }
+
+    /** A cancelled row must be visible and cannot invent transfer statistics. */
+    @Test
+    fun cancelledShowsAccurateStatusWithoutFakeTransferStats() {
+        setContent { DownloadListItem(download = fixture(DownloadStatus.CANCELLED)) }
+        composeTestRule.onNodeWithText(context.getString(R.string.status_cancelled))
+            .assertExists()
+        composeTestRule.onNodeWithText("0%", substring = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText("0 B/s", substring = true).assertDoesNotExist()
+        screenshot("r1g_cancelled.png")
     }
 }

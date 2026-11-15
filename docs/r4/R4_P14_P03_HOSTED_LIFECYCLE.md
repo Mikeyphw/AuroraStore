@@ -49,3 +49,36 @@ launcher continues to print the real, unmodified stdout/stderr from `gh run watc
 `gh pr checks`, and `gh run view --log-failed`, with evidence and durable journals.
 **Hosted HF02 has not yet run**; P14-P03 remains unqualified until the exact
 source/run-bound 76 tests and 20 screenshots pass GitHub CI.
+
+## HF03 — actual isolated-widget capture plus evidence audit repair
+
+Exact failing GitHub Actions run: 43675171321 at PR #5 HEAD `eadfbc3bb09e7edc3db46e993b8c14258416d246`.
+All 76 Android instrumentation executions on full/compact x light/dark were green;
+20 PNGs were collected. The final audit rejected a legitimate small queued
+component image because the *historical full-screen* `r4_p05_screenshot_audit`
+pixel threshold demands 42 changed pixels while the screenshot showed 35 and
+15 sampled colors. A visual review of the actual archived PNGs additionally
+identified legacy `DownloadFinalUiDeviceTest` images that were blank apart from
+Android system bars: merely lowering the audit threshold would be unsafe.
+
+HF03 consolidates all eight actual production Compose UI tests in the P14-P03
+instrumentation class. In particular, missing-cache recovery and cancelled
+states now use the same bounded UiAutomation full-display PNG capture as the
+already passing queued/downloading/failed tests. Each screenshot requires at
+least 12 contrasting body samples, 2 KiB, valid dimensions and actual Compose
+semantic assertions. Test counts are unchanged: 32 Room+policy, 32 production
+Compose, nine baseline DAO, three real loopback DownloadWorker = 76 executions;
+20 distinct PNGs are still required for two sizes and two themes. The frozen
+older test source is **not** mutated or qualified retroactively.
+
+For those specific isolated component PNGs, HF03 retains the protected R4 P05
+stdlib PNG parser's *full decode, chunk CRC and decompression validation*.
+Only if that exact parser finishes and rejects at its final 42-sample body
+threshold does the P14-P03 wrapper accept the context-specific 12-sample,
+8-color nonblank policy. All CRC, malformed PNG, missing file, wrong viewport,
+wrong mode, blank, duplicates, and source/run identity failures remain fatal.
+The P13 / P14-P01/P02 image gates remain untouched. This does not qualify
+physical device installation, live Google Play, personal accounts or release.
+
+The HF03 native terminal launcher preserves actual `gh run watch`, `gh pr checks`,
+`gh run view --log-failed`, stored logs and resumable journals with no `--json`.

@@ -50,14 +50,20 @@ def check_test(s):
   need(denied not in s,'TEST_FORBIDDEN_'+denied)
  return True
 def check_ui_test(s):
- need(s.count('    @Test\n')==4,'FOUR_REAL_COMPOSE_TESTS')
+ need(s.count('    @Test\n')==8,'EIGHT_REAL_COMPOSE_TESTS')
  for marker in ('class R4P14P03DownloadUiDeviceTest : IsolatedTest()',
   'automation.takeScreenshot()', 'DownloadListItem(', 'DownloadActionsSheet(',
   'queuedStatusHasNoInventedProgressOrSpeed',
   'activeTransferDisplaysActualProgressWithoutFakeSpeed',
   'failedTransferDisplaysCorrectFailureStatus',
   'failedTransferRetryActionInvokesProductionCallback',
-  'r4_p14p03_queued.png','r4_p14p03_downloading.png','r4_p14p03_failed.png'):
+  'r4_p14p03_queued.png','r4_p14p03_downloading.png','r4_p14p03_failed.png',
+  'r1g_awaiting_retry.png','r1g_cancelled.png',
+  'verifyingDownloadStillAllowsCancellation',
+  'missingCachedApkShowsRetryWithoutInstallation',
+  'installingDoesNotExposeCancelOrRetry',
+  'cancelledShowsAccurateStatusWithoutFakeTransferStats'):
+
   need(marker in s,'UI_TEST_MARKER_'+marker)
  for marker in ('contentSamples >= 12', 'delta >= 52',
   'frame.width >= 320 && frame.height >= 480',
@@ -77,8 +83,7 @@ def check_run(s):
   'size=1080x2400;density=420','size=720x1600;density=320',
   'trap restore_display EXIT', 'timeout 840 adb shell am instrument',
   "run_class \"$profile\" \"$mode\" lifecycle \"$LIFECYCLE\" 8",
-  "run_class \"$profile\" \"$mode\" download-ui \"$DOWNLOAD_UI\" 4",
-  "run_class \"$profile\" \"$mode\" final-ui \"$FINAL_UI\" 4",
+  'run_class "$profile" "$mode" download-ui "$DOWNLOAD_UI" 8',
   'run_class "$profile" "$mode" baseline-dao "$DAO" 9',
   'truncatedResponseRetriesThenResumesSameAttemptExactly',
   'shaMismatchRejectsPayloadWithoutInstallHandoff',
@@ -97,6 +102,9 @@ def check_run(s):
   need(marker in s,'RUN_RESULT_CONTRACT_'+marker)
  need('! grep -Fxq "OK ($count tests)" "$log"' not in s,
       'RUN_OLD_PLURAL_ONLY_GUARD')
+ need('run_class "$profile" "$mode" final-ui' not in s and
+      "FINAL_UI='com.aurora.store.compose.ui.downloads.DownloadFinalUiDeviceTest'" not in s,
+      'LEGACY_BLANK_SCREENSHOT_PRODUCER')
  need(s.count('timeout 840 adb shell am instrument')==1,'RUNNER_UNBOUNDED')
  need('adb -s localhost:5555' not in s,'PHYSICAL_ADB')
  return True
@@ -107,6 +115,11 @@ def check_audit(s):
   "'production_downloads_external_network_qualified':False",
   'P14P03_HOSTED_76_TESTS_20_PNGS_PASS','png.load_pixels(path)', 'COMPOSITOR_DIMENSIONS_',
   'r4_p14p03_queued.png','r4_p14p03_downloading.png','r4_p14p03_failed.png',
+  'widget_sample_policy(', 'load_widget_png(path)',
+  '12 <= changed < 42 and colors >= 8',
+  'R4_P06_REFUSED_BLANK_SCREENSHOT_',
+  'SPARSE_WIDGET_CONTENT_',
+  "'visual_gate':'isolated_widget_nonblank'",
   'r1g_awaiting_retry.png','r1g_cancelled.png'):
   need(marker in s,'AUDIT_MARKER_'+marker)
  return True

@@ -7,7 +7,6 @@ OUT="$RUNNER_TEMP/aurora-r4-p14-p03"
 TARGET='com.aurora.store.debug'
 LIFECYCLE='com.aurora.store.data.installer.R4P14P03LifecycleDeviceTest'
 DOWNLOAD_UI='com.aurora.store.compose.ui.r4.R4P14P03DownloadUiDeviceTest'
-FINAL_UI='com.aurora.store.compose.ui.downloads.DownloadFinalUiDeviceTest'
 DAO='com.aurora.store.data.room.download.DownloadLifecycleDeviceTest'
 WORKER='com.aurora.store.data.work.DownloadWorkerOfflineDeviceTest'
 mkdir -p "$OUT/metadata" "$OUT/logs" "$OUT/screenshots"
@@ -78,8 +77,9 @@ for profile in full compact;do
  if [[ "$mode" == light ]];then adb shell cmd uimode night no;else adb shell cmd uimode night yes;fi
  adb shell am force-stop "$TARGET" || true
  run_class "$profile" "$mode" lifecycle "$LIFECYCLE" 8
- run_class "$profile" "$mode" download-ui "$DOWNLOAD_UI" 4
- run_class "$profile" "$mode" final-ui "$FINAL_UI" 4
+ # One P14-owned eight-case UI suite captures all five PNGs through the same
+ # bounded compositor guard; the frozen legacy UI tests remain unchanged.
+ run_class "$profile" "$mode" download-ui "$DOWNLOAD_UI" 8
  for shot in r4_p14p03_queued.png r4_p14p03_downloading.png r4_p14p03_failed.png r1g_awaiting_retry.png r1g_cancelled.png;do
   file="$OUT/screenshots/$profile/$mode/$shot"
   adb exec-out run-as "$TARGET" cat "files/$shot" > "$file" || { echo "P14P03_REFUSED_MISSING_SCREENSHOT $shot" >&2;exit 1; }
