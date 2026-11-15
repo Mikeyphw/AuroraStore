@@ -13,3 +13,18 @@ The actual OS user-confirmation dialog is **not tested** in P14-P03: do not inte
 CI demands 76 real test executions total: 32 new Room/policy executions, 32 real Compose UI executions, 9 baseline DAO regression executions, and 3 real DownloadWorker offline executions. Twenty actual Android PNGs are required: five true full-display compositor screenshots per full/compact × light/dark profile, with source/run identities, image hashes, dimensions and exact execution logs. On failure, collect partial screenshots and logcat. This is not a release gate.
 
 **P15 remains the next milestone**, unifying the fully qualified P14-P01/P02/P03 functionality on `localhost:5555` (Android 16 / API36 / ARM64) with read-only device preflight, independently authorized device writes, exact-SHA APK provenance, rollback and cleanup. P16 security/signing/release qualification remains deferred.
+
+## HF01 (compiled P14-P03 runtime repair)
+
+The first hosted run (43669701808) passed 8/8 lifecycle cases but failed 3/4
+Compose UI cases: the whole-screen screenshot guard wanted 42 visual samples
+while isolated real download cards supplied 28–35. HF01 uses the same real
+UiAutomation compositor PNGs, excludes system bars, requires at least 12
+contrasting app-content samples and 2 KiB of encoded image, plus independent
+Compose semantic assertions. It still refuses blank screenshots and retains
+all 20 PNG integrity checks. This is *not* a live download or Android installer
+prompt test.
+
+The HF01 terminal launcher additionally streams unmodified native `gh run watch`
+for both exact-SHA workflows and `gh pr checks` after completion, saving the
+workflow output/failure logs and a resume journal. No `gh --json` flags.

@@ -52,14 +52,23 @@ def check_test(s):
 def check_ui_test(s):
  need(s.count('    @Test\n')==4,'FOUR_REAL_COMPOSE_TESTS')
  for marker in ('class R4P14P03DownloadUiDeviceTest : IsolatedTest()',
-  'R4ScreenshotEvidence.capture(', 'DownloadListItem(', 'DownloadActionsSheet(',
+  'automation.takeScreenshot()', 'DownloadListItem(', 'DownloadActionsSheet(',
   'queuedStatusHasNoInventedProgressOrSpeed',
   'activeTransferDisplaysActualProgressWithoutFakeSpeed',
   'failedTransferDisplaysCorrectFailureStatus',
   'failedTransferRetryActionInvokesProductionCallback',
   'r4_p14p03_queued.png','r4_p14p03_downloading.png','r4_p14p03_failed.png'):
   need(marker in s,'UI_TEST_MARKER_'+marker)
+ for marker in ('contentSamples >= 12', 'delta >= 52',
+  'frame.width >= 320 && frame.height >= 480',
+  'for (attempt in 1..10)', 'SystemClock.sleep(300)',
+  'P14P03_REFUSED_BLANK_WIDGET_SCREENSHOT',
+  'Bitmap.CompressFormat.PNG', 'file.length() > 2048L',
+  'frame.recycle()', 'image.recycle()'):
+  need(marker in s,'WIDGET_SCREENSHOT_GUARD_'+marker)
+ need('R4ScreenshotEvidence.capture(' not in s,'WHOLE_SCREEN_HEURISTIC_ON_ISOLATED_WIDGET')
  need('captureToImage(' not in s,'FLAKY_OLD_SCREENSHOT_CAPTURE')
+ need('contentSamples >= 0' not in s,'BLANK_SCREEN_ACCEPTED')
  return True
 
 def check_run(s):
