@@ -136,7 +136,7 @@ class R4P14OfflineNav3JourneyDeviceTest {
         composeRule.waitUntil(timeoutMillis = 20_000L) {
             composeRule.onAllNodes(hasText(label) and hasClickAction())
                 .fetchSemanticsNodes().any {
-                    it.config.getOrNull(SemanticsProperties.Selected) == true
+                    it.config.getOrElse(SemanticsProperties.Selected) { false }
                 }
         }
     }

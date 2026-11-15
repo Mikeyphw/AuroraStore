@@ -20,6 +20,14 @@ def run():
   (lambda:g.check_test(t.replace('ComposeActivity::class.java','OtherActivity::class.java')),'TEST_MARKER_'),
   (lambda:g.check_test(t.replace('HiltAndroidRule(this)','OtherRule(this)')),'TEST_MARKER_'),
   (lambda:g.check_test(t.replace('SemanticsProperties.Selected','true')),'TEST_MARKER_'),
+  (lambda:g.check_test(t.replace(
+      'it.config.getOrElse(SemanticsProperties.Selected) { false }',
+      'it.config.getOrNull(SemanticsProperties.Selected)')),
+   'COMPOSE_SELECTED_MEMBER_ACCESS'),
+  (lambda:g.check_test(t.replace(
+      'it.config.getOrElse(SemanticsProperties.Selected) { false }',
+      'it.config.getOrElse(SemanticsProperties.Selected) { true }')),
+   'COMPOSE_SELECTED_MEMBER_ACCESS'),
   (lambda:g.check_test(t.replace('"Import and verify APKs"','"Ignored"')),'TEST_MARKER_'),
   (lambda:g.check_test(t.replace('r4_p14_updates_tab.png','r4_p14_missing.png')),'TEST_MARKER_'),
   (lambda:g.check_test(t.replace('P14_REFUSED_STALE_BODY_FRAME','P14_ALLOW_STALE_BODY_FRAME')),'TEST_MARKER_'),

@@ -62,6 +62,10 @@ def check_test(s):
                    'su -c', 'Runtime.getRuntime()', 'https://', 'http://',
                    'import androidx.compose.ui.test.assertExists\n'):
   need(forbidden not in s,'TEST_UNSAFE_'+forbidden)
+ need('it.config.getOrElse(SemanticsProperties.Selected) { false }' in s,
+      'COMPOSE_SELECTED_MEMBER_ACCESS')
+ need('it.config.getOrNull(SemanticsProperties.Selected)' not in s,
+      'COMPOSE_SELECTED_EXTENSION_NOT_IMPORTED')
  return True
 def check_run(s):
  for marker in ('set -euo pipefail','for profile in full compact;do',
