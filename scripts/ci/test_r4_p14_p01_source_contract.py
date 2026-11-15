@@ -28,6 +28,15 @@ def run():
       'it.config.getOrElse(SemanticsProperties.Selected) { false }',
       'it.config.getOrElse(SemanticsProperties.Selected) { true }')),
    'COMPOSE_SELECTED_MEMBER_ACCESS'),
+  (lambda:g.check_test(t.replace('val rows = 160','val rows = 14')),'TEST_MARKER_'),
+  (lambda:g.check_test(t.replace('val columns = 160','val columns = 27')),'TEST_MARKER_'),
+  (lambda:g.check_test(t.replace('6 * rows + 88 * row','13 * rows + 75 * row')),'TEST_MARKER_'),
+  (lambda:g.check_test(t.replace('5 * columns + 90 * column','10 * columns + 80 * column')),'TEST_MARKER_'),
+  (lambda:g.check_test(t.replace('if (observed >= 12)','if (observed >= 0)')),'TEST_MARKER_'),
+  (lambda:g.check_test(t.replace('for (attempt in 1..12)','for (attempt in 1..1)')),'TEST_MARKER_'),
+  (lambda:g.check_test(t.replace('P14_FRAME_READBACK','P14_NO_FRAME_READBACK')),'TEST_MARKER_'),
+  (lambda:g.check_run(r.replace('adb logcat -d -v time -t 2500','echo skipped-logcat')),'RUNNER_MARKER_'),
+  (lambda:g.check_run(r.replace('P14_FAILURE_EVIDENCE_DIR','P14_NO_FAILURE_EVIDENCE')),'RUNNER_MARKER_'),
   (lambda:g.check_test(t.replace('"Import and verify APKs"','"Ignored"')),'TEST_MARKER_'),
   (lambda:g.check_test(t.replace('r4_p14_updates_tab.png','r4_p14_missing.png')),'TEST_MARKER_'),
   (lambda:g.check_test(t.replace('P14_REFUSED_STALE_BODY_FRAME','P14_ALLOW_STALE_BODY_FRAME')),'TEST_MARKER_'),
@@ -51,5 +60,16 @@ def run():
   (lambda:g.check_patches({**patches,g.PRODUCTION_PATHS[0]:{**patches[g.PRODUCTION_PATHS[0]],'replacements':[]}}),'PATCH_INVALID_'),
  ]
  for fn,code in mutations:refused(fn,code)
- print(f'P14_P01_SOURCE_MUTATIONS_PASS positive=6 negatives={len(mutations)}')
+ # Geometry proof for the literal sampling lattice: detect title-only changes
+ # at 7..12% in the app toolbar but not Android status/nav bar changes.
+ cols=rows=160
+ points=[((5*cols+90*x)/(100*cols),(6*rows+88*y)/(100*rows))
+         for y in range(rows) for x in range(cols)]
+ app_title=sum(0.07 <= y <= 0.12 and 0.07 <= x <= 0.30 for x,y in points)
+ status_bar=sum(y < 0.05 for _,y in points)
+ nav_bar=sum(y > 0.95 for _,y in points)
+ assert (app_title >= 300 and status_bar == 0 and nav_bar == 0), (
+        'P14_CAPTURE_GEOMETRY_NOT_QUALIFIED')
+ print(f'P14_DENSE_TOOLBAR_GEOMETRY_PASS samples={len(points)} title={app_title}')
+ print(f'P14_P01_SOURCE_MUTATIONS_PASS positive=7 negatives={len(mutations)}')
 if __name__=='__main__':run()

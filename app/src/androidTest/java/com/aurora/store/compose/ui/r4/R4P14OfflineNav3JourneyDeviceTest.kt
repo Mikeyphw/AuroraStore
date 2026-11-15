@@ -77,16 +77,25 @@ class R4P14OfflineNav3JourneyDeviceTest {
     }
 
     // Android 16 UiAutomation can briefly return the previous painted frame.
-    // Sample the body, not the changing status-bar clock; reject stale visuals.
+    // Include the actual app toolbar (where Apps/Games and Downloads differ),
+    // while excluding the status bar and navigation-bar clock/indicators.
+    // Dense UI sampling keeps the fail-closed no-stale-frame check meaningful.
     private var previousBodySignature: IntArray? = null
 
     private fun bodySignature(bitmap: Bitmap): IntArray {
-        val values = IntArray(14 * 27)
+        // 25,600 representative compositor pixels; 6..94% high includes the
+        // in-app title row that the old 13..78% 378-pixel grid entirely missed.
+        // 5..95% wide excludes display edges but includes compact headers.
+        val rows = 160
+        val columns = 160
+        val values = IntArray(rows * columns)
         var index = 0
-        for (row in 0 until 14) {
-            val y = (bitmap.height * (13 + 5 * row) / 100).coerceIn(0, bitmap.height - 1)
-            for (column in 0 until 27) {
-                val x = (bitmap.width * (10 + 3 * column) / 100).coerceIn(0, bitmap.width - 1)
+        for (row in 0 until rows) {
+            val y = (bitmap.height * (6 * rows + 88 * row) / (100 * rows))
+                .coerceIn(0, bitmap.height - 1)
+            for (column in 0 until columns) {
+                val x = (bitmap.width * (5 * columns + 90 * column) / (100 * columns))
+                    .coerceIn(0, bitmap.width - 1)
                 values[index++] = bitmap.getPixel(x, y)
             }
         }
@@ -120,6 +129,11 @@ class R4P14OfflineNav3JourneyDeviceTest {
             )) { "P14_FRAME_DECODE_FAILED $filename" }
             val sample = try { bodySignature(image) } finally { image.recycle() }
             observed = changedBody(prior, sample)
+            if (attempt == 1 || attempt == 12) {
+                android.util.Log.i("P14VisualEvidence",
+                    "P14_FRAME_READBACK file=$filename attempt=$attempt " +
+                        "changedPixels=$observed required=12 sampleSize=${sample.size}")
+            }
             if (observed >= 12) {
                 previousBodySignature = sample
                 return

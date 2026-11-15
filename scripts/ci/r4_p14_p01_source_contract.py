@@ -56,7 +56,11 @@ def check_test(s):
   '"Import and verify APKs"','SemanticsProperties.Selected',
   'hasClickAction()', 'R4ScreenshotEvidence.capture(',
   'P14_REFUSED_STALE_BODY_FRAME', 'primeVisualBaseline()',
-  'previousBodySignature = sample', *SHOTS):
+  'previousBodySignature = sample',
+  'val rows = 160', 'val columns = 160',
+  '6 * rows + 88 * row', '5 * columns + 90 * column',
+  'if (observed >= 12)', 'for (attempt in 1..12)',
+  'P14_FRAME_READBACK', *SHOTS):
   need(marker in s,'TEST_MARKER_'+marker)
  for forbidden in ('HttpURLConnection(', 'OkHttpClient(', 'PackageInstaller(',
                    'su -c', 'Runtime.getRuntime()', 'https://', 'http://',
@@ -66,6 +70,11 @@ def check_test(s):
       'COMPOSE_SELECTED_MEMBER_ACCESS')
  need('it.config.getOrNull(SemanticsProperties.Selected)' not in s,
       'COMPOSE_SELECTED_EXTENSION_NOT_IMPORTED')
+ need('IntArray(14 * 27)' not in s and '13 + 5 * row' not in s,
+      'SPARSE_SIGNATURE_REINTRODUCED')
+ # Reject screenshot acceptance without an observable UI pixel difference.
+ need('if (observed >= 12)' in s and 'for (attempt in 1..12)' in s,
+      'UNBOUNDED_OR_BYPASSED_FRESHNESS')
  return True
 def check_run(s):
  for marker in ('set -euo pipefail','for profile in full compact;do',
@@ -74,7 +83,9 @@ def check_run(s):
   'grep -Fxq \'OK (4 tests)\'',
   'R4P14OfflineNav3JourneyDeviceTest',
   'timeout 840 adb shell am instrument','adb exec-out run-as "$TARGET"',
-  'r4_p14_p01_screenshot_audit.py',*SHOTS):
+  'r4_p14_p01_screenshot_audit.py',
+  'adb logcat -d -v time -t 2500', 'P14_FAILURE_EVIDENCE_DIR',
+  'debug="$OUT/debug/$profile/$mode"', *SHOTS):
   need(marker in s,'RUNNER_MARKER_'+marker)
  need(s.count('timeout 840 adb shell am instrument')==1,'UNBOUNDED_TEST')
  return True

@@ -61,6 +61,18 @@ for profile in full compact;do
   echo "P14_BEGIN profile=$profile mode=$mode tests=4"
   timeout 840 adb shell am instrument -w -r -e class "$CLASS" "$RUNNER" | tee "$log"
   if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|shortMsg=|Process crashed|INSTRUMENTATION_STATUS_CODE: -2' "$log";then
+   # On a refusal, preserve the screenshots already captured by instrumentation.
+   # This is a disposable GH emulator only; never a physical-device action.
+   debug="$OUT/debug/$profile/$mode"
+   mkdir -p "$debug"
+   adb logcat -d -v time -t 2500 > "$debug/logcat.txt" 2>&1 || true
+   for shot in r4_p14_search_route.png r4_p14_downloads_route.png r4_p14_settings_route.png r4_p14_preferences_route.png r4_p14_games_tab.png r4_p14_updates_tab.png \
+     r4_p14_populated_search.png r4_p14_details_identity.png r4_p14_details_carousel.png r4_p14_details_reviews.png;do
+    partial="$debug/$shot"
+    adb exec-out run-as "$TARGET" cat "files/$shot" > "$partial" 2>/dev/null || true
+    [[ -s "$partial" ]] || rm -f -- "$partial"
+   done
+   echo "P14_FAILURE_EVIDENCE_DIR $debug" >&2
    echo "P14_REFUSED_ANDROID_TEST_FAILURE profile=$profile mode=$mode" >&2;exit 1
   fi
   grep -Fxq 'OK (4 tests)' "$log" || { echo "P14_REFUSED_TEST_COUNT profile=$profile mode=$mode" >&2;exit 1; }
