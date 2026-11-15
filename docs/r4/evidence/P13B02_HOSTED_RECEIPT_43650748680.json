@@ -1,0 +1,718 @@
+{
+  "abi": "x86_64",
+  "android_api": 36,
+  "fixture_component_executions": 12,
+  "full_search_viewmodel_qualified": false,
+  "full_upstream_visual_signoff": false,
+  "manual_visual_approved": false,
+  "p12_frozen": {
+    "executions": 64,
+    "run_id": 43612363362,
+    "screenshots": 37,
+    "source_sha": "3ea10b6f4b0fed5a8913e4edef3536cfc93fc52f"
+  },
+  "physical_arm64_qualified": false,
+  "populated_live_catalog_qualified": false,
+  "production_nav3_executions": 8,
+  "production_navigation3_route_qualified": true,
+  "production_navigation3_route_scope": "Main -> Search -> Back; Main -> More -> Settings -> UI preferences",
+  "real_account_qualified": false,
+  "real_installer_qualified": false,
+  "release_qualified": false,
+  "result": "P13B_HOSTED_NAV3_20_TESTS_48_PNGS_PASS",
+  "run_id": "43650748680",
+  "schema": 2,
+  "screenshots": {
+    "compact/dark/r4_p13b_categories.png": {
+      "bytes": 49080,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 1600,
+      "non_background_samples": 1192,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 85,
+      "sha256": "d065d889e93057b2c07f054bcb255ff2ff035dfd3468d1b6c7b9701436a3b3e8",
+      "width": 720
+    },
+    "compact/dark/r4_p13b_category_collection.png": {
+      "bytes": 50735,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 1600,
+      "non_background_samples": 574,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 103,
+      "sha256": "11d7e233b16ea2e05f5326c99654d98a2154c532d22de8410d4881bb5a846838",
+      "width": 720
+    },
+    "compact/dark/r4_p13b_category_selection.png": {
+      "bytes": 44446,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 1600,
+      "non_background_samples": 903,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 82,
+      "sha256": "ce006140b165f2ba1b75b4bbcacb9d5b9b5e2f6623fac841e63997cd9de4360c",
+      "width": 720
+    },
+    "compact/dark/r4_p13b_charts.png": {
+      "bytes": 57045,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 1600,
+      "non_background_samples": 509,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 96,
+      "sha256": "7213cbbad6865bcad5a49fd8f71f0a8c95158462a7180ab8b839e5c39dea0c74",
+      "width": 720
+    },
+    "compact/dark/r4_p13b_details_reviews.png": {
+      "bytes": 96302,
+      "canvas_center_rgb": [
+        26,
+        27,
+        32
+      ],
+      "height": 1600,
+      "non_background_samples": 1515,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 179,
+      "sha256": "e987f2a0bed19f39a7166b369faf32e3d04c922b8a4d0c2f4775c5b8499668ee",
+      "width": 720
+    },
+    "compact/dark/r4_p13b_details_top.png": {
+      "bytes": 86748,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 1600,
+      "non_background_samples": 5726,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 219,
+      "sha256": "bc7461b96ca28b8e5277d758fa1108e43f469b7cfd01ea6635290d305648f192",
+      "width": 720
+    },
+    "compact/dark/r4_p13b_home.png": {
+      "bytes": 71865,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 1600,
+      "non_background_samples": 1386,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 119,
+      "sha256": "9838c1e4f17e2ce7780bd3fc2471a15b3bbc88e90e4894278aa0b5f46e9d2c10",
+      "width": 720
+    },
+    "compact/dark/r4_p13b_nav_preferences.png": {
+      "bytes": 78939,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 1600,
+      "non_background_samples": 699,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 179,
+      "sha256": "dce57a56552309c78b0e23a957bde4d474bfa96d947fd8c385fe7fd6df56cfea",
+      "width": 720
+    },
+    "compact/dark/r4_p13b_nav_return.png": {
+      "bytes": 107643,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 1600,
+      "non_background_samples": 3572,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 181,
+      "sha256": "dd7bc90eb4503814e66f6d352a70b4a963266fcd2d7d8d118218cb2883faa337",
+      "width": 720
+    },
+    "compact/dark/r4_p13b_nav_search.png": {
+      "bytes": 60718,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 1600,
+      "non_background_samples": 3648,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 137,
+      "sha256": "f86d9ff77b4445348dcdaa8e5e34c0d01b9234d5045912813073f6b9c38f314f",
+      "width": 720
+    },
+    "compact/dark/r4_p13b_nav_settings.png": {
+      "bytes": 82128,
+      "canvas_center_rgb": [
+        26,
+        27,
+        32
+      ],
+      "height": 1600,
+      "non_background_samples": 472,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 127,
+      "sha256": "d9d5b9074be019ab31aa78112982ded5fe2cb561e47f325734e9c0b4a0b16044",
+      "width": 720
+    },
+    "compact/dark/r4_p13b_search.png": {
+      "bytes": 83457,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 1600,
+      "non_background_samples": 4428,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 201,
+      "sha256": "a716099ead1c059d2af1a16329722bafa5b8ef43c0d125c765bcdd9d36644e92",
+      "width": 720
+    },
+    "compact/light/r4_p13b_categories.png": {
+      "bytes": 46465,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 1600,
+      "non_background_samples": 933,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 83,
+      "sha256": "f3c63e6366f02f3149bc5abac45bda4e45c4a5b27bc173eb3cf77ed87aa23aa4",
+      "width": 720
+    },
+    "compact/light/r4_p13b_category_collection.png": {
+      "bytes": 50728,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 1600,
+      "non_background_samples": 563,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 101,
+      "sha256": "e34807d53c0e5550de76370c6e2637b0825562f44b11d6e34d24b10c1b4493cf",
+      "width": 720
+    },
+    "compact/light/r4_p13b_category_selection.png": {
+      "bytes": 42772,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 1600,
+      "non_background_samples": 644,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 80,
+      "sha256": "53c40926bde16d500206709c6c80b420ac2ce1ff2d316f67e17d8b86568d43f7",
+      "width": 720
+    },
+    "compact/light/r4_p13b_charts.png": {
+      "bytes": 56100,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 1600,
+      "non_background_samples": 499,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 97,
+      "sha256": "f880048a4ad2e44a68f828d76b9e1f335e0b8432cb2133924df31b8e4eb5a43a",
+      "width": 720
+    },
+    "compact/light/r4_p13b_details_reviews.png": {
+      "bytes": 94897,
+      "canvas_center_rgb": [
+        244,
+        243,
+        250
+      ],
+      "height": 1600,
+      "non_background_samples": 600,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 182,
+      "sha256": "f76b840ac2a5d23a6933bc613fea95416ab47710659d06e8d165d995192146ca",
+      "width": 720
+    },
+    "compact/light/r4_p13b_details_top.png": {
+      "bytes": 46906,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 1600,
+      "non_background_samples": 3435,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 130,
+      "sha256": "c1ed646ac7abce4e5bd528e0cd76812027349c9aceb3600e27e7487df66b1f1e",
+      "width": 720
+    },
+    "compact/light/r4_p13b_home.png": {
+      "bytes": 69928,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 1600,
+      "non_background_samples": 1371,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 130,
+      "sha256": "681cbe5421eb3d8c7cf58b12db1fc4aa0772298b51b34b601ad5d995b065e05f",
+      "width": 720
+    },
+    "compact/light/r4_p13b_nav_preferences.png": {
+      "bytes": 78281,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 1600,
+      "non_background_samples": 617,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 179,
+      "sha256": "d53903ef0d0914cf7233363ab7aadbb735831d3e7fc7555672c7aa74410ec0b6",
+      "width": 720
+    },
+    "compact/light/r4_p13b_nav_return.png": {
+      "bytes": 131146,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 1600,
+      "non_background_samples": 3544,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 190,
+      "sha256": "0786e5ceb132374951732b95019913f9696bc587a9b7beb70f2e2fa16b8db44a",
+      "width": 720
+    },
+    "compact/light/r4_p13b_nav_search.png": {
+      "bytes": 19301,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 1600,
+      "non_background_samples": 60,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 30,
+      "sha256": "edaf2ceb0d5449e2da4f448840530a08c0274a6989f5f2a6214469380276a138",
+      "width": 720
+    },
+    "compact/light/r4_p13b_nav_settings.png": {
+      "bytes": 79637,
+      "canvas_center_rgb": [
+        244,
+        243,
+        250
+      ],
+      "height": 1600,
+      "non_background_samples": 388,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 126,
+      "sha256": "c53fe36e584ebcce1043e282f7723977a562c5394389b3f8be6f981bc29aa6d4",
+      "width": 720
+    },
+    "compact/light/r4_p13b_search.png": {
+      "bytes": 43465,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 1600,
+      "non_background_samples": 1875,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 113,
+      "sha256": "8a2e1236ef37302f37f85785b0139377b80f051fda5fc6b59b2b8fb0ca37b3f5",
+      "width": 720
+    },
+    "full/dark/r4_p13b_categories.png": {
+      "bytes": 67734,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 2400,
+      "non_background_samples": 2111,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 166,
+      "sha256": "d09c660f44afd9452b359b54bf366f0012b1046bb2d09bd8b5b66cec129f02c0",
+      "width": 1080
+    },
+    "full/dark/r4_p13b_category_collection.png": {
+      "bytes": 70976,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 2400,
+      "non_background_samples": 1025,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 124,
+      "sha256": "e707be2ff5f0d488abf561f604cb1129a45ae4badd97c6411bffb93259adab70",
+      "width": 1080
+    },
+    "full/dark/r4_p13b_category_selection.png": {
+      "bytes": 63590,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 2400,
+      "non_background_samples": 1571,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 107,
+      "sha256": "4de4d4c15cc2a8dfc6dcc829bc98cd99e635cc1943bfdb9650018b162c56150b",
+      "width": 1080
+    },
+    "full/dark/r4_p13b_charts.png": {
+      "bytes": 78999,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 2400,
+      "non_background_samples": 908,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 172,
+      "sha256": "70e310d3e61a7ade44cb97e932e77bf82dd389871c536b13cf28f944ccaa8b75",
+      "width": 1080
+    },
+    "full/dark/r4_p13b_details_reviews.png": {
+      "bytes": 139188,
+      "canvas_center_rgb": [
+        26,
+        27,
+        32
+      ],
+      "height": 2400,
+      "non_background_samples": 2800,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 248,
+      "sha256": "cc0a4d6f9e6cdd2d36614da7d77261c215f3717e1d2dc23fc69d0b8638fed1f8",
+      "width": 1080
+    },
+    "full/dark/r4_p13b_details_top.png": {
+      "bytes": 131840,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 2400,
+      "non_background_samples": 12085,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 259,
+      "sha256": "3e4d9d5a393e7eeac4fd0a65c16ed19bdbc3be92c624bcc341694f811e8ca5e9",
+      "width": 1080
+    },
+    "full/dark/r4_p13b_home.png": {
+      "bytes": 87887,
+      "canvas_center_rgb": [
+        26,
+        27,
+        32
+      ],
+      "height": 2400,
+      "non_background_samples": 2533,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 178,
+      "sha256": "9a229ac1bf072f4e69af937d7ac010fac89be891b598c7619edc713e41cf2be7",
+      "width": 1080
+    },
+    "full/dark/r4_p13b_nav_preferences.png": {
+      "bytes": 107480,
+      "canvas_center_rgb": [
+        26,
+        27,
+        32
+      ],
+      "height": 2400,
+      "non_background_samples": 1098,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 207,
+      "sha256": "6c8dc1d48a5da6487ea124b487c4da1fa245b14efeab0e4c3abb8560f1942c12",
+      "width": 1080
+    },
+    "full/dark/r4_p13b_nav_return.png": {
+      "bytes": 177831,
+      "canvas_center_rgb": [
+        40,
+        41,
+        47
+      ],
+      "height": 2400,
+      "non_background_samples": 25843,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 210,
+      "sha256": "f194ec0c6cf24c375c0aeb99ff2d8a07a45542d07bc41b2cf45b364c60afd2cf",
+      "width": 1080
+    },
+    "full/dark/r4_p13b_nav_search.png": {
+      "bytes": 29206,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 2400,
+      "non_background_samples": 2171,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 42,
+      "sha256": "e595fa4deb70cb8f30cfca5fd7dea021d3e0ebed4899e62189aca15674c41c91",
+      "width": 1080
+    },
+    "full/dark/r4_p13b_nav_settings.png": {
+      "bytes": 113765,
+      "canvas_center_rgb": [
+        26,
+        27,
+        32
+      ],
+      "height": 2400,
+      "non_background_samples": 844,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 208,
+      "sha256": "1e5091ff6b48a8c086ad6675b13855f135b705d3b5eb05697cc441bbb84b1ab8",
+      "width": 1080
+    },
+    "full/dark/r4_p13b_search.png": {
+      "bytes": 62141,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 2400,
+      "non_background_samples": 3651,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 142,
+      "sha256": "c9d0f5672887f6e0f4e81f2da40f2500aecaadf0426d3bba5c6048916e1eeadc",
+      "width": 1080
+    },
+    "full/light/r4_p13b_categories.png": {
+      "bytes": 65248,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 2400,
+      "non_background_samples": 1646,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 158,
+      "sha256": "9f689eb0f6a079838de7854bfabdb0ca0f09ad6813815ca9745f17c8641f49d4",
+      "width": 1080
+    },
+    "full/light/r4_p13b_category_collection.png": {
+      "bytes": 70772,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 2400,
+      "non_background_samples": 1014,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 122,
+      "sha256": "9adb8e21705c4fc624e65286471998181170c362f481fc9a812aeeeee6c78043",
+      "width": 1080
+    },
+    "full/light/r4_p13b_category_selection.png": {
+      "bytes": 59749,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 2400,
+      "non_background_samples": 1113,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 103,
+      "sha256": "64f5dbf715d853016f9b73ab19a03bb1adfbb7d426d47910de58f6c8a7a7e244",
+      "width": 1080
+    },
+    "full/light/r4_p13b_charts.png": {
+      "bytes": 77729,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 2400,
+      "non_background_samples": 888,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 169,
+      "sha256": "339226abedc6021920562925a985f06884d0d698f3556ba3a7bdee703f367f02",
+      "width": 1080
+    },
+    "full/light/r4_p13b_details_reviews.png": {
+      "bytes": 136556,
+      "canvas_center_rgb": [
+        244,
+        243,
+        250
+      ],
+      "height": 2400,
+      "non_background_samples": 1039,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 245,
+      "sha256": "a770e16e062331b329047babcdacbbfc3e57c1edd0208a616b2ae89d7073c804",
+      "width": 1080
+    },
+    "full/light/r4_p13b_details_top.png": {
+      "bytes": 65810,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 2400,
+      "non_background_samples": 6720,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 168,
+      "sha256": "cfddf0bef3bd36bf34980f05bf023fff8fea84bc01eccec8a5cec0e1b08d6f29",
+      "width": 1080
+    },
+    "full/light/r4_p13b_home.png": {
+      "bytes": 84644,
+      "canvas_center_rgb": [
+        244,
+        243,
+        250
+      ],
+      "height": 2400,
+      "non_background_samples": 810,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 181,
+      "sha256": "5d906f90d02ddf277b91f363a0472e2813a644f84a400458cfafe04079b33835",
+      "width": 1080
+    },
+    "full/light/r4_p13b_nav_preferences.png": {
+      "bytes": 106827,
+      "canvas_center_rgb": [
+        244,
+        243,
+        250
+      ],
+      "height": 2400,
+      "non_background_samples": 868,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 206,
+      "sha256": "2875f3881da06965dcd56b931aaaa46e61918796bb9dba161dd114b271dac3b8",
+      "width": 1080
+    },
+    "full/light/r4_p13b_nav_return.png": {
+      "bytes": 233094,
+      "canvas_center_rgb": [
+        225,
+        223,
+        230
+      ],
+      "height": 2400,
+      "non_background_samples": 25341,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 207,
+      "sha256": "ba7da0abcfad7d11ac5f7ce0da6e049ecf2a4c9fa9bed8f954397ecf4193a726",
+      "width": 1080
+    },
+    "full/light/r4_p13b_nav_search.png": {
+      "bytes": 28347,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 2400,
+      "non_background_samples": 114,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 39,
+      "sha256": "cf61815213f819ee15a5504018711369010d7fadbc793bf45ac0002866ceccc0",
+      "width": 1080
+    },
+    "full/light/r4_p13b_nav_settings.png": {
+      "bytes": 111288,
+      "canvas_center_rgb": [
+        244,
+        243,
+        250
+      ],
+      "height": 2400,
+      "non_background_samples": 702,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 210,
+      "sha256": "b9a78abe03bc78d978bb21ed185ba8e4d20e0a0b43ae4d2311be018f8f379311",
+      "width": 1080
+    },
+    "full/light/r4_p13b_search.png": {
+      "bytes": 61802,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 2400,
+      "non_background_samples": 3641,
+      "p12_dark_updates_label_bright_samples": 0,
+      "sampled_colors": 141,
+      "sha256": "eadb791ea2451908b9414205ec828f510329fe32ab21d269d20c27295e5b1ca8",
+      "width": 1080
+    }
+  },
+  "screenshots_count": 48,
+  "source_sha": "47c360e9cb553f73fb6858cd364ea19835bada6e",
+  "tests_executed": 20,
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "viewports": {
+    "compact": [
+      720,
+      1600,
+      320
+    ],
+    "full": [
+      1080,
+      2400,
+      420
+    ]
+  }
+}
