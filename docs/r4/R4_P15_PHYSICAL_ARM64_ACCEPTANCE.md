@@ -1,0 +1,49 @@
+# AuroraStore R4 — P15 consolidated physical ARM64 acceptance
+
+Status: **source overlay prepared; no physical device run and no installed APK proven yet**.
+
+Stacked on the fully hosted-qualified P14-P03 PR #5 (`1ab625ea916de533de4bbc9db8703aafc23f691b`), which itself follows P14-P01/P02 PR #4 (`6e9418baaefadd4afcf4320b4a4b193546e66ec7`) and the limited P13 approval. P15 is never release qualification.
+
+## Two independent gates
+
+**Gate A — GitHub hosted provenance:** Only GitHub Actions runs Gradle, compiles vanilla-debug and AndroidTest APKs, verifies package identities and real APK signing fingerprints, hashes both APKs and uploads an exact-source/run-attributed artifact. This workflow runs no emulator and no physical device. Never regard source-only PASS as evidence of a built APK.
+
+**Gate B — physical API36 ARM64:** A read-only preflight is available without authorization. `localhost:5555` must resolve to one boot-complete, physical `arm64-v8a` API36 target. A preexisting Aurora debug app or test package causes refusal; no overwrite, clear-data, root, ADB shell install, display overrides, locale/theme changes, Wi-Fi configuration, live Play access, or other app installation. The separate `--run` requires `I_AUTHORIZE_P15_TEST_APK_INSTALLS` and a verified downloaded Gate A artifact. It installs only P15's new debug/test APKs and uninstalls only these test-owned packages in `finally`; `--cleanup` provides rollback for interrupted ownership journals and refuses deletion of preexisting packages.
+
+### Consolidated P14 parity (physical)
+
+Run production Navigation3/Search/Details (4), actual Room update/cancel/recovery policies (8), real Compose download-state UI (8), production DownloadDao regression (9), and three named offline DownloadWorker/loopback cases: **32 Android test executions**. Capture and structurally decode **15 full-display PNGs** (10 navigation/catalog, 5 download widgets), reject blank or identical frames, validate exact source/run and the APK pair. Keep bounded instrumentation logs, screenshot SHA-256, explicit cleanup result, and an atomic local journal; read-only preflight writes no device state.
+
+### Explicit exclusions and manual installer gate
+
+The P14-P03 installer-decline outcome was a simulated production callback policy; it is **not** a real user declining an Android installation prompt. P15 automated parity likewise **does not** perform a real package update/install flow, click the OS confirmation, access a Play account, or prove physical production download against Google servers. `real_installer_prompt_decline_qualified=false` remains in evidence. A separate manually supervised, disposable signed-fixture prompt trial and cleanup proof are still required before declaring *full P15* qualified. Even a physical parity PASS is **not** P16 release/signing qualification.
+
+## Operator commands (Termux Zsh)
+
+After the P15 overlay is applied/pushed and hosted build CI is GREEN, the ZIP launcher can fetch the exact source SHA/run artifact. The only read-only device command is:
+
+```zsh
+python3 /sdcard/Download/Aurora_P15_CONSOLIDATED.zip --physical-preflight
+```
+
+To run P14 parity on the physical device, explicitly authorize new test APK installation **after verifying** the read-only report and the download artifact:
+
+```zsh
+python3 /sdcard/Download/Aurora_P15_CONSOLIDATED.zip --physical-run \
+  --authorize I_AUTHORIZE_P15_TEST_APK_INSTALLS \
+  --artifact-dir /sdcard/Download/AuroraStore-P15/apks \
+  --physical-output /sdcard/Download/AuroraStore-P15/physical
+```
+
+If interrupted after installing test-owned APKs:
+
+```zsh
+python3 /sdcard/Download/Aurora_P15_CONSOLIDATED.zip --physical-cleanup \
+  --physical-output /sdcard/Download/AuroraStore-P15/physical
+```
+
+Never use `adb uninstall` on a user's preexisting Aurora installation. Physical tests are independently authorized and never triggered by `--apply-and-push --watch`, `--check`, or `--fetch-apks`.
+
+## Scope / stop conditions
+
+The P15 runner can fail on a real device due to OS policy, insets, test-only Hilt state, or screenshot differences. It must preserve failures, refuse a green receipt, and attempt cleanup; never relax test or safety gates to manufacture qualification. Preflight cannot guarantee a device's installed package is not replaced concurrently by unrelated software. In a crash, `--cleanup` uses the verified ownership journal and remains fail-closed if identity cannot be proven.

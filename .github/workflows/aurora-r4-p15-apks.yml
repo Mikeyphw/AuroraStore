@@ -1,0 +1,88 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# P15 APK provenance, NEVER a physical device action or emulator install.
+name: Aurora R4 P15 — Signed Physical Acceptance APKs
+on:
+  push:
+    branches:
+      - feature/aurora-r4-p15-physical-arm64-20261115
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: aurora-p15-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source:
+    name: P14 immutable 17-source pins, negative tests and no device writes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Exact P14 baseline and P15 source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -B scripts/ci/test_r4_p15_source_contract.py
+          python3 -B scripts/ci/r4_p15_source_contract.py --root .
+          git diff --check 1ab625ea916de533de4bbc9db8703aafc23f691b HEAD
+  build:
+    name: GitHub-only Android APKs and exact SHA/signing provenance
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Initialize fail-closed build output
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/aurora-r4-p15-apks"
+          printf '%s\n' '{"result":"NOT_BUILT","physical_qualified":false,"release_qualified":false}' > "$RUNNER_TEMP/aurora-r4-p15-apks/status.json"
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+      - name: GitHub Android SDK toolchain only
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install 'platforms;android-37.0' 'build-tools;36.0.0'
+          test -s "$ANDROID_SDK_ROOT/platforms/android-37.0/android.jar"
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
+      - name: Compile application and AndroidTest on GitHub (no device)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          chmod +x gradlew
+          ./gradlew --no-daemon --max-workers=2 --stacktrace \
+            :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest
+      - name: Seal signing fingerprints, package identity and both APK hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' APP < <(find app/build/outputs/apk/vanilla/debug -maxdepth 1 -name '*.apk' -type f -print0)
+          mapfile -d '' TEST < <(find app/build/outputs/apk/androidTest -name '*.apk' -type f -print0)
+          test "${#APP[@]}" = 1 && test "${#TEST[@]}" = 1
+          python3 -B scripts/ci/r4_p15_artifact_manifest.py \
+            --app "${APP[0]}" --test "${TEST[0]}" \
+            --source "$GITHUB_SHA" --run "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" \
+            --out "$RUNNER_TEMP/aurora-r4-p15-apks"
+          rm -f "$RUNNER_TEMP/aurora-r4-p15-apks/status.json"
+      - name: Publish source-bound APK pair (does not install)
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: aurora-r4-p15-apks-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/aurora-r4-p15-apks/
+          if-no-files-found: error
+          retention-days: 14
