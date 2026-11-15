@@ -28,3 +28,24 @@ prompt test.
 The HF01 terminal launcher additionally streams unmodified native `gh run watch`
 for both exact-SHA workflows and `gh pr checks` after completion, saving the
 workflow output/failure logs and a resume journal. No `gh --json` flags.
+
+## HF02 — correct real AndroidJUnitRunner single-test verdict
+
+Exact failing hosted attempt: [43673400844](https://github.com/Mikeyphw/AuroraStore/actions/runs/43673400844), PR #5 commit `1d7eaa7aea5645975a987eecc3f096cf98cd3b79`.
+Both targeted CI and P14-P03 source gates passed. The new eight Room/policy tests,
+four UI tests, four Final UI tests and nine DAO regression tests passed on the first
+(full/light) profile. The first worker test also reported **`OK (1 test)`** and
+`INSTRUMENTATION_CODE: -1`, but the hosted shell runner incorrectly required
+`OK (1 tests)` for every `count=1` case. The result was a false refusal, not a
+failed worker implementation.
+
+HF02 requires `OK (1 test)` for a single instrumented method and `OK (N tests)`
+for N>1, plus a successful Android instrumentation completion code; crash and
+failure markers still block success. Source-negative mutations and seven
+isolated **executed Bash** exit-gate tests prevent reintroducing this issue.
+The production download worker, Room state transitions, P14-P01/P02/P13,
+workflow trust permissions and scope of P15 remain unchanged. The HF02 Termux
+launcher continues to print the real, unmodified stdout/stderr from `gh run watch`,
+`gh pr checks`, and `gh run view --log-failed`, with evidence and durable journals.
+**Hosted HF02 has not yet run**; P14-P03 remains unqualified until the exact
+source/run-bound 76 tests and 20 screenshots pass GitHub CI.

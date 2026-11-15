@@ -88,6 +88,15 @@ def check_run(s):
   'r4_p14_p03_evidence_audit.py',
   'P14P03_HOSTED_76_TESTS_20_PNGS_PASS'):
   need(marker in s,'RUN_MARKER_'+marker)
+ # AndroidJUnitRunner emits "OK (1 test)" for one method, "OK (N tests)" otherwise.
+ # Fail closed on missing instrumentation exit, not on grammatical plurality.
+ for marker in ('local expected="OK ($count tests)"',
+                "if (( count == 1 )); then expected='OK (1 test)'; fi",
+                '! grep -Fxq "$expected" "$log"',
+                "! grep -Fxq 'INSTRUMENTATION_CODE: -1' \"$log\""):
+  need(marker in s,'RUN_RESULT_CONTRACT_'+marker)
+ need('! grep -Fxq "OK ($count tests)" "$log"' not in s,
+      'RUN_OLD_PLURAL_ONLY_GUARD')
  need(s.count('timeout 840 adb shell am instrument')==1,'RUNNER_UNBOUNDED')
  need('adb -s localhost:5555' not in s,'PHYSICAL_ADB')
  return True

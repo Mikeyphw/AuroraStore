@@ -42,11 +42,13 @@ collect_failed() {
 run_class() {
  local profile="$1" mode="$2" label="$3" klass="$4" count="$5"
  local log="$OUT/logs/$profile/$label-$mode.txt"
+ local expected="OK ($count tests)"
+ if (( count == 1 )); then expected='OK (1 test)'; fi
  echo "P14P03_TEST_BEGIN profile=$profile mode=$mode label=$label tests=$count"
  timeout 840 adb shell am instrument -w -r -e class "$klass" "$RUNNER" | tee "$log"
- if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|shortMsg=|Process crashed|INSTRUMENTATION_STATUS_CODE: -2' "$log" || ! grep -Fxq "OK ($count tests)" "$log";then
+ if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|shortMsg=|Process crashed|INSTRUMENTATION_STATUS_CODE: -2' "$log" || ! grep -Fxq "$expected" "$log" || ! grep -Fxq 'INSTRUMENTATION_CODE: -1' "$log";then
   collect_failed "$profile" "$mode"
-  echo "P14P03_REFUSED_ANDROID_FAILURE profile=$profile mode=$mode suite=$label" >&2
+  echo "P14P03_REFUSED_ANDROID_FAILURE profile=$profile mode=$mode suite=$label expected=\"$expected\" observed=\"$(grep -E '^OK \(' "$log" | tail -n 1 || true)\"" >&2
   exit 1
  fi
  echo "P14P03_TEST_PASS profile=$profile mode=$mode label=$label count=$count"
