@@ -47,3 +47,19 @@ Never use `adb uninstall` on a user's preexisting Aurora installation. Physical 
 ## Scope / stop conditions
 
 The P15 runner can fail on a real device due to OS policy, insets, test-only Hilt state, or screenshot differences. It must preserve failures, refuse a green receipt, and attempt cleanup; never relax test or safety gates to manufacture qualification. Preflight cannot guarantee a device's installed package is not replaced concurrently by unrelated software. In a crash, `--cleanup` uses the verified ownership journal and remains fail-closed if identity cannot be proven.
+
+## P15 HF01 — robust signed APK package-ID attestation
+
+The first hosted P15 compile (run 43776123080, source d7009e4f) completed both Gradle
+APK builds but stopped in the artifact manifest builder with
+`P15_ARTIFACT_REFUSED_NO_APK_BADGING`. The original parser incorrectly made
+package identification depend on a populated numeric `versionCode` field in
+`aapt dump badging`; AndroidTest metadata can have an empty versionCode.
+
+HF01 takes the exact app/test package identities from the documented
+`aapt2 dump packagename` command and optionally cross-checks the legacy
+`aapt dump badging` name without assuming versionCode. It rejects missing,
+malformed, multi-line, mismatched or swapped package identities and still
+requires both APK signatures and SHA-256 hashes before publishing the manifest.
+Tests run with mocked Android tool stdout, including a blank versionCode.
+No APK installation or physical ARM64 operation is part of this fix.

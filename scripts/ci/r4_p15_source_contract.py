@@ -47,7 +47,9 @@ def check_device(s):
  need("'real_installer_prompt_decline_qualified':False" in s,'FALSE_INSTALLER_CLAIM')
  return True
 def check_manifest(s):
- for key in ("'apksigner'", "'aapt'", 'certificate SHA-256 digest',
+ for key in ("'apksigner'", "'aapt'", "'aapt2'", "'packagename'", 'certificate SHA-256 digest',
+  'extract_package_name(', 'PACKAGE_TOOL_DISAGREEMENT_',
+  'AAPT2_PACKAGE_UNRECOGNIZED_',
   'P15_HOSTED_APK_SHA256_AND_SIGNING_CERT_IDENTITY_PASS',
   "'source_sha':sha", "'run_id':run", "'run_attempt':int(attempt)",
   "'physical_qualified':False", "'installer_prompt_decline_qualified':False",

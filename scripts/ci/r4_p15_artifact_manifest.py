@@ -25,11 +25,37 @@ def signer(apk):
  need(m is not None,'UNSIGNED_OR_UNRECOGNIZED_SIGNER_'+apk.name)
  need('DOES NOT VERIFY' not in s and 'ERROR' not in s.upper(),'APK_SIGNATURE_FAILURE')
  return m.group(1).lower()
+def extract_package_name(aapt2_output: str, apk_name: str) -> str:
+    """AAPT2's dedicated packagename output has no optional version fields.
+
+    AndroidTest APKs may omit versionCode or emit an empty versionCode, so
+    parsing the versionCode field to establish the package identity is wrong.
+    Treat empty, malformed or multiple package identities as a refusal.
+    """
+    values = [line.strip() for line in aapt2_output.splitlines() if line.strip()]
+    need(len(values) == 1 and re.fullmatch(
+        r'[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)+', values[0]
+    ) is not None, 'AAPT2_PACKAGE_UNRECOGNIZED_' + apk_name)
+    return values[0]
+
+
 def package(apk):
- s=output([tool('aapt'),'dump','badging',str(apk)])
- m=re.search(r"(?m)^package: name='([^']+)' versionCode='([0-9]+)'",s)
- need(m is not None,'NO_APK_BADGING')
- return m.group(1)
+    # AAPT2 dump packagename is the documented, version-independent command.
+    name = extract_package_name(output([tool('aapt2'), 'dump', 'packagename', str(apk)]), apk.name)
+    # Independently cross-check the package field when legacy aapt can parse it.
+    # Its badging format is NOT authoritative for versionCode on AndroidTest APKs.
+    legacy = subprocess.run([tool('aapt'), 'dump', 'badging', str(apk)],
+                            capture_output=True, text=True, timeout=110)
+    if legacy.returncode == 0:
+        match = re.search(r"(?m)^package:\s+name='([^']+)'(?=\s|$)", legacy.stdout)
+        if match is not None:
+            need(match.group(1) == name, 'PACKAGE_TOOL_DISAGREEMENT_' + apk.name)
+        else:
+            print('P15_INFO_LEGACY_BADGING_NO_PACKAGE ' + apk.name, flush=True)
+    else:
+        print('P15_INFO_LEGACY_BADGING_UNAVAILABLE ' + apk.name, flush=True)
+    print('P15_APK_PACKAGE_VERIFIED', apk.name, name, flush=True)
+    return name
 def make(app,test,out,sha,run,attempt):
  need(re.fullmatch('[0-9a-f]{40}',sha) is not None,'SOURCE_SHA')
  need(run.isdigit() and attempt.isdigit(),'GH_RUN_ID')

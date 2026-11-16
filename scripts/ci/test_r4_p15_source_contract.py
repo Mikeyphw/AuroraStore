@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """P15 adversarial source, device authorization and actual PNG decode checks."""
 from pathlib import Path
-import io,importlib,sys,tempfile,subprocess,struct,zlib,json,hashlib
+import io,importlib,sys,tempfile,subprocess,struct,zlib,json,hashlib,types
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 import r4_p15_source_contract as c
 import r4_p15_physical_acceptance as physical
+import r4_p15_artifact_manifest as artifact
 ROOT=Path(__file__).resolve().parents[2]
 
 def refuses(call,part):
@@ -37,6 +38,9 @@ def source_mutations():
   (c.check_device,d+'\n# wm density reset','UNAUTHORIZED_DEVICE_MUTATION_'),
   (c.check_device,d+'\n# gh workflow run','UNAUTHORIZED_DEVICE_MUTATION_'),
   (c.check_manifest,a.replace("'aapt'","'fake_aapt'"),'MANIFEST_MARKER_'),
+  (c.check_manifest,a.replace("'aapt2'","'unsafe_legacy_aapt'"),'MANIFEST_MARKER_'),
+  (c.check_manifest,a.replace("'packagename'","'badging'"),'MANIFEST_MARKER_'),
+  (c.check_manifest,a.replace('extract_package_name(','unsafe_package_name('),'MANIFEST_MARKER_'),
   (c.check_manifest,a.replace("'apksigner'","'skip_signing'"),'MANIFEST_MARKER_'),
   (c.check_manifest,a.replace("'physical_qualified':False","'physical_qualified':True"),'MANIFEST_MARKER_'),
   (c.check_manifest,a.replace("'release_qualified':False","'release_qualified':True"),'MANIFEST_MARKER_'),
@@ -228,7 +232,69 @@ def artifact_provenance_mock():
   finally:
    for key,old in prior.items():setattr(physical,key,old)
 
+
+
+def artifact_package_regressions():
+    """Actual attestation parser tests with simulated Android tool stdout.
+
+    No APK, local Gradle or emulator is needed. Verify both package roles,
+    badging that has empty versionCode, disagreement and malformed responses.
+    """
+    assert artifact.extract_package_name('com.aurora.store.debug\n', 'app.apk') == artifact.APP
+    assert artifact.extract_package_name('com.aurora.store.debug.test\n', 'test.apk') == artifact.TEST
+    for malformed in ('', 'com.aurora.store.debug\nother.package\n',
+                      "package: name='com.aurora.store.debug'", 'ERROR badging'):
+        try:
+            artifact.extract_package_name(malformed, 'bad.apk')
+        except artifact.Refused as e:
+            assert 'AAPT2_PACKAGE_UNRECOGNIZED_' in str(e)
+        else:
+            raise AssertionError('P15_AAPT2_MALFORMED_RESPONSE_ACCEPTED')
+    original_tool, original_output, original_subprocess_run = (
+        artifact.tool, artifact.output, artifact.subprocess.run)
+    facts={'app':artifact.APP, 'test':artifact.TEST,'legacy':'empty-version'}
+    def fake_tool(n):
+        assert n in ('aapt','aapt2')
+        return n
+    def fake_output(args):
+        assert args[:3] == ['aapt2','dump','packagename']
+        return facts['test' if 'androidTest' in str(args[3]) else 'app'] + '\n'
+    def fake_run(args, **kwargs):
+        assert args[:3] == ['aapt','dump','badging']
+        value=facts['test' if 'androidTest' in str(args[3]) else 'app']
+        if facts['legacy']=='mismatch':value='org.example.another'
+        if facts['legacy']=='failure':return types.SimpleNamespace(returncode=1,stdout='',stderr='unavailable')
+        return types.SimpleNamespace(returncode=0,
+             stdout=f"package: name='{value}' versionCode='' versionName=''\n",stderr='')
+    try:
+        artifact.tool=fake_tool;artifact.output=fake_output
+        artifact.subprocess.run=fake_run
+        assert artifact.package(Path('app.apk'))==artifact.APP
+        assert artifact.package(Path('androidTest.apk'))==artifact.TEST
+        facts['legacy']='mismatch'
+        try:artifact.package(Path('app.apk'))
+        except artifact.Refused as e:assert 'PACKAGE_TOOL_DISAGREEMENT_' in str(e)
+        else:raise AssertionError('P15_DISAGREEMENT_NOT_REJECTED')
+        facts['legacy']='failure'
+        assert artifact.package(Path('androidTest.apk'))==artifact.TEST
+        facts['legacy']='empty-version';facts['test']=artifact.APP
+        # Correctly refuse an otherwise signed test APK whose package equals the app package.
+        with tempfile.TemporaryDirectory(prefix='p15-pair-package-') as d:
+            temp=Path(d);app=temp/'app.apk';test=temp/'androidTest.apk'
+            app.write_bytes(b'APK'+b'A'*12000);test.write_bytes(b'APK'+b'B'*12000)
+            original_signer=artifact.signer
+            artifact.signer=lambda x:'f'*64
+            try:
+                try:artifact.make(app,test,temp/'out','a'*40,'1234','1')
+                except artifact.Refused as e:assert 'PACKAGE_NAME_MISMATCH' in str(e)
+                else:raise AssertionError('P15_WRONG_TEST_PACKAGE_ACCEPTED')
+            finally:artifact.signer=original_signer
+    finally:
+        artifact.tool=original_tool;artifact.output=original_output
+        artifact.subprocess.run=original_subprocess_run
+    print('P15_AAPT2_PACKAGE_AND_LEGACY_BADGING_10_REGRESSIONS_PASS')
+
 def main():
- source_mutations();safety_mock_tests();png_mutations();device_transaction_mock();artifact_provenance_mock()
+ source_mutations();artifact_package_regressions();safety_mock_tests();png_mutations();device_transaction_mock();artifact_provenance_mock()
  print('P15_DEVICE_TESTS_NOT_RUN_NO_LOCAL_GRADLE_NO_ADB_WRITES')
 if __name__=='__main__':main()
