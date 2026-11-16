@@ -42,6 +42,9 @@ def source_mutations():
   (c.check_manifest,a.replace("'packagename'","'badging'"),'MANIFEST_MARKER_'),
   (c.check_manifest,a.replace('extract_package_name(','unsafe_package_name('),'MANIFEST_MARKER_'),
   (c.check_manifest,a.replace("'apksigner'","'skip_signing'"),'MANIFEST_MARKER_'),
+  (c.check_manifest,a.replace('extract_signer_sha256(','unsafe_extract_signer('),'MANIFEST_MARKER_'),
+  (c.check_manifest,a.replace('SIGNER_CERT_CONFLICT_','SIGNER_CERT_IGNORED_'),'MANIFEST_MARKER_'),
+  (c.check_manifest,a.replace("'--verbose'", "'--nonverbose'"),'MANIFEST_MARKER_'),
   (c.check_manifest,a.replace("'physical_qualified':False","'physical_qualified':True"),'MANIFEST_MARKER_'),
   (c.check_manifest,a.replace("'release_qualified':False","'release_qualified':True"),'MANIFEST_MARKER_'),
   (c.check_manifest,a.replace('P15_DEVICE_INSTALLS_NOT_EXECUTED','P15_INSTALLS_DONE'),'MANIFEST_MARKER_'),
@@ -234,6 +237,43 @@ def artifact_provenance_mock():
 
 
 
+def artifact_signer_regressions():
+    """Android Build Tools 36 and 37 verified signer-output compatibility.
+
+    Mock stdout and exit statuses only; actual APKs must pass apksigner at CI.
+    """
+    digest='6a'*32
+    legacy=f'Signer #1 certificate SHA-256 digest: {digest}\n'
+    v2=f'V2 Signer: certificate SHA-256 digest: {digest}\n'
+    v3=f'V3.0 Signer: certificate SHA-256 digest: {digest.upper()}\n'
+    v31=f'V3.1 Signer: certificate SHA-256 digest: {digest}\n'
+    ranged=f'Signer (minSdkVersion=24, maxSdkVersion=32) certificate SHA-256 digest: {digest}\n'
+    for sample in (legacy,v2,v3,v31,ranged,v2+v3,v2+v3+v31,
+                   'Verifies\nNumber of signers: 1\n'+v2+v3):
+        assert artifact.extract_signer_sha256(sample, 'app.apk')==digest
+    for name,sample,code in (
+        ('missing','Verifies\nNumber of signers: 1\n','UNSIGNED_OR_UNRECOGNIZED_SIGNER_'),
+        ('wrong','V2 Signer: public key SHA-256 digest: '+digest+'\n','UNSIGNED_OR_UNRECOGNIZED_SIGNER_'),
+        ('short','V2 Signer: certificate SHA-256 digest: '+digest[:-2]+'\n','UNSIGNED_OR_UNRECOGNIZED_SIGNER_'),
+        ('conflict',v2+f'V3.0 Signer: certificate SHA-256 digest: {"b7"*32}\n','SIGNER_CERT_CONFLICT_'),
+        ('failure','DOES NOT VERIFY\n'+v2,'APK_SIGNATURE_FAILURE_'),
+        ('error','ERROR: verification failed\n'+v2,'APK_SIGNATURE_FAILURE_'),
+    ):
+        try:artifact.extract_signer_sha256(sample,'app.apk')
+        except artifact.Refused as e:assert code in str(e),(name,str(e))
+        else:raise AssertionError('P15_SIGNER_OUTPUT_MUTATION_ACCEPTED_'+name)
+    prev_tool,prev_output=artifact.tool,artifact.output
+    try:
+        artifact.tool=lambda _: 'apksigner'
+        def mock_output(args):
+            assert args[:4]==['apksigner','verify','--verbose','--print-certs']
+            return v2+v3
+        artifact.output=mock_output
+        assert artifact.signer(Path('app.apk'))==digest
+    finally:
+        artifact.tool,artifact.output=prev_tool,prev_output
+    print('P15_HF02_BUILD_TOOLS_36_37_SIGNER_15_REGRESSIONS_PASS')
+
 def artifact_package_regressions():
     """Actual attestation parser tests with simulated Android tool stdout.
 
@@ -295,6 +335,6 @@ def artifact_package_regressions():
     print('P15_AAPT2_PACKAGE_AND_LEGACY_BADGING_10_REGRESSIONS_PASS')
 
 def main():
- source_mutations();artifact_package_regressions();safety_mock_tests();png_mutations();device_transaction_mock();artifact_provenance_mock()
+ source_mutations();artifact_package_regressions();artifact_signer_regressions();safety_mock_tests();png_mutations();device_transaction_mock();artifact_provenance_mock()
  print('P15_DEVICE_TESTS_NOT_RUN_NO_LOCAL_GRADLE_NO_ADB_WRITES')
 if __name__=='__main__':main()

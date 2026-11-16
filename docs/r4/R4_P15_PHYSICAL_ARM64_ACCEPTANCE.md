@@ -63,3 +63,19 @@ malformed, multi-line, mismatched or swapped package identities and still
 requires both APK signatures and SHA-256 hashes before publishing the manifest.
 Tests run with mocked Android tool stdout, including a blank versionCode.
 No APK installation or physical ARM64 operation is part of this fix.
+
+## P15 HF02 — Android Build Tools 37 certificate labels
+
+Run `43778003268` compiled both APKs and verified the app/test package IDs,
+then failed `P15_ARTIFACT_REFUSED_UNSIGNED_OR_UNRECOGNIZED_SIGNER_app-vanilla-debug.apk`.
+The legacy parser only accepted `Signer #1 certificate SHA-256 digest:`.
+Android Build Tools 37 may instead produce `V2 Signer:` and `V3.0 Signer:`
+certificate lines. This is an output-format mismatch, not evidence that
+signing verification failed. HF02 explicitly requires apksigner's successful
+verification exit, parses known legacy/V2/V3 certificate SHA-256 formats,
+requires a 64-character hex digest, and refuses conflicting certificate
+identities across schemes. It never accepts a public-key fingerprint in place
+of a certificate digest. Local regressions cover valid legacy/current labels,
+missing/short/mismatched fingerprints, and reported verification failures.
+Hosted provenance remains pending until a new exact-source Actions run passes.
+There are no local Gradle or physical-device operations in this repair.

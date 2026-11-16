@@ -19,12 +19,40 @@ def output(args):
  p=subprocess.run(args,capture_output=True,text=True,timeout=110)
  need(p.returncode==0,'PROCESS_FAILED_'+str(args[:2])+'_'+p.stderr[-250:])
  return p.stdout
+# Android Build Tools 37 labels signing-certificate identities by APK scheme:
+# V2 Signer: ... / V3.0 Signer: ... rather than older Signer #1 ... .
+# apksigner verification must succeed first; certificates are never guessed
+# from public-key digests, unverifiable output, or local signing.properties.
+_CERT_DIGEST = re.compile(
+    r'(?im)^\s*(?:Signer\s+#\d+|'
+    r'Signer\s+\(minSdkVersion=\d+,\s*maxSdkVersion=\d+\)|'
+    r'V\d+(?:\.\d+)?\s+Signer(?:\s+#\d+)?)\s*:?\s+'
+    r'certificate\s+SHA-256\s+digest:\s*([0-9a-f]{64})\s*$'
+)
+
+def extract_signer_sha256(text: str, apk_name: str) -> str:
+    """Decode verified apksigner output across Build Tools 36 and 37.
+
+    Repeated V2/V3 scheme records for the same cert are legitimate; differing
+    SHA256 cert identities are refused rather than choosing an arbitrary signer.
+    """
+    need(not re.search(r'(?im)^\s*(?:DOES NOT VERIFY|ERROR)\b', text),
+         'APK_SIGNATURE_FAILURE_' + apk_name)
+    digests = [m.group(1).lower() for m in _CERT_DIGEST.finditer(text)]
+    # Only label names appear in failure diagnostics, never signing material.
+    labels = [x.split('certificate SHA-256 digest:', 1)[0].strip()[:80]
+              for x in text.splitlines() if 'certificate SHA-256 digest:' in x]
+    need(bool(digests), 'UNSIGNED_OR_UNRECOGNIZED_SIGNER_' + apk_name
+         + '_labels=' + repr(labels[:5]))
+    need(len(set(digests)) == 1, 'SIGNER_CERT_CONFLICT_' + apk_name)
+    return digests[0]
+
 def signer(apk):
- s=output([tool('apksigner'),'verify','--print-certs',str(apk)])
- m=re.search(r'(?im)^Signer #1 certificate SHA-256 digest:\s*([a-f0-9]{64})\s*$',s)
- need(m is not None,'UNSIGNED_OR_UNRECOGNIZED_SIGNER_'+apk.name)
- need('DOES NOT VERIFY' not in s and 'ERROR' not in s.upper(),'APK_SIGNATURE_FAILURE')
- return m.group(1).lower()
+    # Exit status is checked by output() before considering certificate labels.
+    verified = output([tool('apksigner'), 'verify', '--verbose', '--print-certs', str(apk)])
+    cert = extract_signer_sha256(verified, apk.name)
+    print('P15_APK_SIGNING_CERT_VERIFIED', apk.name, cert, flush=True)
+    return cert
 def extract_package_name(aapt2_output: str, apk_name: str) -> str:
     """AAPT2's dedicated packagename output has no optional version fields.
 

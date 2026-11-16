@@ -54,7 +54,9 @@ def check_manifest(s):
   "'source_sha':sha", "'run_id':run", "'run_attempt':int(attempt)",
   "'physical_qualified':False", "'installer_prompt_decline_qualified':False",
   "'release_qualified':False", "'aurora-p15-app.apk'", "'aurora-p15-androidTest.apk'",
-  "'com.aurora.store.debug'", 'P15_DEVICE_INSTALLS_NOT_EXECUTED'):
+  "'com.aurora.store.debug'", 'P15_DEVICE_INSTALLS_NOT_EXECUTED',
+  'extract_signer_sha256(', 'SIGNER_CERT_CONFLICT_',
+  "'--verbose'", 'V\\d+(?:\\.\\d+)?'):
   need(key in s,'MANIFEST_MARKER_'+key)
  return True
 def check_workflow(s):
