@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "upstream_pull_request": "https://github.com/whyorean/AuroraStore/pull/113",
+  "reference_repository": "aryan-j/AuroraStore",
+  "reference_ref": "codex/aurora-ui-showcase",
+  "reference_scope": "Author-provided stock-versus-Expressive visual examples; not a golden-pixel identity requirement",
+  "source_verified_on": "2026-11-14",
+  "comparisons": {
+    "for_you": {"name": "comparison-for-you.png", "git_blob_sha1": "51b4fc2f4ef02ca59f1251bdace98c7b96c2c902", "actual": "r4_p13b_home.png", "comparability": "isolated_offline_fixture"},
+    "home_actions": {"name": "comparison-home-actions.png", "git_blob_sha1": "df19e579a302e381088fab1d826387e14a9d1b5d", "actual": "r4_p13b_home.png", "comparability": "isolated_offline_fixture"},
+    "top_charts": {"name": "comparison-top-charts.png", "git_blob_sha1": "ecd6928e469495ba680d0356505bce79e4d03852", "actual": "r4_p13b_charts.png", "comparability": "isolated_offline_fixture"},
+    "categories": {"name": "comparison-categories.png", "git_blob_sha1": "61c54268a50a2b04bbae285dd6b132e9358afab1", "actual": "r4_p13b_categories.png", "comparability": "isolated_offline_fixture"},
+    "details": {"name": "comparison-app-details.png", "git_blob_sha1": "197cc27b07552b47c1fefa49486d64f83923ad95", "actual": "r4_p13b_details_top.png", "comparability": "isolated_offline_fixture"},
+    "search": {"name": "feature-search.png", "git_blob_sha1": "c2d0c0f66bc60c819382557b8123926b5b1bf3e5", "actual": "r4_p13b_search.png", "comparability": "isolated_offline_fixture"},
+    "settings": {"name": "comparison-settings.png", "git_blob_sha1": "9adb0938e893dd494f7cbb205c4a22d55e8620ec", "actual": "r4_p13b_nav_settings.png", "comparability": "production_navigation3_offline"},
+    "customization": {"name": "comparison-customization.png", "git_blob_sha1": "5093b1f6866e106c9762b9be6ddbad6d2609160e", "actual": "r4_p13b_nav_preferences.png", "comparability": "production_navigation3_offline"}
+  }
+}
