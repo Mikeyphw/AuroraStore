@@ -23,6 +23,7 @@ import com.aurora.gplayapi.model.BundleCursor
 import com.aurora.gplayapi.model.StreamBundle
 import com.aurora.gplayapi.web.WebPlayClient
 import com.aurora.store.AuroraApp
+import com.aurora.store.data.catalog.CatalogJourneyGateway
 import com.aurora.store.data.PageResult
 import com.aurora.store.data.event.AuthEvent
 import com.aurora.store.data.model.SearchFilter
@@ -48,7 +49,8 @@ import kotlinx.coroutines.launch
 class SearchViewModel @Inject constructor(
     val authProvider: AuthProvider,
     private val webPlayClient: WebPlayClient,
-    private val playClient: PlayClient
+    private val playClient: PlayClient,
+    private val catalogJourneyGateway: CatalogJourneyGateway
 ) : ViewModel() {
 
     private val _suggestions = MutableStateFlow<List<SearchSuggestion>>(emptyList())
@@ -75,6 +77,12 @@ class SearchViewModel @Inject constructor(
     }
 
     fun search(query: String) {
+        // An instrumentation-only Hilt override provides deterministic offline results.
+        // The release binding returns null and retains the original Play-backed path.
+        catalogJourneyGateway.searchResults(query)?.let { offline ->
+            _apps.value = PagingData.from(offline)
+            return
+        }
         var cursor: BundleCursor? = null
 
         fun StreamBundle.flatApps(): List<App> =
@@ -121,6 +129,10 @@ class SearchViewModel @Inject constructor(
     fun fetchSuggestions(query: String) {
         val normalized = query.trim()
         suggestionsJob?.cancel()
+        catalogJourneyGateway.suggestions(normalized)?.let { offline ->
+            _suggestions.value = offline
+            return
+        }
         if (normalized.isBlank()) {
             _suggestions.value = emptyList()
             return

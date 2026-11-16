@@ -1,0 +1,21 @@
+{
+  "full_upstream_visual_signoff": false,
+  "limited_p13b_visual_review_approved": true,
+  "reason": "offline fixture comparisons and unqualified full catalog routes",
+  "release_qualified": false,
+  "reviewed_screens": [
+    "for_you",
+    "home_actions",
+    "top_charts",
+    "categories",
+    "details",
+    "search",
+    "settings",
+    "customization"
+  ],
+  "reviewer": "Mikeyphw",
+  "run_id": "43650748680",
+  "schema": 1,
+  "source_sha": "47c360e9cb553f73fb6858cd364ea19835bada6e",
+  "upstream_pr": "whyorean/AuroraStore#113"
+}

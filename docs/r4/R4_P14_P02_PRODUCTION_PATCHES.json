@@ -1,0 +1,69 @@
+{
+  "app/src/main/java/com/aurora/store/compose/ui/details/AppDetailsScreen.kt": {
+    "replacements": [
+      [
+        "import androidx.compose.ui.platform.LocalContext\n",
+        "import androidx.compose.ui.platform.LocalContext\nimport androidx.compose.ui.platform.testTag\n"
+      ],
+      [
+        "                LazyColumn(\n                    modifier = Modifier\n                        .fillMaxSize(),\n                    contentPadding = contentPadding,",
+        "                LazyColumn(\n                    modifier = Modifier\n                        .fillMaxSize()\n                        .testTag(\"aurora-details-main-list\"),\n                    contentPadding = contentPadding,"
+      ],
+      [
+        "                        item(key = \"screenshots\") {\n                            Screenshots(\n                                screenshots = app.screenshots,\n                                onNavigateToScreenshot = {\n                                    showExtraPane(ExtraScreen.Screenshot(it))\n                                }\n                            )\n                        }",
+        "                        item(key = \"screenshots\") {\n                            Box(modifier = Modifier.testTag(\"aurora-details-screenshots\")) {\n                                Screenshots(\n                                    screenshots = app.screenshots,\n                                    onNavigateToScreenshot = {\n                                        showExtraPane(ExtraScreen.Screenshot(it))\n                                    }\n                                )\n                            }\n                        }"
+      ],
+      [
+        "                    item {\n                        RatingAndReviews(\n                            rating = app.rating,\n                            featuredReviews = featuredReviews.take(1),\n                            onNavigateToDetailsReview = { showExtraPane(ExtraScreen.Review) }\n                        )\n                    }",
+        "                    item {\n                        Box(modifier = Modifier.testTag(\"aurora-details-reviews\")) {\n                            RatingAndReviews(\n                                rating = app.rating,\n                                featuredReviews = featuredReviews.take(1),\n                                onNavigateToDetailsReview = { showExtraPane(ExtraScreen.Review) }\n                            )\n                        }\n                    }"
+      ]
+    ],
+    "sha": "74577ceceb9ea82b85880cac3c229da73270814d"
+  },
+  "app/src/main/java/com/aurora/store/viewmodel/details/AppDetailsViewModel.kt": {
+    "replacements": [
+      [
+        "import com.aurora.store.AuroraApp\n",
+        "import com.aurora.store.AuroraApp\nimport com.aurora.store.data.catalog.CatalogJourneyGateway\n"
+      ],
+      [
+        "    private val accountRepository: AccountRepository,\n    private val exodusRepository: ExodusRepository\n",
+        "    private val accountRepository: AccountRepository,\n    private val exodusRepository: ExodusRepository,\n    private val catalogJourneyGateway: CatalogJourneyGateway\n"
+      ],
+      [
+        "                _testingProgramSubscribed.value = null\n                _app.value = playClient.apps.details(packageName).copy(",
+        "                _testingProgramSubscribed.value = null\n                val offline = catalogJourneyGateway.appDetails(packageName)\n                if (offline != null) {\n                    _app.value = offline.copy(isInstalled = false)\n                    _state.value = AppState.Unavailable\n                    _featuredReviews.value = catalogJourneyGateway.featuredReviews(packageName)\n                        ?: emptyList()\n                    _suggestionsBundle.value = StreamBundle.EMPTY\n                    return@launch\n                }\n                _app.value = playClient.apps.details(packageName).copy("
+      ],
+      [
+        "            if (throwable != null || app.value == null) return@invokeOnCompletion\n\n            fetchFavourite(packageName)",
+        "            if (throwable != null || app.value == null) return@invokeOnCompletion\n            // Offline instrumentation response is complete: do not launch remote extras.\n            if (catalogJourneyGateway.appDetails(packageName) != null) return@invokeOnCompletion\n\n            fetchFavourite(packageName)"
+      ],
+      [
+        "        viewModelScope.launch { _canDownload.value = playClient.supports(Capability.DOWNLOAD) }",
+        "        if (!catalogJourneyGateway.isHermetic) {\n            viewModelScope.launch { _canDownload.value = playClient.supports(Capability.DOWNLOAD) }\n        }"
+      ]
+    ],
+    "sha": "784b92ad34ac8a7bb62720aaafcb07b2c59367fe"
+  },
+  "app/src/main/java/com/aurora/store/viewmodel/search/SearchViewModel.kt": {
+    "replacements": [
+      [
+        "import com.aurora.store.AuroraApp\n",
+        "import com.aurora.store.AuroraApp\nimport com.aurora.store.data.catalog.CatalogJourneyGateway\n"
+      ],
+      [
+        "    private val webPlayClient: WebPlayClient,\n    private val playClient: PlayClient\n",
+        "    private val webPlayClient: WebPlayClient,\n    private val playClient: PlayClient,\n    private val catalogJourneyGateway: CatalogJourneyGateway\n"
+      ],
+      [
+        "    fun search(query: String) {\n        var cursor: BundleCursor? = null\n",
+        "    fun search(query: String) {\n        // An instrumentation-only Hilt override provides deterministic offline results.\n        // The release binding returns null and retains the original Play-backed path.\n        catalogJourneyGateway.searchResults(query)?.let { offline ->\n            _apps.value = PagingData.from(offline)\n            return\n        }\n        var cursor: BundleCursor? = null\n"
+      ],
+      [
+        "        suggestionsJob?.cancel()\n        if (normalized.isBlank()) {",
+        "        suggestionsJob?.cancel()\n        catalogJourneyGateway.suggestions(normalized)?.let { offline ->\n            _suggestions.value = offline\n            return\n        }\n        if (normalized.isBlank()) {"
+      ]
+    ],
+    "sha": "7d155d705ed8a686c5951e3ea49f0a1de9588501"
+  }
+}

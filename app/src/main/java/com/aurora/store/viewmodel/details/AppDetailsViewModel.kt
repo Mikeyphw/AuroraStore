@@ -29,6 +29,7 @@ import com.aurora.gplayapi.model.TopChart
 import com.aurora.gplayapi.session.Capability
 import com.aurora.gplayapi.web.WebPlayClient
 import com.aurora.store.AuroraApp
+import com.aurora.store.data.catalog.CatalogJourneyGateway
 import com.aurora.store.R
 import com.aurora.store.data.AccountRepository
 import com.aurora.store.data.ExodusRepository
@@ -94,7 +95,8 @@ class AppDetailsViewModel @Inject constructor(
     private val okHttpClient: OkHttpClient,
     private val json: Json,
     private val accountRepository: AccountRepository,
-    private val exodusRepository: ExodusRepository
+    private val exodusRepository: ExodusRepository,
+    private val catalogJourneyGateway: CatalogJourneyGateway
 ) : ViewModel() {
 
     private val _app = MutableStateFlow<App?>(null)
@@ -221,13 +223,24 @@ class AppDetailsViewModel @Inject constructor(
 
     init {
         observeAppState()
-        viewModelScope.launch { _canDownload.value = playClient.supports(Capability.DOWNLOAD) }
+        if (!catalogJourneyGateway.isHermetic) {
+            viewModelScope.launch { _canDownload.value = playClient.supports(Capability.DOWNLOAD) }
+        }
     }
 
     fun fetchAppDetails(packageName: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 _testingProgramSubscribed.value = null
+                val offline = catalogJourneyGateway.appDetails(packageName)
+                if (offline != null) {
+                    _app.value = offline.copy(isInstalled = false)
+                    _state.value = AppState.Unavailable
+                    _featuredReviews.value = catalogJourneyGateway.featuredReviews(packageName)
+                        ?: emptyList()
+                    _suggestionsBundle.value = StreamBundle.EMPTY
+                    return@launch
+                }
                 _app.value = playClient.apps.details(packageName).copy(
                     isInstalled = PackageUtil.isInstalled(context, packageName)
                 )
@@ -261,6 +274,8 @@ class AppDetailsViewModel @Inject constructor(
         }.invokeOnCompletion { throwable ->
             // Only proceed if there was no error while fetching the app details
             if (throwable != null || app.value == null) return@invokeOnCompletion
+            // Offline instrumentation response is complete: do not launch remote extras.
+            if (catalogJourneyGateway.appDetails(packageName) != null) return@invokeOnCompletion
 
             fetchFavourite(packageName)
             fetchFeaturedReviews(packageName)

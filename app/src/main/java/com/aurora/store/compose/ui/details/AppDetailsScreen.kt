@@ -67,6 +67,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.BackHandler
@@ -774,7 +775,8 @@ private fun ScreenContentApp(
             ) {
                 LazyColumn(
                     modifier = Modifier
-                        .fillMaxSize(),
+                        .fillMaxSize()
+                        .testTag("aurora-details-main-list"),
                     contentPadding = contentPadding,
                     verticalArrangement = Arrangement.spacedBy(
                         dimensionResource(R.dimen.spacing_large)
@@ -810,12 +812,14 @@ private fun ScreenContentApp(
 
                     if (app.screenshots.isNotEmpty()) {
                         item(key = "screenshots") {
-                            Screenshots(
-                                screenshots = app.screenshots,
-                                onNavigateToScreenshot = {
-                                    showExtraPane(ExtraScreen.Screenshot(it))
-                                }
-                            )
+                            Box(modifier = Modifier.testTag("aurora-details-screenshots")) {
+                                Screenshots(
+                                    screenshots = app.screenshots,
+                                    onNavigateToScreenshot = {
+                                        showExtraPane(ExtraScreen.Screenshot(it))
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -829,11 +833,13 @@ private fun ScreenContentApp(
                     }
 
                     item {
-                        RatingAndReviews(
-                            rating = app.rating,
-                            featuredReviews = featuredReviews.take(1),
-                            onNavigateToDetailsReview = { showExtraPane(ExtraScreen.Review) }
-                        )
+                        Box(modifier = Modifier.testTag("aurora-details-reviews")) {
+                            RatingAndReviews(
+                                rating = app.rating,
+                                featuredReviews = featuredReviews.take(1),
+                                onNavigateToDetailsReview = { showExtraPane(ExtraScreen.Review) }
+                            )
+                        }
                     }
 
                     if (shouldShowMenuOnMainPane) {
