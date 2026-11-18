@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "kind": "aurora-r4-p11-review-staging",
+  "repository": "Mikeyphw/AuroraStore",
+  "pr_number": 2,
+  "pr_must_remain_draft": true,
+  "parent_sha": "a21f81a03ea618dcd2fe97d3725343f81449b715",
+  "r3d_base_sha": "4afa0a40815da035547d7b62460d56bc6d0e26bc",
+  "p09_source_sha": "ecb9c4db5d347f5073ceacc4ef0555f9d6e52608",
+  "author_sha": "8ff1cbc8d252cee26507372b8ead59d72872c9da",
+  "merge_sha": "340ecef9ffd8235a6e721ca37604fc380728fbf4",
+  "phase": "DRAFT_REVIEW_STAGED_RELEASE_NOT_QUALIFIED",
+  "review_scope": "SOURCE_INVENTORY_AND_OFFLINE_HOSTED_EVIDENCE_ONLY",
+  "baseline_changed_files": 153,
+  "baseline_categories": {
+    "production": 95,
+    "instrumentation": 4,
+    "ci": 13,
+    "docs": 8,
+    "workflow": 1,
+    "other": 32
+  },
+  "followups": [
+    "app/src/main/java/com/aurora/store/compose/ui/accounts/GoogleLoginScreen.kt",
+    "app/src/main/java/com/aurora/store/compose/ui/spoof/SpoofScreen.kt"
+  ],
+  "ready_for_review": false,
+  "automatic_merge_allowed": false,
+  "manual_upstream_visual_approved": false,
+  "live_google_play_qualified": false,
+  "real_google_account_login_qualified": false,
+  "spoof_restart_ui_qualified": false,
+  "physical_arm64_qualified": false,
+  "real_installer_qualified": false,
+  "production_signing_qualified": false,
+  "release_qualified": false,
+  "manual_items": [
+    {"id":"original_author_pixel_fidelity","status":"PENDING","evidence_needed":"Human side-by-side comparison against original upstream PR #113 design and activity captures"},
+    {"id":"retained_r3d_behavior","status":"PENDING","evidence_needed":"Review 19 retained R3D Compose files and two session-related behavior followups in context"},
+    {"id":"live_google_account_and_switching","status":"DEFERRED","evidence_needed":"Live Google account login, additional account selection, failures, and default-session behavior"},
+    {"id":"spoof_restart_runtime","status":"DEFERRED","evidence_needed":"A real UI session showing restart prompt, splash navigation, and preserved login state"},
+    {"id":"physical_arm64","status":"DEFERRED","evidence_needed":"Explicitly authorized ARM64 physical-device build, install and functional validation"},
+    {"id":"actual_install_update","status":"DEFERRED","evidence_needed":"Explicitly authorized actual APK install, update, cancel and rollback lifecycle test"},
+    {"id":"release_signing","status":"DEFERRED","evidence_needed":"Audited release key provenance, signing, installer and publication approval"}
+  ]
+}

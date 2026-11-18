@@ -30,6 +30,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -211,7 +212,7 @@ private fun AppHeader(update: Update, onShowDetails: () -> Unit) {
             contentDescription = null,
             modifier = Modifier
                 .requiredSize(dimensionResource(R.dimen.icon_size_medium))
-                .clip(RoundedCornerShape(dimensionResource(R.dimen.radius_medium)))
+                .clip(RoundedCornerShape(dimensionResource(R.dimen.app_icon_radius)))
         )
 
         Column(modifier = Modifier.weight(1f)) {
@@ -287,12 +288,19 @@ private fun AccountAccordion(
             text = stringResource(R.string.action_switch_account),
             style = MaterialTheme.typography.bodyLarge
         )
-        Icon(
-            painter = painterResource(
-                if (expanded) R.drawable.ic_keyboard_arrow_up else R.drawable.ic_keyboard_arrow_down
-            ),
-            contentDescription = null
-        )
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            shape = RoundedCornerShape(dimensionResource(R.dimen.radius_medium))
+        ) {
+            Icon(
+                painter = painterResource(
+                    if (expanded) R.drawable.ic_keyboard_arrow_up else R.drawable.ic_keyboard_arrow_down
+                ),
+                contentDescription = null,
+                modifier = Modifier.padding(dimensionResource(R.dimen.spacing_xsmall))
+            )
+        }
     }
 
     Spacer(Modifier.height(dimensionResource(R.dimen.spacing_xsmall)))

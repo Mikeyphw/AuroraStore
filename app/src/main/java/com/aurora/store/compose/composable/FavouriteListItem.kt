@@ -37,6 +37,7 @@ import com.aurora.gplayapi.model.App
 import com.aurora.store.AuroraApp
 import com.aurora.store.R
 import com.aurora.store.compose.composable.app.AnimatedAppIcon
+import com.aurora.store.compose.composable.rememberStoreImageRequest
 import com.aurora.store.compose.preview.AppPreviewProvider
 import com.aurora.store.compose.preview.ThemePreviewProvider
 import com.aurora.store.compose.theme.colorGreen
@@ -111,15 +112,12 @@ fun FavouriteListItem(
                     )
                 } else {
                     AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(favourite.iconURL)
-                            .crossfade(true)
-                            .build(),
+                        model = rememberStoreImageRequest(favourite.iconURL),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .requiredSize(dimensionResource(R.dimen.icon_size_medium))
-                            .clip(RoundedCornerShape(dimensionResource(R.dimen.radius_medium)))
+                            .clip(RoundedCornerShape(dimensionResource(R.dimen.app_icon_radius)))
                     )
                 }
             },

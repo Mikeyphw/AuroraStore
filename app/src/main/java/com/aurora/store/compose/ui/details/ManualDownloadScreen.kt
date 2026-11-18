@@ -254,7 +254,7 @@ private fun ScreenContent(
             modifier = Modifier
                 .padding(paddingValues)
                 .fillMaxSize()
-                .padding(dimensionResource(R.dimen.spacing_medium)),
+                .padding(dimensionResource(R.dimen.spacing_large)),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column(
@@ -265,7 +265,8 @@ private fun ScreenContent(
             ) {
                 Info(
                     painter = painterResource(R.drawable.ic_download_manager),
-                    title = AnnotatedString(text = stringResource(R.string.manual_download_hint))
+                    title = AnnotatedString(text = stringResource(R.string.manual_download_hint)),
+                    horizontalPadding = 0.dp
                 )
                 OutlinedTextField(
                     modifier = Modifier.fillMaxWidth(),

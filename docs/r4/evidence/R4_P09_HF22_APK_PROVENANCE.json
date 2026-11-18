@@ -1,0 +1,31 @@
+{
+  "apk_pair": {
+    "androidTest": {
+      "filename": "androidTest.apk",
+      "package": "com.aurora.store.debug.test",
+      "sha256": "5d56ba3a886bf2a098edac5e98f5f021a8d854fa72bd4c773f64128fa355a53b",
+      "signer_sha256": "a40da80a59d170caa950cf15c18c454d47a39b26989d8b640ecd745ba71bf5dc",
+      "size": 2692151
+    },
+    "app": {
+      "filename": "app.apk",
+      "package": "com.aurora.store.debug",
+      "sha256": "6fc22a19ca8c98bcd1444351e0ede29136320b1928b23698d9864e9d7c51de76",
+      "signer_sha256": "a40da80a59d170caa950cf15c18c454d47a39b26989d8b640ecd745ba71bf5dc",
+      "size": 27805030
+    }
+  },
+  "artifact_id": null,
+  "installation_qualified": false,
+  "instrumentation_qualified": false,
+  "manifest_sha256": null,
+  "mode": "INDEPENDENT_HOSTED_BUILD",
+  "overall": "PASS",
+  "physical_device_qualified": false,
+  "publisher_authenticated": false,
+  "release_qualified": false,
+  "role": "APK_INPUT_PROVENANCE_ONLY",
+  "run_id": "43498499144",
+  "source_sha": "ecb9c4db5d347f5073ceacc4ef0555f9d6e52608",
+  "targeted_run_id": null
+}

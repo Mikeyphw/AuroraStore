@@ -10,18 +10,40 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBar as MaterialTopAppBar
 import androidx.compose.material3.adaptive.WindowAdaptiveInfo
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.material3.adaptive.layout.AdaptStrategy
@@ -33,16 +55,21 @@ import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirective
 import androidx.compose.material3.adaptive.navigation.NavigableSupportingPaneScaffold
 import androidx.compose.material3.adaptive.navigation.rememberSupportingPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalContext
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -61,18 +88,19 @@ import com.aurora.extensions.requiresObbDir
 import com.aurora.extensions.share
 import com.aurora.extensions.toast
 import com.aurora.gplayapi.model.App
-import com.aurora.gplayapi.model.DataSafetyReport
 import com.aurora.gplayapi.model.Review
 import com.aurora.gplayapi.model.StreamBundle
 import com.aurora.gplayapi.model.StreamCluster
+import com.aurora.gplayapi.model.DataSafetyReport
 import com.aurora.gplayapi.model.TopChart
 import com.aurora.store.ComposeActivity
 import com.aurora.store.R
 import com.aurora.store.compose.composable.ClusterRow
 import com.aurora.store.compose.composable.ContainedLoadingIndicator
-import com.aurora.store.compose.composable.InsufficientStorageDialog
 import com.aurora.store.compose.composable.PermissionUpdateWarningDialog
+import com.aurora.store.compose.composable.InsufficientStorageDialog
 import com.aurora.store.compose.composable.Placeholder
+import com.aurora.store.compose.composable.RoundedIconButton
 import com.aurora.store.compose.composable.ScrollHint
 import com.aurora.store.compose.composable.SectionHeader
 import com.aurora.store.compose.composable.ShimmerCarouselSection
@@ -87,17 +115,11 @@ import com.aurora.store.compose.ui.commons.ForceRestartDialog
 import com.aurora.store.compose.ui.commons.PermissionRationaleScreen
 import com.aurora.store.compose.ui.details.composable.Actions
 import com.aurora.store.compose.ui.details.composable.Changelog
-import com.aurora.store.compose.ui.details.composable.Compatibility
-import com.aurora.store.compose.ui.details.composable.DataSafety
 import com.aurora.store.compose.ui.details.composable.Details
-import com.aurora.store.compose.ui.details.composable.DeveloperDetails
-import com.aurora.store.compose.ui.details.composable.PlayListing
-import com.aurora.store.compose.ui.details.composable.Privacy
+import com.aurora.store.compose.ui.details.composable.DetailsPortalCard
 import com.aurora.store.compose.ui.details.composable.RatingAndReviews
 import com.aurora.store.compose.ui.details.composable.Screenshots
 import com.aurora.store.compose.ui.details.composable.Tags
-import com.aurora.store.compose.ui.details.composable.Testing
-import com.aurora.store.compose.ui.details.composable.UserReview
 import com.aurora.store.compose.ui.details.menu.AppDetailsMenu
 import com.aurora.store.compose.ui.details.menu.MenuItem
 import com.aurora.store.compose.ui.details.navigation.ExtraScreen
@@ -134,7 +156,6 @@ fun AppDetailsScreen(
     forceSinglePane: Boolean = false
 ) {
     val context = LocalContext.current
-
     val app by viewModel.app.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val featuredReviews by viewModel.featuredReviews.collectAsStateWithLifecycle()
@@ -142,10 +163,10 @@ fun AppDetailsScreen(
     val favorite by viewModel.favourite.collectAsStateWithLifecycle()
     val exodusReport by viewModel.exodusReport.collectAsStateWithLifecycle()
     val dataSafetyReport by viewModel.dataSafetyReport.collectAsStateWithLifecycle()
-    val categoryIconUrl by viewModel.categoryIconUrl.collectAsStateWithLifecycle()
     val plexusScores by viewModel.plexusScores.collectAsStateWithLifecycle()
     val installError by viewModel.installError.collectAsStateWithLifecycle()
     val suggestionsBundle by viewModel.suggestionsBundle.collectAsStateWithLifecycle()
+    val categoryIconUrl by viewModel.categoryIconUrl.collectAsStateWithLifecycle()
     val canDownload by viewModel.canDownload.collectAsStateWithLifecycle()
     val testingProgramUpdating by viewModel.testingProgramUpdating.collectAsStateWithLifecycle()
     val testingProgramSubscribed by
@@ -360,12 +381,8 @@ private fun ScreenContentApp(
 ) {
     val context = LocalContext.current
 
-    // Gated decision 1 (phase-6 migration plan): gate on the session's DOWNLOAD capability
-    // rather than on account presence. Aurora's isAnonymous ("dispensed Play account") is a
-    // different concept from a gplayapi-v4 anonymous session, and every anonymously-fetched
-    // app's isFree is false (the V2 proto's Price is always empty), so gating on !isAnonymous
-    // the way v3 did would make Install vanish catalogue-wide for anonymous sessions. Free
-    // apps are always acquirable regardless.
+    // v4 V2 price can be absent for anonymous listings: capability, not account label,
+    // controls whether an authenticated session can request downloads.
     val canAcquire = app.isFree || canDownload
 
     var scaffoldDirective = calculatePaneScaffoldDirective(windowAdaptiveInfo)
@@ -389,11 +406,8 @@ private fun ScreenContentApp(
     fun onTopChartClick(chart: TopChart, title: String) {
         coroutineScope.launch {
             val cluster = onFetchTopChart(chart, title)
-            if (cluster != null) {
-                onNavigateTo(Destination.StreamBrowse(cluster))
-            } else {
-                context.toast(R.string.no_apps_available)
-            }
+            if (cluster != null) onNavigateTo(Destination.StreamBrowse(cluster))
+            else context.toast(R.string.no_apps_available)
         }
     }
     val shouldShowMenuOnMainPane = scaffoldNavigator
@@ -436,12 +450,18 @@ private fun ScreenContentApp(
         coroutineScope.launch {
             if (screen is ExtraScreen.Screenshot) {
                 isScreenshotOpen = true
-                // The scaffold only re-lays out on navigation; let the directive land first
                 withFrameNanos { }
                 withFrameNanos { }
             }
             scaffoldNavigator.navigateTo(SupportingPaneScaffoldRole.Extra, screen)
         }
+    }
+
+    BackHandler(
+        enabled = scaffoldNavigator.scaffoldValue[SupportingPaneScaffoldRole.Extra] !=
+            PaneAdaptedValue.Hidden
+    ) {
+        onNavigateBack()
     }
 
     fun onInstall(
@@ -605,7 +625,10 @@ private fun ScreenContentApp(
         AnimatedContent(
             targetState = state,
             contentKey = { it::class },
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            transitionSpec = {
+                fadeIn(animationSpec = spring()) togetherWith
+                    fadeOut(animationSpec = tween(durationMillis = 100))
+            },
             label = "Actions"
         ) { currentState ->
             when (currentState) {
@@ -676,151 +699,140 @@ private fun ScreenContentApp(
 
     @Composable
     fun MainPane() {
+        val listState = rememberLazyListState()
+        val showCompactTitle by remember {
+            derivedStateOf { listState.firstVisibleItemIndex > 0 }
+        }
+        val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+        val topBarContainerColor = MaterialTheme.colorScheme.surface
+        val layoutDirection = LocalLayoutDirection.current
+        val activity = LocalActivity.current as? ComponentActivity
         Scaffold(
+            modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
             topBar = {
-                TopAppBar(
-                    actions = { if (shouldShowMenuOnMainPane) SetupMenu() }
+                MaterialTopAppBar(
+                    title = {
+                        AnimatedVisibility(
+                            visible = showCompactTitle,
+                            enter = fadeIn(animationSpec = spring()) +
+                                slideInVertically(animationSpec = spring()) { it / 2 },
+                            exit = fadeOut(animationSpec = tween(durationMillis = 100)) +
+                                slideOutVertically(animationSpec = tween(durationMillis = 160)) {
+                                    -it / 2
+                                },
+                            label = "DetailAppBarTitle"
+                        ) {
+                            Text(
+                                text = app.displayName,
+                                style = MaterialTheme.typography.titleLarge,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        RoundedIconButton(
+                            modifier = Modifier.padding(
+                                start = dimensionResource(R.dimen.spacing_medium)
+                            ),
+                            onClick = {
+                                activity?.onBackPressedDispatcher?.onBackPressed()
+                            },
+                            painter = painterResource(R.drawable.ic_arrow_back),
+                            contentDescription = stringResource(R.string.action_back)
+                        )
+                    },
+                    actions = {
+                        Row(
+                            modifier = Modifier.padding(
+                                end = dimensionResource(R.dimen.spacing_medium)
+                            )
+                        ) {
+                            if (shouldShowMenuOnMainPane) SetupMenu()
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = topBarContainerColor,
+                        scrolledContainerColor = topBarContainerColor
+                    ),
+                    scrollBehavior = scrollBehavior
                 )
-            }
+            },
+            contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
         ) { paddingValues ->
-            val listState = rememberLazyListState()
+            val contentPadding = PaddingValues(
+                start = paddingValues.calculateStartPadding(layoutDirection),
+                top = paddingValues.calculateTopPadding(),
+                end = paddingValues.calculateEndPadding(layoutDirection),
+                bottom = paddingValues.calculateBottomPadding() +
+                    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
+                    dimensionResource(R.dimen.spacing_large)
+            )
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
             ) {
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize(),
+                    contentPadding = contentPadding,
                     verticalArrangement = Arrangement.spacedBy(
-                        dimensionResource(R.dimen.spacing_medium)
+                        dimensionResource(R.dimen.spacing_large)
                     ),
                     state = listState
                 ) {
-                    item {
+                    item(key = "app-identity") {
                         Details(
+                            modifier = Modifier.padding(
+                                horizontal = dimensionResource(R.dimen.spacing_large),
+                                vertical = dimensionResource(R.dimen.spacing_small)
+                            ),
                             app = app,
                             state = state,
-                            onNavigateToDetailsDevProfile = { showExtraPane(Screen.DevProfile(it)) }
+                            showAppName = true,
+                            onNavigateToDetailsDevProfile = {
+                                showExtraPane(Screen.DevProfile(it))
+                            }
                         )
+                    }
+
+                    item {
+                        Tags(app = app, state = state)
                     }
 
                     item {
                         SetupActions()
                     }
 
-                    item {
-                        Tags(app = app)
+                    if (app.changes.isNotBlank()) {
+                        item(key = "changelog") { Changelog(changelog = app.changes) }
+                    }
+
+                    if (app.screenshots.isNotEmpty()) {
+                        item(key = "screenshots") {
+                            Screenshots(
+                                screenshots = app.screenshots,
+                                onNavigateToScreenshot = {
+                                    showExtraPane(ExtraScreen.Screenshot(it))
+                                }
+                            )
+                        }
                     }
 
                     item {
-                        PlayListing(
-                            app = app,
-                            categoryIconUrl = categoryIconUrl,
-                            onCategoryClick = { onNavigateTo(Destination.CategoryBrowse(it)) },
-                            onTopChartClick = ::onTopChartClick,
-                            onBrowse = { title, browseUrl ->
-                                onNavigateTo(Destination.ExpandedStreamBrowse(title, browseUrl))
-                            }
-                        )
-                    }
-
-                    item {
-                        Changelog(changelog = app.changes)
-                    }
-
-                    item {
-                        SectionHeader(
+                        DetailsPortalCard(
                             title = stringResource(R.string.details_more_about_app),
-                            subtitle = app.shortDescription,
+                            description = app.shortDescription,
+                            icon = painterResource(R.drawable.ic_menu_about),
                             onClick = { showExtraPane(ExtraScreen.More) }
-                        )
-                    }
-
-                    item {
-                        Screenshots(
-                            screenshots = app.screenshots,
-                            onNavigateToScreenshot = { showExtraPane(ExtraScreen.Screenshot(it)) }
                         )
                     }
 
                     item {
                         RatingAndReviews(
                             rating = app.rating,
-                            featuredReviews = featuredReviews,
+                            featuredReviews = featuredReviews.take(1),
                             onNavigateToDetailsReview = { showExtraPane(ExtraScreen.Review) }
-                        )
-                    }
-
-                    item {
-                        // Reviews can only be submitted by personal accounts for installed apps.
-                        if (!isAnonymous && app.isInstalled) {
-                            UserReview(
-                                review = userReview,
-                                onSubmit = onSubmitReview,
-                                onDelete = onDeleteReview
-                            )
-                        }
-                    }
-
-                    item {
-                        if (!isAnonymous && app.testingProgram?.isAvailable == true) {
-                            Testing(
-                                isSubscribed = testingProgramSubscribed
-                                    ?: app.testingProgram!!.isSubscribed,
-                                isUpdating = testingProgramUpdating,
-                                onTestingSubscriptionChange = onTestingSubscriptionChange
-                            )
-                        }
-                    }
-
-                    item {
-                        Compatibility(needsGms = app.requiresGMS(), plexusScores = plexusScores)
-                    }
-
-                    item {
-                        SectionHeader(
-                            title = stringResource(R.string.details_permission),
-                            subtitle = if (app.permissions.isNotEmpty()) {
-                                stringResource(R.string.permissions_requested, app.permissions.size)
-                            } else {
-                                stringResource(R.string.details_no_permission)
-                            },
-                            onClick = if (app.permissions.isNotEmpty()) {
-                                { showExtraPane(ExtraScreen.Permission) }
-                            } else {
-                                null
-                            }
-                        )
-                    }
-
-                    item {
-                        if (dataSafetyReport != null) {
-                            DataSafety(
-                                report = dataSafetyReport,
-                                privacyPolicyUrl = app.privacyPolicyUrl
-                            )
-                        }
-                    }
-
-                    item {
-                        Privacy(
-                            report = exodusReport,
-                            onNavigateToDetailsExodus = if (exodusReport != null &&
-                                exodusReport.id != -1
-                            ) {
-                                { showExtraPane(ExtraScreen.Exodus) }
-                            } else {
-                                null
-                            }
-                        )
-                    }
-
-                    item {
-                        DeveloperDetails(
-                            address = app.developerAddress,
-                            website = app.developerWebsite,
-                            email = app.developerEmail
                         )
                     }
 
@@ -875,8 +887,27 @@ private fun ScreenContentApp(
 
         is ExtraScreen.More -> MoreScreen(
             packageName = app.packageName,
-            onNavigateTo = onNavigateTo
+            onNavigateTo = onNavigateTo,
+            onOpenMoreInfo = { showExtraPane(ExtraScreen.MoreInfo) }
         )
+
+        is ExtraScreen.MoreInfo -> {
+            MoreInfoPane(
+                app = app,
+                state = state,
+                userReview = userReview,
+                isAnonymous = isAnonymous,
+                testingProgramUpdating = testingProgramUpdating,
+                testingProgramSubscribed = testingProgramSubscribed,
+                plexusScores = plexusScores,
+                dataSafetyReport = dataSafetyReport,
+                exodusReport = exodusReport,
+                onNavigateToExtra = ::showExtraPane,
+                onTestingSubscriptionChange = onTestingSubscriptionChange,
+                onSubmitReview = onSubmitReview,
+                onDeleteReview = onDeleteReview
+            )
+        }
 
         is ExtraScreen.Permission -> PermissionScreen(
             packageName = app.packageName
@@ -897,8 +928,6 @@ private fun ScreenContentApp(
             onProceed = { onInstall(ignoreMicroG = true) }
         )
 
-        // Play gives a developer id only to developers with a developer page; the rest are
-        // reached through a pub: search on their name
         is Screen.DevProfile -> if (app.developerId.isNotBlank()) {
             DevProfileScreen(
                 developerId = app.developerId,
@@ -934,9 +963,64 @@ private fun ScreenContentApp(
         supportingPane = { AnimatedPane { SupportingPane() } },
         extraPane = {
             scaffoldNavigator.currentDestination?.contentKey?.let { screen ->
-                AnimatedPane { ExtraPane(screen) }
+                AnimatedPane {
+                    AnimatedContent(
+                        targetState = screen,
+                        transitionSpec = {
+                            val navigatingBackToMore =
+                                initialState == ExtraScreen.MoreInfo &&
+                                    targetState == ExtraScreen.More
+                            val direction = if (navigatingBackToMore) -1 else 1
+                            slideInHorizontally(
+                                animationSpec = spring(),
+                                initialOffsetX = { direction * it / 3 }
+                            ) + fadeIn(animationSpec = spring()) togetherWith
+                                slideOutHorizontally(
+                                    animationSpec = tween(durationMillis = 180),
+                                    targetOffsetX = { -direction * it / 3 }
+                                ) + fadeOut(animationSpec = tween(durationMillis = 120))
+                        },
+                        label = "ExtraPaneContent"
+                    ) { currentScreen ->
+                        ExtraPane(currentScreen)
+                    }
+                }
             }
         }
+    )
+}
+
+/** Renders the previously collected app details inside the More info destination. */
+@Composable
+private fun MoreInfoPane(
+    app: App,
+    state: AppState,
+    userReview: Review?,
+    isAnonymous: Boolean,
+    testingProgramUpdating: Boolean,
+    testingProgramSubscribed: Boolean?,
+    plexusScores: Scores?,
+    dataSafetyReport: DataSafetyReport?,
+    exodusReport: Report?,
+    onNavigateToExtra: (NavKey) -> Unit,
+    onTestingSubscriptionChange: (Boolean) -> Unit,
+    onSubmitReview: (Int, String, String) -> Unit,
+    onDeleteReview: () -> Unit
+) {
+    AppMoreInfoScreen(
+        app = app,
+        state = state,
+        userReview = userReview,
+        isAnonymous = isAnonymous,
+        testingProgramUpdating = testingProgramUpdating,
+        testingProgramSubscribed = testingProgramSubscribed,
+        plexusScores = plexusScores,
+        dataSafetyReport = dataSafetyReport,
+        exodusReport = exodusReport,
+        onNavigateToExtra = onNavigateToExtra,
+        onTestingSubscriptionChange = onTestingSubscriptionChange,
+        onSubmitReview = onSubmitReview,
+        onDeleteReview = onDeleteReview
     )
 }
 
@@ -957,16 +1041,19 @@ private fun LazyListScope.suggestionClusterItems(
     val clusters = suggestionsBundle.clusters.distinctBy { it.id }.filter {
         it.title.isNotBlank() && it.apps.isNotEmpty()
     }
-
     clusters.forEach { cluster ->
         item(key = "cluster-header-${cluster.id}") {
-            SectionHeader(title = cluster.title)
+            SectionHeader(
+                title = cluster.title,
+                horizontalPadding = androidx.compose.ui.res.dimensionResource(R.dimen.spacing_large)
+            )
         }
         item(key = "cluster-row-${cluster.id}") {
             ClusterRow(
                 cluster = cluster,
                 onAppClick = onAppClick,
-                onClusterScrolled = onClusterScrolled
+                onClusterScrolled = onClusterScrolled,
+                horizontalContentPadding = androidx.compose.ui.res.dimensionResource(R.dimen.spacing_large)
             )
         }
     }
@@ -979,7 +1066,6 @@ private fun AppDetailsScreenPreview(@PreviewParameter(AppPreviewProvider::class)
     ScreenContentApp(
         app = app,
         isAnonymous = false,
-        canDownload = true,
         suggestionsBundle = StreamBundle(
             id = "suggestions",
             clusters = listOf(
