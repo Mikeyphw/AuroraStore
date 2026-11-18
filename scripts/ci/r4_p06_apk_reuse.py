@@ -36,6 +36,22 @@ def validate_context(sha: str, env=None) -> None:
     need(env.get('GITHUB_EVENT_NAME') in ('push', 'workflow_dispatch'), 'WRONG_EVENT')
     need(bool(env.get('GH_TOKEN') or env.get('GITHUB_TOKEN')), 'TOKEN_REQUIRED')
 
+def repository_wide_run_discovery(api):
+    """Discover workflow runs when a restored fork has no default-branch YAML.
+
+    The R3D selector still enforces branch, workflow path, exact SHA, all three
+    green job identities, and real signed APK artifact validation. Only the
+    Actions *listing endpoint* changes; API failure remains fatal.
+    """
+    workflow = f'repos/{REPO}/actions/workflows/aurora-targeted.yml/runs?'
+    repository = f'repos/{REPO}/actions/runs?'
+    def query(path):
+        if path.startswith(workflow):
+            return api(repository + path[len(workflow):])
+        return api(path)
+    return query
+
+
 def require_trusted_pair():
     # Not a copy of R3D signing verification: import the canonical source pinned
     # against the unmodified R3D Git tree by the enclosing workflow/launcher.
@@ -51,6 +67,7 @@ def require_trusted_pair():
     }), 'R3D_THREE_JOB_CONTRACT_DRIFT')
     need(set(pair.NAMES) == {'app', 'androidTest'}, 'R3D_ROLE_CONTRACT_DRIFT')
     pair.BRANCH = BRANCH  # R4 selector, strictly scoped to this subprocess
+    pair.api = repository_wide_run_discovery(pair.api)
     return pair
 
 def probe(root: Path, sha: str, tmp: Path, github_output: Path, wait_seconds: int = 240,
