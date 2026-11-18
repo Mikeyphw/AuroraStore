@@ -148,6 +148,12 @@ def check_post_p10(paths: set[str]) -> None:
          'POST_P10_ALLOWLIST_DRIFT_' + ','.join(sorted(paths ^ ALLOWED_P11)))
 
 
+def check_ci_only_extensions(paths: set[str]) -> None:
+    # Reuse the current P12 CI-only scope; original P11/P12 reviews stay immutable.
+    import r4_p12_visual_contrast_gate as p12
+    need(paths == p12.CI_ONLY_ALLOWED, 'POST_P12_UNQUALIFIED_CI_ONLY_CHANGE_SET')
+
+
 def check_status(doc: dict) -> None:
     need(isinstance(doc, dict) and set(doc) == {
         'schema','kind','repository','pr_number','pr_must_remain_draft',
@@ -227,9 +233,13 @@ def verify(root: Path) -> dict:
     # Later UI changes cannot be covered silently by the historical P09/P11
     # receipts: P12's explicit allowlist and exact source patch are mandatory.
     import r4_p12_visual_contrast_gate as p12
-    post_p11 = parse_names_z(git(root,'diff','--name-status','--no-renames','-z',P11_SOURCE_CHECKPOINT,head))
+    need(subprocess.run(['git','merge-base','--is-ancestor',p12.P12_CHECKPOINT,head],
+                        cwd=root).returncode==0, 'P12_CHECKPOINT_NOT_ANCESTOR')
+    post_p11 = parse_names_z(git(root,'diff','--name-status','--no-renames','-z',P11_SOURCE_CHECKPOINT,p12.P12_CHECKPOINT))
     need({path for _,path in post_p11} == p12.ALLOWED,
-         'POST_P11_UNQUALIFIED_CHANGE_SET')
+         'POST_P11_HISTORICAL_SOURCE_DRIFT')
+    post_p12 = parse_names_z(git(root,'diff','--name-status','--no-renames','-z',p12.P12_CHECKPOINT,head))
+    check_ci_only_extensions({path for _,path in post_p12})
     original = git(root,'show',P11_SOURCE_CHECKPOINT+':'+p12.PLACEHOLDER).decode('utf-8').strip()
     current = (root/p12.PLACEHOLDER).read_text(encoding='utf-8').strip()
     p12.check_patch(original,current)
@@ -248,6 +258,8 @@ def verify(root: Path) -> dict:
         'repo':REPO,'pr_number':PR,'audited_head_sha':head,
         'r3d_base_sha':BASE,'p10_pinned_sha':P10,
         'post_p10_paths':sorted({p for _,p in post_p10}),
+        'p12_pinned_source_sha':p12.P12_CHECKPOINT,
+        'post_p12_ci_only_paths':sorted({p for _,p in post_p12}),
         'hosted_prior_p09_device_tests':52,'hosted_prior_p09_screenshots':25,
         'manual_items_still_open':sorted(PENDING_IDS),
         'draft_only':True,'ready_for_review':False,'release_qualified':False,

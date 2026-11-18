@@ -14,6 +14,16 @@ import subprocess
 import sys
 
 P11 = '9632c29bc19248bb905d1aaa257469118576312d'
+P12_CHECKPOINT = '3ea10b6f4b0fed5a8913e4edef3536cfc93fc52f'  # Last reviewed pre-P05 CI-only extension
+CI_ONLY_ALLOWED = frozenset({
+    'scripts/ci/r4_p06_apk_reuse.py',
+    'scripts/ci/test_r4_p06_apk_reuse.py',
+    'scripts/ci/r4_p11_pr_review_gate.py',
+    'scripts/ci/test_r4_p11_pr_review_gate.py',
+    'scripts/ci/r4_p12_visual_contrast_gate.py',
+    'scripts/ci/test_r4_p12_visual_contrast_gate.py',
+    'docs/r4/R4_P12_VISUAL_AUDIT.md',
+})
 P09 = 'ecb9c4db5d347f5073ceacc4ef0555f9d6e52608'
 REPO = 'Mikeyphw/AuroraStore'
 WORKFLOW = '.github/workflows/aurora-r4-p05-device-ux.yml'
@@ -93,6 +103,10 @@ def check_status(d: dict):
     need(re.fullmatch('[a-f0-9]{64}', str(d.get('p09_screenshot_artifact_digest_sha256',''))) is not None,
          'ARCHIVED_ARTIFACT_DIGEST')
 
+def check_ci_only_extensions(paths: set[str]) -> None:
+    need(paths == CI_ONLY_ALLOWED, 'POST_P12_UNQUALIFIED_CI_ONLY_CHANGE_SET')
+
+
 def check_patch(preimage: str, current: str):
     need(preimage.count(OLD) == 1, 'PREIMAGE_TEXT_UNEXPECTED')
     need(current == preimage.replace(OLD, NEW, 1), 'PRODUCTION_CHANGE_BEYOND_CONTRAST_FIX')
@@ -160,7 +174,8 @@ def check_history_guards(p08: str, p10: str, p11: str):
          'HISTORICAL_P10_REVIEW_NOT_PINNED')
     need('P11_SOURCE_CHECKPOINT' in p11 and
          "'diff','--name-status','--no-renames','-z',P10,P11_SOURCE_CHECKPOINT" in p11 and
-         "'diff','--name-status','--no-renames','-z',P11_SOURCE_CHECKPOINT,head" in p11 and
+         "'diff','--name-status','--no-renames','-z',P11_SOURCE_CHECKPOINT,p12.P12_CHECKPOINT" in p11 and
+         'check_ci_only_extensions(' in p11 and
          'p12.check_patch(' in p11,
          'P11_REVIEW_OR_P12_EXTENSION_NOT_PINNED')
 
@@ -187,8 +202,12 @@ def verify(root: Path):
          'P11_NOT_ANCESTOR')
     need(not git(root,'diff','--name-only','HEAD') and
          not git(root,'diff','--cached','--name-only'), 'DIRTY_TRACKED_TREE')
-    paths=set(git(root,'diff','--name-only',P11,'HEAD').splitlines())
-    need(paths==ALLOWED, 'P12_CHANGED_FILE_ALLOWLIST_'+repr(sorted(paths^ALLOWED)))
+    need(subprocess.run(['git','merge-base','--is-ancestor',P12_CHECKPOINT,head],
+                        cwd=root).returncode==0, 'P12_CHECKPOINT_NOT_ANCESTOR')
+    paths=set(git(root,'diff','--name-only',P11,P12_CHECKPOINT).splitlines())
+    need(paths==ALLOWED, 'P12_HISTORICAL_CHANGED_FILE_ALLOWLIST_'+repr(sorted(paths^ALLOWED)))
+    post=set(git(root,'diff','--name-only',P12_CHECKPOINT,'HEAD').splitlines())
+    check_ci_only_extensions(post)
     preimage=git(root,'show',P11+':'+PLACEHOLDER)
     current=(root/PLACEHOLDER).read_text(encoding='utf-8').strip()
     check_patch(preimage,current)
