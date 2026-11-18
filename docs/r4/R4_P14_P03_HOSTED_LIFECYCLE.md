@@ -82,3 +82,17 @@ physical device installation, live Google Play, personal accounts or release.
 
 The HF03 native terminal launcher preserves actual `gh run watch`, `gh pr checks`,
 `gh run view --log-failed`, stored logs and resumable journals with no `--json`.
+
+## Hosted AGP resolution repair after fork restoration (November 17, 2026)
+
+Restored-fork run 43894619025 (source 1ab625ea) stopped during Gradle plugin
+resolution, before Android compilation or instrumentation. The error was
+`com.android.application:9.4.1` unavailable from plugin repositories, despite
+P15 subsequently compiling the same AGP version in run 43894636811.
+The P14 workflow now retries only this exact transient lookup failure, at most
+three attempts, preserving complete attempt logs. Any unrelated build failure
+immediately stops; an exhausted retry remains red. The source gate has new
+negative coverage for the retry and non-transient failure safeguards.
+All 76 instrumentation cases, 20 screenshots, immutable ancestor pins, read-only
+permissions, installer exclusions and device/release nonqualification remain.
+This change requires a new exact-HEAD hosted run; old evidence is not regraded.

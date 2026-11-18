@@ -178,6 +178,8 @@ def main():
  (lambda:g.check_workflow(w.replace('  contents: read','  contents: write')),'WORKFLOW_MARKER_'),
  (lambda:g.check_workflow(w.replace('persist-credentials: false','persist-credentials: true')),'WORKFLOW_MARKER_'),
  (lambda:g.check_workflow(w.replace('api-level: 36','api-level: 34')),'WORKFLOW_MARKER_'),
+ (lambda:g.check_workflow(w.replace('P14P03_AGP_RESOLUTION_RETRY','DISABLED_RETRY')),'WORKFLOW_MARKER_'),
+ (lambda:g.check_workflow(w.replace('P14P03_NON_TRANSIENT_GRADLE_FAILURE','ALLOW_ANY_BUILD_FAILURE')),'WORKFLOW_MARKER_'),
  ]
  for fn,code in changes:reject(fn,code)
  exercise_real_bash_result_gate(r)
