@@ -76,7 +76,8 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           chmod +x gradlew
-          ./gradlew --no-daemon --max-workers=2 --stacktrace \
+          bash scripts/ci/aurora-hosted-gradle-retry.sh \
+            --no-daemon --max-workers=2 --stacktrace \
             :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest
       - name: Require KVM-backed disposable emulator
         shell: bash

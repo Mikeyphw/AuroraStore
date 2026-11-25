@@ -76,9 +76,12 @@ class ArtifactP02SignedFileProvider : ContentProvider() {
     override fun insert(uri: Uri, values: ContentValues?): Uri? =
         throw UnsupportedOperationException("Fixture is read-only")
 
-    override fun update(uri: Uri, values: ContentValues?, selection: String?,
-                        selectionArgs: Array<out String>?): Int =
-        throw UnsupportedOperationException("Fixture is read-only")
+    override fun update(
+        uri: Uri,
+        values: ContentValues?,
+        selection: String?,
+        selectionArgs: Array<out String>?
+    ): Int = throw UnsupportedOperationException("Fixture is read-only")
 
     override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int =
         throw UnsupportedOperationException("Fixture is read-only")

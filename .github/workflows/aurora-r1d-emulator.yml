@@ -151,7 +151,9 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew --no-daemon --max-workers=2 :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest
+          bash scripts/ci/aurora-hosted-gradle-retry.sh \
+            --no-daemon --max-workers=2 --stacktrace \
+            :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest
       - name: Seal actual APK bytes, matched signing identity and exact source/run provenance
         shell: bash
         run: |

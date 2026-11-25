@@ -72,6 +72,7 @@ jobs:
           python3 -B scripts/ci/test_r3c07_hf03_optimization.py
           python3 -B scripts/ci/test_aur_int01_room.py
           python3 -B scripts/ci/test_aur_int01_campaign.py
+          python3 -B scripts/ci/test_aur_int01_hf01.py
           python3 -B scripts/ci/test_r3c07_p03a_source.py
           python3 -B scripts/ci/test_r3c07_p03b_source.py
           python3 -B scripts/ci/test_r3c08_p01_source.py

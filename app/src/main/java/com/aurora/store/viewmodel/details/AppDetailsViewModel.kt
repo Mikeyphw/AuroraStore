@@ -29,15 +29,16 @@ import com.aurora.gplayapi.model.TopChart
 import com.aurora.gplayapi.session.Capability
 import com.aurora.gplayapi.web.WebPlayClient
 import com.aurora.store.AuroraApp
-import com.aurora.store.data.catalog.CatalogJourneyGateway
 import com.aurora.store.R
 import com.aurora.store.data.AccountRepository
 import com.aurora.store.data.ExodusRepository
+import com.aurora.store.data.catalog.CatalogJourneyGateway
 import com.aurora.store.data.event.AuthEvent
 import com.aurora.store.data.event.InstallerEvent
 import com.aurora.store.data.helper.DownloadHelper
 import com.aurora.store.data.model.AppState
 import com.aurora.store.data.model.DownloadStatus
+import com.aurora.store.data.model.ExodusTracker
 import com.aurora.store.data.model.PlexusReport
 import com.aurora.store.data.model.Report
 import com.aurora.store.data.model.ReportsResult

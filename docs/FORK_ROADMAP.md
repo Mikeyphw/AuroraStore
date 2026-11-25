@@ -81,3 +81,16 @@ before final release qualification. No generated schema hash is fabricated.
 R5 advanced update filtering and R6 release qualification remain subsequent
 milestones. Historical R0–R4 receipts remain evidence at their original SHAs,
 not acceptance of this integrated source.
+
+### INT01-HF01 — initial hosted failure repair
+
+PR #7 was delivered at `d234dc010d7625b75ddb6d28fefdb43d4d0114d6`.
+The initial nine hosted workflows failed; source contracts passed, but Kotlin
+compilation, debug-provider formatting and transient AGP resolution blocked
+acceptance. Repair the missing Compose and privacy-model imports, preserve
+read-only fixture behavior, and retry only the exact observed AGP 9.4.1
+resolution failure in R1D/P13. Re-run all nine workflows at the repaired PR
+head. The new local source tests check import declarations, executable P14
+markers, provider formatting and bounded retry behavior; they do not qualify
+Android compilation, ktlint, Room KSP export, emulator or physical execution.
+Do not create another consolidation PR or replay the original integration.

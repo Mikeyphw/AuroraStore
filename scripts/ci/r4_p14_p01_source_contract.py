@@ -179,6 +179,15 @@ def check_human(root):
       limited['full_upstream_visual_signoff'] is False and
       limited['release_qualified'] is False,'SIGNOFF_ESCALATED')
  return True
+def production_marker_present(code, marker):
+ # Imports are declarations, not contiguous executable code. A formatter or
+ # merge may reorder them without altering the production gateway. Check every
+ # complete import line; all executable patch markers remain byte-exact.
+ lines=marker.splitlines()
+ if lines and all(re.fullmatch(r'import [A-Za-z_][A-Za-z0-9_.]*', line) for line in lines):
+  return all(line in code.splitlines() for line in lines)
+ return marker in code
+
 def source_checks(root):
  check_test((root/TEST).read_text())
  check_run((root/RUN).read_text())
@@ -191,7 +200,7 @@ def source_checks(root):
  if all((root/x).exists() for x in PRODUCTION_PATHS):
   for path in PRODUCTION_PATHS:
    code=(root/path).read_text()
-   need(all(new in code for old,new in document[path]['replacements']),
+   need(all(production_marker_present(code,new) for old,new in document[path]['replacements']),
         'PRODUCTION_PATCH_MARKER_'+path)
  need('details_top' in (root/DOC).read_text(),'DETAILS_GAP_ERASED')
  check_human(root)
