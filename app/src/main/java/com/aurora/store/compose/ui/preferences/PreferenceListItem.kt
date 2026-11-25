@@ -97,10 +97,7 @@ fun preferenceRowPosition(index: Int, count: Int): PreferenceRowPosition = when 
 }
 
 @Composable
-fun PreferenceSectionHeader(
-    title: String,
-    modifier: Modifier = Modifier
-) {
+fun PreferenceSectionHeader(title: String, modifier: Modifier = Modifier) {
     androidx.compose.material3.Text(
         text = title,
         style = MaterialTheme.typography.titleSmall,

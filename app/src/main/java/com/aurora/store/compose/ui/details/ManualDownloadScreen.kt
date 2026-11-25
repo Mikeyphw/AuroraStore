@@ -231,7 +231,9 @@ private fun ScreenContent(
             installedVersionCode = installedVersionCode,
             currentListingVersionCode = currentVersionCode,
             onSelect = { report ->
-                HistoricalVersionPolicy.canonicalVersionCode(report.versionCode.toString())?.let { code ->
+                HistoricalVersionPolicy.canonicalVersionCode(
+                    report.versionCode.toString()
+                )?.let { code ->
                     versionCode = TextFieldValue(text = code, selection = TextRange(code.length))
                     showVersionPicker = false
                 }

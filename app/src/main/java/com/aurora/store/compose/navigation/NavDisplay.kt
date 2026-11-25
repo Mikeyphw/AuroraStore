@@ -314,13 +314,16 @@ fun NavDisplay(startDestination: NavKey) {
             entry<Screen.Search>(
                 metadata = metadata {
                     put(NavDisplay.TransitionKey) {
-                        slideInVertically(searchPanelMotionSpec) { it } togetherWith ExitTransition.None
+                        slideInVertically(searchPanelMotionSpec) { it } togetherWith
+                            ExitTransition.None
                     }
                     put(NavDisplay.PopTransitionKey) {
-                        EnterTransition.None togetherWith slideOutVertically(searchPanelMotionSpec) { it }
+                        EnterTransition.None togetherWith
+                            slideOutVertically(searchPanelMotionSpec) { it }
                     }
                     put(NavDisplay.PredictivePopTransitionKey) {
-                        EnterTransition.None togetherWith slideOutVertically(searchPanelMotionSpec) { it }
+                        EnterTransition.None togetherWith
+                            slideOutVertically(searchPanelMotionSpec) { it }
                     }
                 }
             ) { screen ->

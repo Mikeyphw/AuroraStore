@@ -30,10 +30,10 @@ import com.aurora.Constants
 import com.aurora.extensions.areNotificationsEnabled
 import com.aurora.extensions.isOAndAbove
 import com.aurora.store.R
-import com.aurora.store.compose.ui.preferences.PreferenceRowPosition
-import com.aurora.store.compose.ui.preferences.preferenceRowPosition
 import com.aurora.store.compose.composable.TopAppBar
 import com.aurora.store.compose.preview.ThemePreviewProvider
+import com.aurora.store.compose.ui.preferences.PreferenceRowPosition
+import com.aurora.store.compose.ui.preferences.preferenceRowPosition
 import com.aurora.store.util.Preferences
 import com.aurora.store.util.Preferences.PREFERENCE_NOTIFICATION_PROGRESS
 import com.aurora.store.util.save

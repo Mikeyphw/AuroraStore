@@ -41,7 +41,12 @@ internal object ArtifactApkVerifier {
     }
 
     private fun digest(signature: Signature): String = MessageDigest.getInstance("SHA-256")
-        .digest(signature.toByteArray()).joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
+        .digest(signature.toByteArray()).joinToString("") {
+            "%02x".format(
+                Locale.ROOT,
+                it.toInt() and 0xff
+            )
+        }
 
     private fun signed(info: PackageInfo): Set<String> = if (Build.VERSION.SDK_INT >= 28) {
         info.signingInfo?.apkContentsSigners.orEmpty().map(::digest).toSet()
@@ -51,11 +56,12 @@ internal object ArtifactApkVerifier {
     }
 
     private fun archiveInfo(manager: PackageManager, file: File): PackageInfo? {
-        val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES
-            else {
-                @Suppress("DEPRECATION")
-                PackageManager.GET_SIGNATURES
-            }
+        val flags = if (Build.VERSION.SDK_INT >= 28) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            @Suppress("DEPRECATION")
+            PackageManager.GET_SIGNATURES
+        }
         return manager.getPackageArchiveInfo(file.absolutePath, flags)
     }
 
@@ -76,13 +82,17 @@ internal object ArtifactApkVerifier {
         }
         return BinaryApkManifest.read(file).also { identity ->
             ArtifactApkIdentityPolicy.requireManifestIdentity(
-                identity.packageName, identity.versionCode, identity.splitName
+                identity.packageName,
+                identity.versionCode,
+                identity.splitName
             )
         }
     }
 
     private fun signerFor(
-        manager: PackageManager, file: File, identity: BinaryApkManifest.Identity
+        manager: PackageManager,
+        file: File,
+        identity: BinaryApkManifest.Identity
     ): Set<String> {
         // getPackageArchiveInfo() is not a standalone proof that the complete
         // APK v2/v3 signing block was cryptographically authenticated. Until a
@@ -94,8 +104,11 @@ internal object ArtifactApkVerifier {
         }
         val info = archiveInfo(manager, file)
         ArtifactApkIdentityPolicy.requirePlatformAgreement(
-            identity.packageName, identity.versionCode, identity.splitName == null,
-            info?.packageName, info?.longVersionCode
+            identity.packageName,
+            identity.versionCode,
+            identity.splitName == null,
+            info?.packageName,
+            info?.longVersionCode
         )
         if (Build.VERSION.SDK_INT >= 36) {
             val authenticated = try {
@@ -106,21 +119,25 @@ internal object ArtifactApkVerifier {
             } catch (_: Exception) {
                 throw ApkVerificationException("APK v2+ signature verification failed")
             }
-            if (authenticated.isEmpty() || info?.let(::signed)?.let {
+            if (authenticated.isEmpty() ||
+                info?.let(::signed)?.let {
                     it.isNotEmpty() && it != authenticated
                 } == true
-            ) throw ApkVerificationException("Archive signing identity mismatch")
+            ) {
+                throw ApkVerificationException("Archive signing identity mismatch")
+            }
             return authenticated
         }
         throw ApkVerificationException("Independent APK verifier is unavailable")
     }
 
     private fun installed(manager: PackageManager, pkg: String): PackageInfo? = try {
-        val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES
-            else {
-                @Suppress("DEPRECATION")
-                PackageManager.GET_SIGNATURES
-            }
+        val flags = if (Build.VERSION.SDK_INT >= 28) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            @Suppress("DEPRECATION")
+            PackageManager.GET_SIGNATURES
+        }
         manager.getPackageInfo(pkg, flags)
     } catch (_: PackageManager.NameNotFoundException) {
         null
@@ -131,15 +148,13 @@ internal object ArtifactApkVerifier {
      * Source claims cannot authenticate the installed app or reuse old signing evidence.
      * Any package/version/signature/split/installed-version drift cancels this attempt.
      */
-    fun revalidateForInstall(
-        context: Context,
-        imported: VerifiedImport,
-        cancelled: () -> Boolean
-    ) {
+    fun revalidateForInstall(context: Context, imported: VerifiedImport, cancelled: () -> Boolean) {
         if (cancelled()) throw ApkVerificationException("Import cancelled before installation")
         val manager = context.packageManager
         val pieces = imported.files.map { part ->
-            if (cancelled() || !part.file.isFile || part.file.length() != part.byteCount ||
+            if (cancelled() ||
+                !part.file.isFile ||
+                part.file.length() != part.byteCount ||
                 ArtifactPrivateStager.sha256(part.file, cancelled) != part.sha256
             ) {
                 throw ApkVerificationException("Private APK changed before installation")
@@ -147,8 +162,11 @@ internal object ArtifactApkVerifier {
             val identity = signedManifest(part.file)
             val signer = signerFor(manager, part.file, identity)
             ApkIdentity(
-                part.file.name, identity.packageName, identity.versionCode,
-                identity.splitName.isNullOrEmpty(), signer
+                part.file.name,
+                identity.packageName,
+                identity.versionCode,
+                identity.splitName.isNullOrEmpty(),
+                signer
             ) to identity.splitName
         }
         val attempt = imported.attempt
@@ -156,11 +174,17 @@ internal object ArtifactApkVerifier {
         ArtifactApkIdentityPolicy.requireUniqueSplitNames(pieces.map { it.second })
         // Untrusted container metadata may only veto a contradictory signed set.
         ArtifactArchiveDescriptorPolicy.checkAgainstSignedApks(
-            imported.staged.descriptor, imported.staged.format, attempt.packageName,
-            attempt.versionCode, imported.staged.archiveApkEntryNames, pieces.map { it.second }
+            imported.staged.descriptor,
+            imported.staged.format,
+            attempt.packageName,
+            attempt.versionCode,
+            imported.staged.archiveApkEntryNames,
+            pieces.map { it.second }
         )
         ArtifactSplitCompatibilityPolicy.check(
-            imported.staged.format, pieces.map { it.second }, Build.SUPPORTED_ABIS.toList()
+            imported.staged.format,
+            pieces.map { it.second },
+            Build.SUPPORTED_ABIS.toList()
         )
         val freshFeatureDependencies = imported.files.map { part ->
             ArtifactSignedManifestDependencies.read(part.file)
@@ -175,6 +199,7 @@ internal object ArtifactApkVerifier {
             throw ApkVerificationException("Verified split or signer identity changed")
         }
         val current = installed(manager, attempt.packageName)
+
         @Suppress("DEPRECATION")
         val version = current?.let {
             if (Build.VERSION.SDK_INT >= 28) it.longVersionCode else it.versionCode.toLong()
@@ -187,16 +212,22 @@ internal object ArtifactApkVerifier {
             val history = if (Build.VERSION.SDK_INT >= 28) {
                 installedInfo.signingInfo?.signingCertificateHistory.orEmpty()
                     .map(::digest).toSet()
-            } else active
+            } else {
+                active
+            }
             ArtifactApkIdentityPolicy.installedSignerStatus(
-                imported.signerSha256, active, history
+                imported.signerSha256,
+                active,
+                history
             ) == ArtifactApkIdentityPolicy.InstalledSignerStatus.ACTIVE_MATCH
         }
         if (continuity != imported.signerMatchesInstalled || continuity == false) {
             throw ApkVerificationException("Installed app signer changed after import review")
         }
         for (part in imported.files) {
-            if (cancelled() || !part.file.isFile || part.file.length() != part.byteCount ||
+            if (cancelled() ||
+                !part.file.isFile ||
+                part.file.length() != part.byteCount ||
                 ArtifactPrivateStager.sha256(part.file, cancelled) != part.sha256
             ) {
                 throw ApkVerificationException("Verified APK bytes changed before session creation")
@@ -214,9 +245,12 @@ internal object ArtifactApkVerifier {
         val signedFeatureDependencies = mutableListOf<String?>()
         val ids = staged.apks.map { part ->
             if (cancelled()) throw ApkVerificationException("Import was cancelled")
-            if (!part.file.isFile || part.file.length() != part.byteCount ||
+            if (!part.file.isFile ||
+                part.file.length() != part.byteCount ||
                 ArtifactPrivateStager.sha256(part.file, cancelled) != part.sha256
-            ) throw ApkVerificationException("Staged file changed since copying")
+            ) {
+                throw ApkVerificationException("Staged file changed since copying")
+            }
             val manifest = signedManifest(part.file)
             val names = signerFor(manager, part.file, manifest)
             signedFeatureDependencies.add(ArtifactSignedManifestDependencies.read(part.file))
@@ -238,35 +272,50 @@ internal object ArtifactApkVerifier {
         val splitNames = ids.map { it.second }
         ArtifactApkIdentityPolicy.requireUniqueSplitNames(splitNames)
         ArtifactArchiveDescriptorPolicy.checkAgainstSignedApks(
-            staged.descriptor, staged.format, base.packageName, base.versionCode,
-            staged.archiveApkEntryNames, splitNames
+            staged.descriptor,
+            staged.format,
+            base.packageName,
+            base.versionCode,
+            staged.archiveApkEntryNames,
+            splitNames
         )
         // No implicit selection of competing ABI/density variants from untrusted
         // APKS/APKM/XAPK metadata. The same check runs again before installation.
         ArtifactSplitCompatibilityPolicy.check(
-            staged.format, splitNames, Build.SUPPORTED_ABIS.toList()
+            staged.format,
+            splitNames,
+            Build.SUPPORTED_ABIS.toList()
         )
         ArtifactFeatureDependencyPolicy.check(splitNames, signedFeatureDependencies)
         val installed = installed(manager, base.packageName)
         val installedSigners = installed?.let(::signed)
         val history = if (Build.VERSION.SDK_INT >= 28) {
             installed?.signingInfo?.signingCertificateHistory.orEmpty().map(::digest).toSet()
-        } else installedSigners.orEmpty()
+        } else {
+            installedSigners.orEmpty()
+        }
         val compatible = installedSigners?.let {
             ArtifactApkIdentityPolicy.installedSignerStatus(
-                base.signerDigests, it, history
+                base.signerDigests,
+                it,
+                history
             ) == ArtifactApkIdentityPolicy.InstalledSignerStatus.ACTIVE_MATCH
         }
-        if (compatible == false) throw ApkVerificationException(
-            "APK signer does not match the installed app"
-        )
+        if (compatible == false) {
+            throw ApkVerificationException(
+                "APK signer does not match the installed app"
+            )
+        }
         // Bind the eventual PackageInstaller handoff to the same immutable
         // private bytes whose archive manifest and certificates were verified.
         for (part in staged.apks) {
-            if (cancelled() || !part.file.isFile ||
+            if (cancelled() ||
+                !part.file.isFile ||
                 part.file.length() != part.byteCount ||
                 ArtifactPrivateStager.sha256(part.file, cancelled) != part.sha256
-            ) throw ApkVerificationException("Verified APK bytes changed during inspection")
+            ) {
+                throw ApkVerificationException("Verified APK bytes changed during inspection")
+            }
         }
         val generation = SecureRandom().nextLong().ushr(1).coerceAtLeast(1L)
         val attempt = ArtifactAttempt(base.packageName, base.versionCode, generation, provenance)
@@ -279,11 +328,17 @@ internal object ArtifactApkVerifier {
             attempt,
             selected,
             ArtifactAttemptPolicy.Event.BytesStaged(
-                attempt, staged.originalSha256, staged.originalSize
+                attempt,
+                staged.originalSha256,
+                staged.originalSize
             )
         ) ?: throw ApkVerificationException("Invalid private staging receipt")
-        val tier = if (compatible == true) ArtifactTrustTier.INSTALLED_SIGNER_CONTINUITY
-            else ArtifactTrustTier.APK_SIGNER_VALID_PUBLISHER_UNANCHORED
+        val tier = if (compatible == true) {
+            ArtifactTrustTier.INSTALLED_SIGNER_CONTINUITY
+        } else {
+            ArtifactTrustTier.APK_SIGNER_VALID_PUBLISHER_UNANCHORED
+        }
+
         @Suppress("DEPRECATION")
         val installedVersion = installed?.let {
             if (Build.VERSION.SDK_INT >= 28) it.longVersionCode else it.versionCode.toLong()

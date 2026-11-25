@@ -42,13 +42,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewWrapper
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.aurora.store.R
-import com.aurora.store.compose.ui.preferences.PreferenceListItem
-import com.aurora.store.compose.ui.preferences.PreferenceRowPosition
-import com.aurora.store.compose.ui.preferences.PreferenceSectionHeader
 import com.aurora.store.compose.composable.TopAppBar
 import com.aurora.store.compose.navigation.Destination
 import com.aurora.store.compose.preview.ThemePreviewProvider
 import com.aurora.store.compose.ui.commons.ForceRestartDialog
+import com.aurora.store.compose.ui.preferences.PreferenceListItem
+import com.aurora.store.compose.ui.preferences.PreferenceRowPosition
+import com.aurora.store.compose.ui.preferences.PreferenceSectionHeader
 import com.aurora.store.util.CommonUtil
 import com.aurora.store.util.PackageUtil
 import com.aurora.store.util.Preferences

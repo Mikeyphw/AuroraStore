@@ -7,14 +7,14 @@ package com.aurora.store.compose.ui.apps
 
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,9 +31,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -41,12 +41,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import com.aurora.gplayapi.api.TopChartType
+import com.aurora.gplayapi.model.App
 import com.aurora.gplayapi.model.ContentType
 import com.aurora.store.R
 import com.aurora.store.compose.navigation.Destination
 import com.aurora.store.data.room.download.Download
-import com.aurora.gplayapi.model.App
 import com.aurora.store.util.Preferences
 import com.aurora.store.viewmodel.category.CategoryViewModel
 import com.aurora.store.viewmodel.homestream.StreamViewModel
@@ -149,7 +148,6 @@ fun AppsGamesScreen(
     val pagerState = rememberPagerState { tabs.size }
     val coroutineScope = rememberCoroutineScope()
     var selectedChartIndex by rememberSaveable { mutableIntStateOf(0) }
-
 
     Column(modifier = Modifier.fillMaxSize()) {
         ExpressiveChoiceGroup(

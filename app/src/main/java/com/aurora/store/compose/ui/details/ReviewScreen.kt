@@ -60,9 +60,9 @@ import com.aurora.store.compose.composable.Placeholder
 import com.aurora.store.compose.composable.ScrollHint
 import com.aurora.store.compose.composable.TopAppBar
 import com.aurora.store.compose.composable.details.ReviewListItem
-import com.aurora.store.compose.ui.details.composable.RatingAndReviews
 import com.aurora.store.compose.preview.ReviewPreviewProvider
 import com.aurora.store.compose.preview.ThemePreviewProvider
+import com.aurora.store.compose.ui.details.composable.RatingAndReviews
 import com.aurora.store.viewmodel.details.AppDetailsViewModel
 import com.aurora.store.viewmodel.details.ReviewViewModel
 import kotlin.random.Random
@@ -158,7 +158,8 @@ private fun ScreenContent(
                             state = listState,
                             contentPadding = PaddingValues(
                                 bottom = WindowInsets.navigationBars.asPaddingValues()
-                                    .calculateBottomPadding() + dimensionResource(R.dimen.spacing_large)
+                                    .calculateBottomPadding() +
+                                    dimensionResource(R.dimen.spacing_large)
                             )
                         ) {
                             if (rating != null) {

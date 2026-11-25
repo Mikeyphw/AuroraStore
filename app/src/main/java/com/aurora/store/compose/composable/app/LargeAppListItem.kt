@@ -20,14 +20,14 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -35,12 +35,11 @@ import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewWrapper
-import com.aurora.store.data.model.DownloadStatus
-import com.aurora.store.data.room.download.Download
+import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.aurora.extensions.requiresGMS
 import com.aurora.gplayapi.model.App
 import com.aurora.store.R
@@ -49,9 +48,10 @@ import com.aurora.store.compose.composable.auroraSegmentedListItemShapes
 import com.aurora.store.compose.composable.rememberStoreImageRequest
 import com.aurora.store.compose.preview.AppPreviewProvider
 import com.aurora.store.compose.preview.ThemePreviewProvider
+import com.aurora.store.data.model.DownloadStatus
+import com.aurora.store.data.room.download.Download
 import com.aurora.store.util.CommonUtil
 import com.aurora.store.util.PackageUtil
-import coil3.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -100,7 +100,9 @@ fun LargeAppListItem(
     }
 
     val canOpen = remember(showHomeAction, app.packageName, isInstalled) {
-        showHomeAction && isInstalled && PackageUtil.getLaunchIntent(context, app.packageName) != null
+        showHomeAction &&
+            isInstalled &&
+            PackageUtil.getLaunchIntent(context, app.packageName) != null
     }
     val status = if (showHomeAction) download?.status else null
     val isCancellable = status != null && status in cancellableDownloadStates
@@ -176,7 +178,7 @@ fun LargeAppListItem(
                 )
                 if (showHomeAction && (installCount != null || rating != null)) {
                     Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         installCount?.let {
@@ -249,7 +251,8 @@ private fun AppInlineMetric(icon: Int, value: String) {
 
 @Composable
 private fun buildAppExtras(app: App): String {
-    val priceLabel = stringResource(if (app.isFree) R.string.details_free else R.string.details_paid)
+    val priceLabel =
+        stringResource(if (app.isFree) R.string.details_free else R.string.details_paid)
     val adsLabel = stringResource(
         if (app.containsAds) R.string.details_contains_ads else R.string.details_no_ads
     )

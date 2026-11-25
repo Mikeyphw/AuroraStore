@@ -23,10 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.aurora.store.R
 
 @Composable
-internal fun AppRatingChip(
-    rating: String,
-    modifier: Modifier = Modifier
-) {
+internal fun AppRatingChip(rating: String, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
         shape = CircleShape,

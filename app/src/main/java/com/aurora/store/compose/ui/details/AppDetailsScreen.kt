@@ -8,8 +8,13 @@ package com.aurora.store.compose.ui.details
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -17,8 +22,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -30,19 +33,18 @@ import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBar as MaterialTopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.WindowAdaptiveInfo
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.material3.adaptive.layout.AdaptStrategy
@@ -54,22 +56,20 @@ import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirective
 import androidx.compose.material3.adaptive.navigation.NavigableSupportingPaneScaffold
 import androidx.compose.material3.adaptive.navigation.rememberSupportingPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.LocalActivity
-import androidx.activity.compose.BackHandler
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -87,17 +87,17 @@ import com.aurora.extensions.requiresObbDir
 import com.aurora.extensions.share
 import com.aurora.extensions.toast
 import com.aurora.gplayapi.model.App
+import com.aurora.gplayapi.model.DataSafetyReport
 import com.aurora.gplayapi.model.Review
 import com.aurora.gplayapi.model.StreamBundle
 import com.aurora.gplayapi.model.StreamCluster
-import com.aurora.gplayapi.model.DataSafetyReport
 import com.aurora.gplayapi.model.TopChart
 import com.aurora.store.ComposeActivity
 import com.aurora.store.R
 import com.aurora.store.compose.composable.ClusterRow
 import com.aurora.store.compose.composable.ContainedLoadingIndicator
-import com.aurora.store.compose.composable.PermissionUpdateWarningDialog
 import com.aurora.store.compose.composable.InsufficientStorageDialog
+import com.aurora.store.compose.composable.PermissionUpdateWarningDialog
 import com.aurora.store.compose.composable.Placeholder
 import com.aurora.store.compose.composable.RoundedIconButton
 import com.aurora.store.compose.composable.ScrollHint
@@ -116,6 +116,7 @@ import com.aurora.store.compose.ui.details.composable.Actions
 import com.aurora.store.compose.ui.details.composable.Changelog
 import com.aurora.store.compose.ui.details.composable.Details
 import com.aurora.store.compose.ui.details.composable.DetailsPortalCard
+import com.aurora.store.compose.ui.details.composable.PlayListing
 import com.aurora.store.compose.ui.details.composable.RatingAndReviews
 import com.aurora.store.compose.ui.details.composable.Screenshots
 import com.aurora.store.compose.ui.details.composable.Tags
@@ -128,7 +129,6 @@ import com.aurora.store.compose.ui.sheets.InstallErrorSheet
 import com.aurora.store.data.installer.AppInstaller
 import com.aurora.store.data.model.AppState
 import com.aurora.store.data.model.ExodusTracker
-import com.aurora.store.compose.ui.details.composable.PlayListing
 import com.aurora.store.data.model.PermissionType
 import com.aurora.store.data.model.Report
 import com.aurora.store.data.model.Scores
@@ -399,8 +399,11 @@ private fun ScreenContentApp(
             } finally {
                 isTopChartLoading = false
             }
-            if (cluster != null) onNavigateTo(Destination.StreamBrowse(cluster))
-            else context.toast(R.string.no_apps_available)
+            if (cluster != null) {
+                onNavigateTo(Destination.StreamBrowse(cluster))
+            } else {
+                context.toast(R.string.no_apps_available)
+            }
         }
     }
     val shouldShowMenuOnMainPane = scaffoldNavigator
@@ -1064,7 +1067,9 @@ private fun LazyListScope.suggestionClusterItems(
                 cluster = cluster,
                 onAppClick = onAppClick,
                 onClusterScrolled = onClusterScrolled,
-                horizontalContentPadding = androidx.compose.ui.res.dimensionResource(R.dimen.spacing_large)
+                horizontalContentPadding = androidx.compose.ui.res.dimensionResource(
+                    R.dimen.spacing_large
+                )
             )
         }
     }

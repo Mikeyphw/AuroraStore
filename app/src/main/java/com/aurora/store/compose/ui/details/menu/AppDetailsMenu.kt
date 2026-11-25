@@ -32,8 +32,8 @@ import androidx.compose.ui.unit.dp
 import com.aurora.Constants
 import com.aurora.store.R
 import com.aurora.store.compose.composable.ExpressiveCheckableMenuItem
-import com.aurora.store.compose.composable.ExpressiveMenuIcon
 import com.aurora.store.compose.composable.ExpressiveMenuGroup
+import com.aurora.store.compose.composable.ExpressiveMenuIcon
 import com.aurora.store.compose.composable.ExpressiveMenuItem
 import com.aurora.store.compose.composable.ExpressiveMenuPopup
 import com.aurora.store.compose.composable.TopAppBar
@@ -80,123 +80,123 @@ fun AppDetailsMenu(
             ),
             verticalAlignment = Alignment.CenterVertically
         ) {
-        val favoriteModifier = Modifier.weight(1.15f).animateWidth(interactionSources[0])
-        val shareModifier = Modifier.weight(1f).animateWidth(interactionSources[1])
-        val overflowModifier = Modifier.weight(0.9f).animateWidth(interactionSources[2])
+            val favoriteModifier = Modifier.weight(1.15f).animateWidth(interactionSources[0])
+            val shareModifier = Modifier.weight(1f).animateWidth(interactionSources[1])
+            val overflowModifier = Modifier.weight(0.9f).animateWidth(interactionSources[2])
 
-        customItem(
-            buttonGroupContent = {
-                FilledTonalIconToggleButton(
-                    checked = isFavorite,
-                    onCheckedChange = { onClick(MenuItem.FAVORITE) },
-                    modifier = favoriteModifier,
-                    interactionSource = interactionSources[0],
-                    shapes = IconButtonDefaults.toggleableShapes(
-                        shape = leadingShapes.shape,
-                        pressedShape = leadingShapes.pressedShape,
-                        checkedShape = leadingShapes.checkedShape
-                    )
-                ) {
-                    Icon(
-                        painter = if (isFavorite) {
-                            painterResource(R.drawable.ic_favorite_checked)
-                        } else {
-                            painterResource(R.drawable.ic_favorite_unchecked)
-                        },
-                        contentDescription = stringResource(R.string.action_favourite)
-                    )
-                }
-            },
-            menuContent = { menuState ->
-                ExpressiveCheckableMenuItem(
-                    index = 0,
-                    count = 2,
-                    checked = isFavorite,
-                    text = {
-                        Text(
-                            text = if (isFavorite) {
-                                stringResource(R.string.action_remove_favourite)
-                            } else {
-                                stringResource(R.string.action_favourite)
-                            }
+            customItem(
+                buttonGroupContent = {
+                    FilledTonalIconToggleButton(
+                        checked = isFavorite,
+                        onCheckedChange = { onClick(MenuItem.FAVORITE) },
+                        modifier = favoriteModifier,
+                        interactionSource = interactionSources[0],
+                        shapes = IconButtonDefaults.toggleableShapes(
+                            shape = leadingShapes.shape,
+                            pressedShape = leadingShapes.pressedShape,
+                            checkedShape = leadingShapes.checkedShape
                         )
-                    },
-                    onCheckedChange = {
-                        menuState.dismiss()
-                        onClick(MenuItem.FAVORITE)
-                    },
-                    leadingIcon = {
-                        ExpressiveMenuIcon(painterResource(R.drawable.ic_favorite_unchecked))
-                    },
-                    checkedLeadingIcon = {
-                        ExpressiveMenuIcon(painterResource(R.drawable.ic_favorite_checked))
+                    ) {
+                        Icon(
+                            painter = if (isFavorite) {
+                                painterResource(R.drawable.ic_favorite_checked)
+                            } else {
+                                painterResource(R.drawable.ic_favorite_unchecked)
+                            },
+                            contentDescription = stringResource(R.string.action_favourite)
+                        )
                     }
-                )
-            }
-        )
-
-        customItem(
-            buttonGroupContent = {
-                FilledTonalIconButton(
-                    onClick = { onClick(MenuItem.SHARE) },
-                    modifier = shareModifier,
-                    interactionSource = interactionSources[1],
-                    shapes = IconButtonDefaults.shapes(
-                        shape = middleShapes.shape,
-                        pressedShape = middleShapes.pressedShape
-                    )
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_share),
-                        contentDescription = stringResource(R.string.action_share)
+                },
+                menuContent = { menuState ->
+                    ExpressiveCheckableMenuItem(
+                        index = 0,
+                        count = 2,
+                        checked = isFavorite,
+                        text = {
+                            Text(
+                                text = if (isFavorite) {
+                                    stringResource(R.string.action_remove_favourite)
+                                } else {
+                                    stringResource(R.string.action_favourite)
+                                }
+                            )
+                        },
+                        onCheckedChange = {
+                            menuState.dismiss()
+                            onClick(MenuItem.FAVORITE)
+                        },
+                        leadingIcon = {
+                            ExpressiveMenuIcon(painterResource(R.drawable.ic_favorite_unchecked))
+                        },
+                        checkedLeadingIcon = {
+                            ExpressiveMenuIcon(painterResource(R.drawable.ic_favorite_checked))
+                        }
                     )
                 }
-            },
-            menuContent = { menuState ->
-                ExpressiveMenuItem(
-                    index = 1,
-                    count = 2,
-                    text = { Text(text = stringResource(R.string.action_share)) },
-                    leadingIcon = {
-                        ExpressiveMenuIcon(painterResource(R.drawable.ic_share))
-                    },
-                    onClick = {
-                        menuState.dismiss()
-                        onClick(MenuItem.SHARE)
-                    }
-                )
-            }
-        )
+            )
 
-        customItem(
-            buttonGroupContent = {
-                FilledTonalIconButton(
-                    onClick = { expanded = true },
-                    modifier = overflowModifier,
-                    interactionSource = interactionSources[2],
-                    shapes = IconButtonDefaults.shapes(
-                        shape = trailingShapes.shape,
-                        pressedShape = trailingShapes.pressedShape
-                    )
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_more_vert),
-                        contentDescription = stringResource(R.string.menu)
+            customItem(
+                buttonGroupContent = {
+                    FilledTonalIconButton(
+                        onClick = { onClick(MenuItem.SHARE) },
+                        modifier = shareModifier,
+                        interactionSource = interactionSources[1],
+                        shapes = IconButtonDefaults.shapes(
+                            shape = middleShapes.shape,
+                            pressedShape = middleShapes.pressedShape
+                        )
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_share),
+                            contentDescription = stringResource(R.string.action_share)
+                        )
+                    }
+                },
+                menuContent = { menuState ->
+                    ExpressiveMenuItem(
+                        index = 1,
+                        count = 2,
+                        text = { Text(text = stringResource(R.string.action_share)) },
+                        leadingIcon = {
+                            ExpressiveMenuIcon(painterResource(R.drawable.ic_share))
+                        },
+                        onClick = {
+                            menuState.dismiss()
+                            onClick(MenuItem.SHARE)
+                        }
                     )
                 }
-            },
-            menuContent = { menuState ->
-                MenuItems(
-                    state = state,
-                    canManualDownload = canManualDownload,
-                    canUseOtherAccount = canUseOtherAccount,
-                    onClick = { item ->
-                        menuState.dismiss()
-                        onClick(item)
+            )
+
+            customItem(
+                buttonGroupContent = {
+                    FilledTonalIconButton(
+                        onClick = { expanded = true },
+                        modifier = overflowModifier,
+                        interactionSource = interactionSources[2],
+                        shapes = IconButtonDefaults.shapes(
+                            shape = trailingShapes.shape,
+                            pressedShape = trailingShapes.pressedShape
+                        )
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_more_vert),
+                            contentDescription = stringResource(R.string.menu)
+                        )
                     }
-                )
-            }
-        )
+                },
+                menuContent = { menuState ->
+                    MenuItems(
+                        state = state,
+                        canManualDownload = canManualDownload,
+                        canUseOtherAccount = canUseOtherAccount,
+                        onClick = { item ->
+                            menuState.dismiss()
+                            onClick(item)
+                        }
+                    )
+                }
+            )
         }
         ExpressiveMenuPopup(
             expanded = expanded,

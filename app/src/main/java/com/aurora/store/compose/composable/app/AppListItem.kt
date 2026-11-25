@@ -44,13 +44,11 @@ import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewWrapper
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import coil3.request.crossfade
 import com.aurora.gplayapi.model.App
 import com.aurora.store.R
+import com.aurora.store.compose.composable.rememberStoreImageRequest
 import com.aurora.store.compose.preview.AppPreviewProvider
 import com.aurora.store.compose.preview.ThemePreviewProvider
-import com.aurora.store.compose.composable.rememberStoreImageRequest
 import com.aurora.store.data.model.DownloadStatus
 import com.aurora.store.data.room.download.Download
 import com.aurora.store.util.CommonUtil
@@ -101,7 +99,9 @@ fun AppListItem(
     }
 
     val canOpen = remember(showHomeAction, app.packageName, isInstalled) {
-        showHomeAction && isInstalled && PackageUtil.getLaunchIntent(context, app.packageName) != null
+        showHomeAction &&
+            isInstalled &&
+            PackageUtil.getLaunchIntent(context, app.packageName) != null
     }
     val status = if (showHomeAction) download?.status else null
     val isCancellable = status != null && status in cancellableDownloadStates
@@ -211,7 +211,7 @@ fun AppListItem(
                     horizontalArrangement = Arrangement.spacedBy(
                         dimensionResource(R.dimen.spacing_small)
                     ),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     rating?.let { AppRatingChip(rating = it) }
                     installCount?.let {

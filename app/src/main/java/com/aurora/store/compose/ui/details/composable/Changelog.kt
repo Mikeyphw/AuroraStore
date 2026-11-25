@@ -22,7 +22,6 @@ import androidx.compose.ui.text.fromHtml
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewWrapper
-import androidx.compose.ui.unit.dp
 import com.aurora.gplayapi.model.App
 import com.aurora.store.R
 import com.aurora.store.compose.preview.AppPreviewProvider

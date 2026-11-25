@@ -5,8 +5,8 @@
 
 package com.aurora.store.compose.composable.app
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,8 +27,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewWrapper
 import com.aurora.store.R
-import com.aurora.store.compose.composable.auroraSegmentedListItemShapes
 import com.aurora.store.compose.composable.app.AnimatedAppIcon
+import com.aurora.store.compose.composable.auroraSegmentedListItemShapes
 import com.aurora.store.compose.preview.ThemePreviewProvider
 import com.aurora.store.data.model.DownloadStatus
 import com.aurora.store.data.room.download.Download

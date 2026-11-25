@@ -26,7 +26,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -37,6 +36,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
@@ -70,7 +70,8 @@ fun Tags(app: App, state: AppState = AppState.Unavailable) {
     val sizeLabel = stringResource(R.string.details_metric_size)
     val updatedLabel = stringResource(R.string.details_metric_updated)
     val priceLabel = stringResource(R.string.details_metric_price)
-    val priceValue = stringResource(if (app.isFree) R.string.details_free else R.string.details_paid)
+    val priceValue =
+        stringResource(if (app.isFree) R.string.details_free else R.string.details_paid)
     val adsLabel = stringResource(R.string.details_metric_ads)
     val adsValue = stringResource(
         if (app.containsAds) R.string.details_contains_ads else R.string.details_no_ads
@@ -183,9 +184,15 @@ fun Tags(app: App, state: AppState = AppState.Unavailable) {
 @Composable
 private fun MetricItem(modifier: Modifier = Modifier, metric: AppMetric, index: Int) {
     val (containerColor, contentColor) = when (index % 3) {
-        0 -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
-        1 -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-        else -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+        0 ->
+            MaterialTheme.colorScheme.primaryContainer to
+                MaterialTheme.colorScheme.onPrimaryContainer
+        1 ->
+            MaterialTheme.colorScheme.secondaryContainer to
+                MaterialTheme.colorScheme.onSecondaryContainer
+        else ->
+            MaterialTheme.colorScheme.tertiaryContainer to
+                MaterialTheme.colorScheme.onTertiaryContainer
     }
 
     Surface(

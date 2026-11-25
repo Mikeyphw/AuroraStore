@@ -53,10 +53,10 @@ import com.aurora.store.compose.composable.ScrollHint
 import com.aurora.store.compose.composable.SectionHeader
 import com.aurora.store.compose.composable.TopAppBar
 import com.aurora.store.compose.composable.app.AppListItem
-import com.aurora.store.compose.ui.details.composable.DetailsPortalCard
 import com.aurora.store.compose.navigation.Destination
 import com.aurora.store.compose.preview.AppPreviewProvider
 import com.aurora.store.compose.preview.ThemePreviewProvider
+import com.aurora.store.compose.ui.details.composable.DetailsPortalCard
 import com.aurora.store.viewmodel.details.AppDetailsViewModel
 import com.aurora.store.viewmodel.details.MoreViewModel
 

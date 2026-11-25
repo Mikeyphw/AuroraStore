@@ -62,7 +62,10 @@ fun VersionPickerSheet(
     // Exodus is history metadata, not a guarantee that Play still serves an APK.
     val availableReports = remember(reports) {
         reports.mapNotNull { report ->
-            HistoricalVersionPolicy.parseVersionCode(report.versionCode.toString())?.let { it to report }
+            HistoricalVersionPolicy.parseVersionCode(report.versionCode.toString())?.let {
+                it to
+                    report
+            }
         }.distinctBy { it.first }
             .sortedByDescending { it.first }
             .map { it.second }

@@ -30,13 +30,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
-import com.aurora.extensions.copyToClipBoard
 import com.aurora.extensions.appInfo
+import com.aurora.extensions.copyToClipBoard
 import com.aurora.extensions.requiresGMS
 import com.aurora.extensions.toast
 import com.aurora.gplayapi.model.App
-import com.aurora.gplayapi.model.Review
 import com.aurora.gplayapi.model.DataSafetyReport
+import com.aurora.gplayapi.model.Review
 import com.aurora.store.R
 import com.aurora.store.compose.composable.Info
 import com.aurora.store.compose.composable.ScrollHint

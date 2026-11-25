@@ -34,12 +34,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewWrapper
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.aurora.store.R
+import com.aurora.store.compose.composable.TopAppBar
+import com.aurora.store.compose.preview.ThemePreviewProvider
 import com.aurora.store.compose.ui.preferences.PreferenceListItem
 import com.aurora.store.compose.ui.preferences.PreferenceRowPosition
 import com.aurora.store.compose.ui.preferences.PreferenceSectionHeader
 import com.aurora.store.compose.ui.preferences.preferenceRowPosition
-import com.aurora.store.compose.composable.TopAppBar
-import com.aurora.store.compose.preview.ThemePreviewProvider
 import com.aurora.store.util.Preferences
 import com.aurora.store.util.Preferences.PREFERENCE_FILTER_AURORA_ONLY
 import com.aurora.store.util.Preferences.PREFERENCE_FILTER_INSTALLERS
@@ -111,7 +111,9 @@ private fun ScreenContent(onCheckUpdatesNow: () -> Unit = {}) {
                     }
                 )
             }
-            item { PreferenceSectionHeader(stringResource(R.string.source_filters_installers_header)) }
+            item {
+                PreferenceSectionHeader(stringResource(R.string.source_filters_installers_header))
+            }
             if (installers.isEmpty()) {
                 item {
                     PreferenceListItem(
@@ -126,7 +128,9 @@ private fun ScreenContent(onCheckUpdatesNow: () -> Unit = {}) {
                     )
                 }
             } else {
-                itemsIndexed(items = installers.toList(), key = { _, name -> name }) { index, name ->
+                itemsIndexed(items = installers.toList(), key = { _, name ->
+                    name
+                }) { index, name ->
                     PreferenceListItem(
                         position = preferenceRowPosition(index, installers.size + 1),
                         headlineContent = { Text(name) },

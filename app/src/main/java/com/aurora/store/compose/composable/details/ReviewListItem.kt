@@ -6,9 +6,9 @@
 package com.aurora.store.compose.composable.details
 
 import android.text.format.DateUtils
-import androidx.compose.foundation.background
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,10 +24,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
@@ -69,8 +69,11 @@ fun ReviewListItem(
         modifier = modifier
             .fillMaxWidth()
             .then(
-                if (expandable) Modifier.animateContentSize(animationSpec = spring())
-                else Modifier
+                if (expandable) {
+                    Modifier.animateContentSize(animationSpec = spring())
+                } else {
+                    Modifier
+                }
             ),
         shapes = com.aurora.store.compose.composable.auroraListItemShapes(),
         overlineContent = {
@@ -84,7 +87,7 @@ fun ReviewListItem(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         },
-            supportingContent = {
+        supportingContent = {
             Column(
                 modifier = if (expandable) {
                     Modifier.animateContentSize(animationSpec = spring())
@@ -129,12 +132,18 @@ fun ReviewListItem(
                 RoundedIconButton(
                     onClick = { expanded = !expanded },
                     painter = painterResource(
-                        if (expanded) R.drawable.ic_keyboard_arrow_up
-                        else R.drawable.ic_keyboard_arrow_down
+                        if (expanded) {
+                            R.drawable.ic_keyboard_arrow_up
+                        } else {
+                            R.drawable.ic_keyboard_arrow_down
+                        }
                     ),
                     contentDescription = stringResource(
-                        if (expanded) R.string.details_collapse_review
-                        else R.string.details_expand_review
+                        if (expanded) {
+                            R.string.details_collapse_review
+                        } else {
+                            R.string.details_expand_review
+                        }
                     )
                 )
             }

@@ -16,12 +16,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -68,15 +68,15 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringArrayResource
@@ -86,10 +86,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
-import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
+import coil3.compose.AsyncImage
 import com.aurora.extensions.requiresGMS
-import com.aurora.gplayapi.api.SearchSuggestion
 import com.aurora.gplayapi.model.App
 import com.aurora.store.R
 import com.aurora.store.compose.composable.ContainedLoadingIndicator
@@ -98,27 +97,24 @@ import com.aurora.store.compose.composable.ExpressiveMenuIcon
 import com.aurora.store.compose.composable.ExpressiveMenuPopup
 import com.aurora.store.compose.composable.ExpressiveSelectableMenuItem
 import com.aurora.store.compose.composable.Placeholder
-import com.aurora.store.compose.composable.auroraListItemShapes
 import com.aurora.store.compose.composable.ScrollHint
 import com.aurora.store.compose.composable.SearchSuggestionListItem
+import com.aurora.store.compose.composable.auroraListItemShapes
+import com.aurora.store.compose.composable.rememberStoreImageRequest
 import com.aurora.store.compose.navigation.Destination
 import com.aurora.store.compose.ui.details.AppDetailsScreen
 import com.aurora.store.data.model.SearchFilter
-import com.aurora.store.viewmodel.search.SearchViewModel
 import com.aurora.store.util.CommonUtil
-import coil3.compose.AsyncImage
-import com.aurora.store.compose.composable.rememberStoreImageRequest
+import com.aurora.store.viewmodel.search.SearchViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** The search action uses the same expressive floating-toolbar FAB slot as the bottom bar. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun MainSearchButton(
-    onNavigateTo: (Destination) -> Unit
-) {
+fun MainSearchButton(onNavigateTo: (Destination) -> Unit) {
     val colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors()
     FloatingActionButton(
         onClick = { onNavigateTo(Destination.Search()) },
@@ -146,10 +142,7 @@ fun MainSearchButton(
  * consistent even while the search keyboard is visible.
  */
 @Composable
-private fun SearchBackHandler(
-    enabled: Boolean,
-    onBack: () -> Unit
-) {
+private fun SearchBackHandler(enabled: Boolean, onBack: () -> Unit) {
     val view = LocalView.current
     val currentOnBack by rememberUpdatedState(onBack)
     val usePlatformPriority = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
@@ -258,129 +251,135 @@ fun SearchScreen(
 
     NavigableListDetailPaneScaffold(
         navigator = scaffoldNavigator,
-        listPane = { AnimatedPane {
-            Scaffold(
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentWindowInsets = WindowInsets.safeDrawing.only(
-                    WindowInsetsSides.Top + WindowInsetsSides.Horizontal
-                )
-            ) { paddingValues ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                ) {
-                    Row(
+        listPane = {
+            AnimatedPane {
+                Scaffold(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentWindowInsets = WindowInsets.safeDrawing.only(
+                        WindowInsetsSides.Top + WindowInsetsSides.Horizontal
+                    )
+                ) { paddingValues ->
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(
-                                horizontal = dimensionResource(R.dimen.spacing_large),
-                                vertical = dimensionResource(R.dimen.spacing_small)
-                            ),
-                        verticalAlignment = Alignment.CenterVertically
+                            .fillMaxSize()
+                            .padding(paddingValues)
                     ) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = SearchBarDefaults.inputFieldShape,
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    horizontal = dimensionResource(R.dimen.spacing_large),
+                                    vertical = dimensionResource(R.dimen.spacing_small)
+                                ),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            SearchBarDefaults.InputField(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusRequester(focusRequester),
-                                searchBarState = searchBarState,
-                                textFieldState = textFieldState,
-                                onSearch = ::submitSearch,
-                                placeholder = {
-                                    Text(
-                                        text = stringResource(R.string.search_hint),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                },
-                                leadingIcon = {
-                                    IconButton(onClick = ::handleBack) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_arrow_back),
-                                            contentDescription = stringResource(R.string.action_back)
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = SearchBarDefaults.inputFieldShape,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh
+                            ) {
+                                SearchBarDefaults.InputField(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .focusRequester(focusRequester),
+                                    searchBarState = searchBarState,
+                                    textFieldState = textFieldState,
+                                    onSearch = ::submitSearch,
+                                    placeholder = {
+                                        Text(
+                                            text = stringResource(R.string.search_hint),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
-                                    }
-                                },
-                                trailingIcon = {
-                                    if (textFieldState.text.isNotBlank()) {
-                                        IconButton(
-                                            onClick = {
-                                                submittedQuery = ""
-                                                viewModel.fetchSuggestions("")
-                                                textFieldState.clearText()
-                                            }
-                                        ) {
+                                    },
+                                    leadingIcon = {
+                                        IconButton(onClick = ::handleBack) {
                                             Icon(
-                                                painter = painterResource(R.drawable.ic_cancel),
-                                                contentDescription = stringResource(R.string.action_clear)
+                                                painter = painterResource(R.drawable.ic_arrow_back),
+                                                contentDescription = stringResource(
+                                                    R.string.action_back
+                                                )
                                             )
                                         }
-                                    }
-                                }
-                            )
-                        }
-                    }
-
-                    if (submittedQuery.isNotBlank()) {
-                        MainSearchResults(
-                            viewModel = viewModel,
-                            onOpenApp = ::showDetailPane
-                        )
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize().imePadding(),
-                            contentPadding = PaddingValues(
-                                top = dimensionResource(R.dimen.spacing_small),
-                                bottom = WindowInsets.navigationBars.asPaddingValues()
-                                    .calculateBottomPadding() + dimensionResource(R.dimen.spacing_small)
-                            )
-                        ) {
-                            items(suggestions) { suggestion ->
-                                SearchSuggestionListItem(
-                                    searchSuggestion = suggestion,
-                                    onClick = ::submitSearch,
-                                    onAction = { query ->
-                                        textFieldState.setTextAndPlaceCursorAtEnd(query.trim())
+                                    },
+                                    trailingIcon = {
+                                        if (textFieldState.text.isNotBlank()) {
+                                            IconButton(
+                                                onClick = {
+                                                    submittedQuery = ""
+                                                    viewModel.fetchSuggestions("")
+                                                    textFieldState.clearText()
+                                                }
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_cancel),
+                                                    contentDescription = stringResource(
+                                                        R.string.action_clear
+                                                    )
+                                                )
+                                            }
+                                        }
                                     }
                                 )
+                            }
+                        }
+
+                        if (submittedQuery.isNotBlank()) {
+                            MainSearchResults(
+                                viewModel = viewModel,
+                                onOpenApp = ::showDetailPane
+                            )
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize().imePadding(),
+                                contentPadding = PaddingValues(
+                                    top = dimensionResource(R.dimen.spacing_small),
+                                    bottom = WindowInsets.navigationBars.asPaddingValues()
+                                        .calculateBottomPadding() +
+                                        dimensionResource(R.dimen.spacing_small)
+                                )
+                            ) {
+                                items(suggestions) { suggestion ->
+                                    SearchSuggestionListItem(
+                                        searchSuggestion = suggestion,
+                                        onClick = ::submitSearch,
+                                        onAction = { query ->
+                                            textFieldState.setTextAndPlaceCursorAtEnd(query.trim())
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
-        } },
-        detailPane = { AnimatedPane {
-            when (val packageName = scaffoldNavigator.currentDestination?.contentKey) {
-                null -> Placeholder(
-                    painter = painterResource(R.drawable.ic_round_search),
-                    message = stringResource(R.string.select_app_for_details)
-                )
-                else -> AppDetailsScreen(
-                    packageName = packageName,
-                    onNavigateTo = { destination ->
-                        if (destination is Destination.AppDetails) {
-                            showDetailPane(destination.packageName)
-                        } else {
-                            onNavigateTo(destination)
-                        }
-                    },
-                    forceSinglePane = true
-                )
+        },
+        detailPane = {
+            AnimatedPane {
+                when (val packageName = scaffoldNavigator.currentDestination?.contentKey) {
+                    null -> Placeholder(
+                        painter = painterResource(R.drawable.ic_round_search),
+                        message = stringResource(R.string.select_app_for_details)
+                    )
+                    else -> AppDetailsScreen(
+                        packageName = packageName,
+                        onNavigateTo = { destination ->
+                            if (destination is Destination.AppDetails) {
+                                showDetailPane(destination.packageName)
+                            } else {
+                                onNavigateTo(destination)
+                            }
+                        },
+                        forceSinglePane = true
+                    )
+                }
             }
-        } }
+        }
     )
 }
 
 @Composable
-private fun MainSearchResults(
-    viewModel: SearchViewModel,
-    onOpenApp: (String) -> Unit
-) {
+private fun MainSearchResults(viewModel: SearchViewModel, onOpenApp: (String) -> Unit) {
     val results = viewModel.apps.collectAsLazyPagingItems()
 
     Column(modifier = Modifier.fillMaxSize().imePadding()) {

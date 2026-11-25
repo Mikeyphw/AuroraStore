@@ -24,10 +24,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewWrapper
 import com.aurora.extensions.toast
 import com.aurora.store.R
-import com.aurora.store.compose.ui.preferences.PreferenceListItem
-import com.aurora.store.compose.ui.preferences.PreferenceRowPosition
 import com.aurora.store.compose.composable.TopAppBar
 import com.aurora.store.compose.preview.ThemePreviewProvider
+import com.aurora.store.compose.ui.preferences.PreferenceListItem
+import com.aurora.store.compose.ui.preferences.PreferenceRowPosition
 import com.aurora.store.util.AppLockAuthenticator
 import com.aurora.store.util.Preferences
 import com.aurora.store.util.Preferences.PREFERENCE_APP_LOCK_ENABLED

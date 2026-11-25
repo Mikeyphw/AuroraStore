@@ -311,7 +311,11 @@ private fun AccountAccordion(
         ) {
             Icon(
                 painter = painterResource(
-                    if (expanded) R.drawable.ic_keyboard_arrow_up else R.drawable.ic_keyboard_arrow_down
+                    if (expanded) {
+                        R.drawable.ic_keyboard_arrow_up
+                    } else {
+                        R.drawable.ic_keyboard_arrow_down
+                    }
                 ),
                 contentDescription = null,
                 modifier = Modifier.padding(dimensionResource(R.dimen.spacing_xsmall))

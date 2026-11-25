@@ -74,7 +74,9 @@ fun DetailsPortalCard(
 
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(dimensionResource(R.dimen.spacing_xsmall))
+                verticalArrangement = Arrangement.spacedBy(
+                    dimensionResource(R.dimen.spacing_xsmall)
+                )
             ) {
                 Text(text = title, style = MaterialTheme.typography.titleMedium)
                 Text(

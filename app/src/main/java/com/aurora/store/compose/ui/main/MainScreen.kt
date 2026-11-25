@@ -10,20 +10,21 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColor
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.Spring.DampingRatioNoBouncy
+import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.animateDp
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -41,7 +42,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -49,8 +49,8 @@ import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
@@ -60,15 +60,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
@@ -78,35 +79,35 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.aurora.extensions.requiresObbDir
 import com.aurora.extensions.requiresGMS
+import com.aurora.extensions.requiresObbDir
 import com.aurora.extensions.toast
 import com.aurora.gplayapi.model.App
 import com.aurora.store.MainViewModel
 import com.aurora.store.R
-import com.aurora.store.compose.composable.PermissionUpdateWarningDialog
 import com.aurora.store.compose.composable.InsufficientStorageDialog
+import com.aurora.store.compose.composable.PermissionUpdateWarningDialog
 import com.aurora.store.compose.composable.TrackerUpdateWarningDialog
 import com.aurora.store.compose.composition.LocalNetworkStatus
 import com.aurora.store.compose.navigation.Destination
 import com.aurora.store.compose.ui.apps.AppsGamesScreen
 import com.aurora.store.compose.ui.commons.MoreSheet
 import com.aurora.store.compose.ui.commons.NetworkScreen
-import com.aurora.store.compose.ui.sheets.AppUpdateSheet
 import com.aurora.store.compose.ui.search.MainSearchButton
 import com.aurora.store.compose.ui.search.SearchScreen
 import com.aurora.store.compose.ui.search.searchPanelMotionSpec
+import com.aurora.store.compose.ui.sheets.AppUpdateSheet
 import com.aurora.store.compose.ui.updates.UpdatesScreen
-import com.aurora.store.data.model.ExodusTracker
 import com.aurora.store.data.model.DownloadStatus
+import com.aurora.store.data.model.ExodusTracker
 import com.aurora.store.data.model.NetworkStatus
 import com.aurora.store.data.model.PermissionType
 import com.aurora.store.data.model.StorageRequirement
 import com.aurora.store.data.providers.PermissionProvider.Companion.isGranted
 import com.aurora.store.data.providers.PermissionProvider.Companion.isPermittedToInstall
 import com.aurora.store.data.room.update.Update
-import com.aurora.store.util.PackageUtil
 import com.aurora.store.util.FlavouredUtil
+import com.aurora.store.util.PackageUtil
 import com.aurora.store.util.Preferences
 import com.aurora.store.util.Preferences.PREFERENCE_UPDATES_WARN_PERMISSIONS
 import com.aurora.store.util.Preferences.PREFERENCE_UPDATES_WARN_TRACKERS
@@ -356,11 +357,11 @@ fun MainScreen(
         )
     }
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-        ) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
         Scaffold(
             modifier = Modifier
                 .fillMaxSize()
@@ -384,7 +385,9 @@ fun MainScreen(
                             ) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_notifications),
-                                    contentDescription = stringResource(R.string.title_notifications)
+                                    contentDescription = stringResource(
+                                        R.string.title_notifications
+                                    )
                                 )
                             }
                         }
@@ -442,56 +445,56 @@ fun MainScreen(
                         MainTab.UPDATES -> {
                             Box(modifier = Modifier.fillMaxSize().padding(bottom = 112.dp)) {
                                 UpdatesScreen(
-                            viewModel = updatesViewModel,
-                            onNavigateTo = ::handleNavigation,
-                            onRequestUpdate = { update ->
-                                if (warnPermissions && update.newPermissions.isNotEmpty()) {
-                                    permissionWarning = update
-                                } else {
-                                    checkTrackersThenUpdate(update)
-                                }
-                            },
-                            onRequestUpdateAll = { selectedUpdates ->
-                                val needsObb = selectedUpdates.any {
-                                    it.fileList.requiresObbDir()
-                                }
-                                if (needsObb &&
-                                    !isGranted(context, PermissionType.STORAGE_MANAGER)
-                                ) {
-                                    onNavigateTo(
-                                        Destination.PermissionRationale(
-                                            setOf(PermissionType.STORAGE_MANAGER)
-                                        )
-                                    )
-                                } else {
-                                    val (heldBack, toUpdate) = selectedUpdates.partition {
-                                        warnPermissions && it.newPermissions.isNotEmpty()
-                                    }
-                                    if (heldBack.isNotEmpty()) {
-                                        context.toast(
-                                            context.resources.getQuantityString(
-                                                R.plurals.updates_skipped_new_permissions,
-                                                heldBack.size,
-                                                heldBack.size
+                                    viewModel = updatesViewModel,
+                                    onNavigateTo = ::handleNavigation,
+                                    onRequestUpdate = { update ->
+                                        if (warnPermissions && update.newPermissions.isNotEmpty()) {
+                                            permissionWarning = update
+                                        } else {
+                                            checkTrackersThenUpdate(update)
+                                        }
+                                    },
+                                    onRequestUpdateAll = { selectedUpdates ->
+                                        val needsObb = selectedUpdates.any {
+                                            it.fileList.requiresObbDir()
+                                        }
+                                        if (needsObb &&
+                                            !isGranted(context, PermissionType.STORAGE_MANAGER)
+                                        ) {
+                                            onNavigateTo(
+                                                Destination.PermissionRationale(
+                                                    setOf(PermissionType.STORAGE_MANAGER)
+                                                )
                                             )
-                                        )
-                                    }
-                                    updatesViewModel.downloadAll(toUpdate)
-                                }
-                            },
-                            onCancelUpdate = { packageName ->
-                                if (downloads.any {
-                                        it.packageName == packageName && !it.isFinished
-                                    }
-                                ) {
-                                    checkingJobs.remove(packageName)
-                                    updatesViewModel.cancelDownload(packageName)
-                                } else {
-                                    checkingJobs.remove(packageName)?.cancel()
-                                }
-                            },
-                            onCancelAll = { updatesViewModel.cancelAll() },
-                            checkingPackages = checkingJobs.keys
+                                        } else {
+                                            val (heldBack, toUpdate) = selectedUpdates.partition {
+                                                warnPermissions && it.newPermissions.isNotEmpty()
+                                            }
+                                            if (heldBack.isNotEmpty()) {
+                                                context.toast(
+                                                    context.resources.getQuantityString(
+                                                        R.plurals.updates_skipped_new_permissions,
+                                                        heldBack.size,
+                                                        heldBack.size
+                                                    )
+                                                )
+                                            }
+                                            updatesViewModel.downloadAll(toUpdate)
+                                        }
+                                    },
+                                    onCancelUpdate = { packageName ->
+                                        if (downloads.any {
+                                                it.packageName == packageName && !it.isFinished
+                                            }
+                                        ) {
+                                            checkingJobs.remove(packageName)
+                                            updatesViewModel.cancelDownload(packageName)
+                                        } else {
+                                            checkingJobs.remove(packageName)?.cancel()
+                                        }
+                                    },
+                                    onCancelAll = { updatesViewModel.cancelAll() },
+                                    checkingPackages = checkingJobs.keys
                                 )
                             }
                         }
@@ -552,7 +555,7 @@ fun MainScreen(
                                                     pagerState.animateScrollToPage(
                                                         page = index,
                                                         animationSpec = spring(
-                                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                                            dampingRatio = DampingRatioNoBouncy,
                                                             stiffness = Spring.StiffnessMediumLow
                                                         )
                                                     )
@@ -636,11 +639,11 @@ private fun FloatingMainTab(
     // separately animating icon visibility and parent content size.
     val transition = updateTransition(targetState = selected, label = "main-tab-selection")
     val selectionMotion = spring<Float>(
-        dampingRatio = Spring.DampingRatioNoBouncy,
+        dampingRatio = DampingRatioNoBouncy,
         stiffness = Spring.StiffnessMediumLow
     )
     val colorMotion = spring<Color>(
-        dampingRatio = Spring.DampingRatioNoBouncy,
+        dampingRatio = DampingRatioNoBouncy,
         stiffness = Spring.StiffnessMediumLow
     )
     val contentColor by transition.animateColor(
@@ -662,7 +665,7 @@ private fun FloatingMainTab(
     val horizontalPadding by transition.animateDp(
         transitionSpec = {
             spring<Dp>(
-                dampingRatio = Spring.DampingRatioNoBouncy,
+                dampingRatio = DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMediumLow
             )
         },
@@ -671,7 +674,7 @@ private fun FloatingMainTab(
     val iconSlotWidth by transition.animateDp(
         transitionSpec = {
             spring<Dp>(
-                dampingRatio = Spring.DampingRatioNoBouncy,
+                dampingRatio = DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMediumLow
             )
         },

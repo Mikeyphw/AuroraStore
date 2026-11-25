@@ -17,15 +17,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.material3.ExpandedFullScreenSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.ExpandedFullScreenSearchBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SearchBar
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
@@ -49,8 +49,8 @@ import com.aurora.store.compose.composable.ArrowIconBox
 import com.aurora.store.compose.composable.TopAppBar
 import com.aurora.store.compose.composable.auroraSegmentedListItemShapes
 import com.aurora.store.compose.navigation.Destination
-import com.aurora.store.data.artifact.ArtifactImportActivity
 import com.aurora.store.compose.preview.ThemePreviewProvider
+import com.aurora.store.data.artifact.ArtifactImportActivity
 import com.aurora.store.data.model.PermissionType
 import kotlinx.coroutines.launch
 
@@ -150,9 +150,13 @@ private fun ScreenContent(onNavigateTo: (Destination) -> Unit = {}) {
         snapshotFlow { textFieldState.text.toString().trim() }
     }.collectAsStateWithLifecycle(initialValue = "")
     val matchingEntries = remember(query, entries) {
-        if (query.isEmpty()) entries else entries.filter { entry ->
-            entry.title.contains(query, ignoreCase = true) ||
-                entry.searchTerms.contains(query, ignoreCase = true)
+        if (query.isEmpty()) {
+            entries
+        } else {
+            entries.filter { entry ->
+                entry.title.contains(query, ignoreCase = true) ||
+                    entry.searchTerms.contains(query, ignoreCase = true)
+            }
         }
     }
 
@@ -227,7 +231,9 @@ private fun ScreenContent(onNavigateTo: (Destination) -> Unit = {}) {
                             .padding(horizontal = dimensionResource(R.dimen.spacing_large))
                             .then(
                                 if (index < entries.lastIndex) {
-                                    Modifier.padding(bottom = dimensionResource(R.dimen.spacing_xsmall))
+                                    Modifier.padding(
+                                        bottom = dimensionResource(R.dimen.spacing_xsmall)
+                                    )
                                 } else {
                                     Modifier
                                 }
@@ -279,9 +285,13 @@ private fun ScreenContent(onNavigateTo: (Destination) -> Unit = {}) {
                 )
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(vertical = dimensionResource(R.dimen.spacing_small))
+                    contentPadding = PaddingValues(
+                        vertical = dimensionResource(R.dimen.spacing_small)
+                    )
                 ) {
-                    itemsIndexed(matchingEntries, key = { _, entry -> entry.title }) { index, entry ->
+                    itemsIndexed(matchingEntries, key = { _, entry ->
+                        entry.title
+                    }) { index, entry ->
                         SegmentedListItem(
                             shapes = auroraSegmentedListItemShapes(index, matchingEntries.size),
                             modifier = Modifier

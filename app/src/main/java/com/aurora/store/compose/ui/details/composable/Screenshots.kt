@@ -6,15 +6,15 @@
 
 package com.aurora.store.compose.ui.details.composable
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
 import androidx.compose.material3.carousel.rememberCarouselState

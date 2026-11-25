@@ -10,6 +10,7 @@ internal object ArtifactApkIdentityPolicy {
     enum class InstalledSignerStatus { ACTIVE_MATCH, HISTORY_ONLY_UNVERIFIED, MISMATCH }
 
     private val packagePattern = Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+")
+
     // Android feature/config split IDs may contain dots, hyphens and underscores.
     private val splitPattern = Regex("[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")
 
@@ -17,11 +18,17 @@ internal object ArtifactApkIdentityPolicy {
         if (!packagePattern.matches(packageName) || versionCode <= 0L) {
             throw ApkVerificationException("Signed APK has an invalid package or version identity")
         }
-        if (splitName != null && (!splitPattern.matches(splitName) ||
-                splitName == "base" || splitName == "config" ||
-                splitName.startsWith(".") || splitName.endsWith(".") ||
-                splitName.contains("..") || splitName.contains("--")
-            )) {
+        if (splitName != null &&
+            (
+                !splitPattern.matches(splitName) ||
+                    splitName == "base" ||
+                    splitName == "config" ||
+                    splitName.startsWith(".") ||
+                    splitName.endsWith(".") ||
+                    splitName.contains("..") ||
+                    splitName.contains("--")
+                )
+        ) {
             throw ApkVerificationException("Signed APK has an invalid or ambiguous split identity")
         }
     }
@@ -30,12 +37,20 @@ internal object ArtifactApkIdentityPolicy {
     fun requireUniqueSplitNames(names: List<String?>) {
         if (names.count { it == null } != 1 ||
             names.filterNotNull().distinct().size != names.size - 1
-        ) throw ApkVerificationException("APK set has missing base or duplicate manifest splits")
+        ) {
+            throw ApkVerificationException("APK set has missing base or duplicate manifest splits")
+        }
         for (name in names.filterNotNull()) {
-            if (!splitPattern.matches(name) || name.startsWith(".") ||
-                name.endsWith(".") || name.contains("..") ||
-                name == "base" || name == "config" || name.contains("--")
-            ) throw ApkVerificationException("APK set has invalid split identity")
+            if (!splitPattern.matches(name) ||
+                name.startsWith(".") ||
+                name.endsWith(".") ||
+                name.contains("..") ||
+                name == "base" ||
+                name == "config" ||
+                name.contains("--")
+            ) {
+                throw ApkVerificationException("APK set has invalid split identity")
+            }
         }
     }
 
@@ -46,15 +61,22 @@ internal object ArtifactApkIdentityPolicy {
      * trust, but an available contradictory view always refuses the import.
      */
     fun requirePlatformAgreement(
-        packageName: String, versionCode: Long, isBase: Boolean,
-        platformPackage: String?, platformVersion: Long?
+        packageName: String,
+        versionCode: Long,
+        isBase: Boolean,
+        platformPackage: String?,
+        platformVersion: Long?
     ) {
         if ((platformPackage == null) != (platformVersion == null) ||
             (isBase && platformPackage == null)
-        ) throw ApkVerificationException("Android could not confirm base APK identity")
+        ) {
+            throw ApkVerificationException("Android could not confirm base APK identity")
+        }
         if (platformPackage != null &&
             (packageName != platformPackage || versionCode != platformVersion)
-        ) throw ApkVerificationException("Signed manifest differs from Android archive identity")
+        ) {
+            throw ApkVerificationException("Signed manifest differs from Android archive identity")
+        }
     }
 
     /**
@@ -64,12 +86,19 @@ internal object ArtifactApkIdentityPolicy {
      * Play/R3B policy is deliberately unchanged.
      */
     fun installedSignerStatus(
-        candidate: Set<String>, installedActive: Set<String>, installedHistory: Set<String>
+        candidate: Set<String>,
+        installedActive: Set<String>,
+        installedHistory: Set<String>
     ): InstalledSignerStatus {
         if (candidate.isEmpty() || installedActive.isEmpty()) return InstalledSignerStatus.MISMATCH
         if (candidate == installedActive) return InstalledSignerStatus.ACTIVE_MATCH
-        return if (candidate.size == 1 && installedActive.size == 1 &&
+        return if (candidate.size == 1 &&
+            installedActive.size == 1 &&
             candidate.single() in installedHistory
-        ) InstalledSignerStatus.HISTORY_ONLY_UNVERIFIED else InstalledSignerStatus.MISMATCH
+        ) {
+            InstalledSignerStatus.HISTORY_ONLY_UNVERIFIED
+        } else {
+            InstalledSignerStatus.MISMATCH
+        }
     }
 }

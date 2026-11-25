@@ -59,8 +59,8 @@ import com.aurora.extensions.toast
 import com.aurora.store.R
 import com.aurora.store.compose.composable.BlackListItem
 import com.aurora.store.compose.composable.ContainedLoadingIndicator
-import com.aurora.store.compose.composable.ScrollHint
 import com.aurora.store.compose.composable.RoundedIconButton
+import com.aurora.store.compose.composable.ScrollHint
 import com.aurora.store.compose.composable.TextDividerComposable
 import com.aurora.store.compose.preview.ThemePreviewProvider
 import com.aurora.store.compose.ui.blacklist.menu.BlacklistMenu
