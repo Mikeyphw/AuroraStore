@@ -16,29 +16,42 @@ class ArtifactSplitCompatibilityDeviceTest {
         assertThat(device).isNotEmpty()
         val target = device.first().replace('-', '_')
         val a = ArtifactSplitCompatibilityPolicy.check(
-            ArtifactArchivePolicy.Format.APKS,listOf(null,"config.$target"),device
+            ArtifactArchivePolicy.Format.APKS,
+            listOf(null, "config.$target"),
+            device
         )
         assertThat(a.installabilityConfirmed).isFalse()
     }
+
     @Test fun twoDifferentAbiVariantsCannotBeSilentlyInstalledTogether() {
-        assertThat(runCatching {
-            ArtifactSplitCompatibilityPolicy.check(
-                ArtifactArchivePolicy.Format.APKM,
-                listOf(null,"config.arm64_v8a","config.x86_64"),Build.SUPPORTED_ABIS.toList()
-            )
-        }.isFailure).isTrue()
+        assertThat(
+            runCatching {
+                ArtifactSplitCompatibilityPolicy.check(
+                    ArtifactArchivePolicy.Format.APKM,
+                    listOf(null, "config.arm64_v8a", "config.x86_64"),
+                    Build.SUPPORTED_ABIS.toList()
+                )
+            }.isFailure
+        ).isTrue()
     }
+
     @Test fun extraDensityVariantsCannotBeSilentlyInstalledTogether() {
-        assertThat(runCatching {
-            ArtifactSplitCompatibilityPolicy.check(
-                ArtifactArchivePolicy.Format.XAPK,
-                listOf(null,"config.hdpi","config.xxhdpi"),Build.SUPPORTED_ABIS.toList()
-            )
-        }.isFailure).isTrue()
+        assertThat(
+            runCatching {
+                ArtifactSplitCompatibilityPolicy.check(
+                    ArtifactArchivePolicy.Format.XAPK,
+                    listOf(null, "config.hdpi", "config.xxhdpi"),
+                    Build.SUPPORTED_ABIS.toList()
+                )
+            }.isFailure
+        ).isTrue()
     }
+
     @Test fun featuresRemainUnqualifiedWithoutManifestDependencies() {
         val assessment = ArtifactSplitCompatibilityPolicy.check(
-            ArtifactArchivePolicy.Format.APKS,listOf(null,"camera"),Build.SUPPORTED_ABIS.toList()
+            ArtifactArchivePolicy.Format.APKS,
+            listOf(null, "camera"),
+            Build.SUPPORTED_ABIS.toList()
         )
         assertThat(assessment.featureDependenciesUnverified).isTrue()
         assertThat(assessment.installabilityConfirmed).isFalse()

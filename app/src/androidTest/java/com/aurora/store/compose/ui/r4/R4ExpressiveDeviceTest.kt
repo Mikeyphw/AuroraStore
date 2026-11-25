@@ -77,7 +77,9 @@ class R4ExpressiveDeviceTest : IsolatedTest() {
             )
         }
         composeTestRule.onNodeWithText(context.getString(R.string.action_update)).assertExists()
-        composeTestRule.onNodeWithText(context.getString(R.string.action_cancel)).assertDoesNotExist()
+        composeTestRule.onNodeWithText(
+            context.getString(R.string.action_cancel)
+        ).assertDoesNotExist()
         screenshot("r4_update_idle.png")
         composeTestRule.onNodeWithText(context.getString(R.string.action_update)).performClick()
         composeTestRule.runOnIdle {
@@ -87,7 +89,9 @@ class R4ExpressiveDeviceTest : IsolatedTest() {
         // The new state is distinct from the verified and installing captures.
         // An isolated Settings shot duplicated the actual activity Settings image.
         composeTestRule.onNodeWithText(context.getString(R.string.action_cancel)).assertExists()
-        composeTestRule.onNodeWithText(context.getString(R.string.action_update)).assertDoesNotExist()
+        composeTestRule.onNodeWithText(
+            context.getString(R.string.action_update)
+        ).assertDoesNotExist()
         screenshot("r4_update_downloading.png")
     }
 
@@ -105,7 +109,9 @@ class R4ExpressiveDeviceTest : IsolatedTest() {
             )
         }
         composeTestRule.onNodeWithText(context.getString(R.string.action_cancel)).assertExists()
-        composeTestRule.onNodeWithText(context.getString(R.string.action_update)).assertDoesNotExist()
+        composeTestRule.onNodeWithText(
+            context.getString(R.string.action_update)
+        ).assertDoesNotExist()
         screenshot("r4_update_verifying.png")
         composeTestRule.onNodeWithText(context.getString(R.string.action_cancel)).performClick()
         composeTestRule.runOnIdle {
@@ -124,8 +130,12 @@ class R4ExpressiveDeviceTest : IsolatedTest() {
             )
         }
         composeTestRule.onNodeWithText(context.getString(R.string.action_installing)).assertExists()
-        composeTestRule.onNodeWithText(context.getString(R.string.action_cancel)).assertDoesNotExist()
-        composeTestRule.onNodeWithText(context.getString(R.string.action_update)).assertDoesNotExist()
+        composeTestRule.onNodeWithText(
+            context.getString(R.string.action_cancel)
+        ).assertDoesNotExist()
+        composeTestRule.onNodeWithText(
+            context.getString(R.string.action_update)
+        ).assertDoesNotExist()
         screenshot("r4_update_installing.png")
     }
 

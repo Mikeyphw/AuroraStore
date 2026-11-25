@@ -42,12 +42,16 @@ class P14HermeticCatalogGateway @Inject constructor(
             val bitmap = Bitmap.createBitmap(320, 560, Bitmap.Config.ARGB_8888)
             try {
                 val canvas = Canvas(bitmap)
-                canvas.drawColor(listOf(
-                    Color.rgb(45, 91, 159), Color.rgb(37, 134, 122),
-                    Color.rgb(144, 78, 124)
-                )[index])
+                canvas.drawColor(
+                    listOf(
+                        Color.rgb(45, 91, 159),
+                        Color.rgb(37, 134, 122),
+                        Color.rgb(144, 78, 124)
+                    )[index]
+                )
                 val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = Color.WHITE; textSize = 40f
+                    color = Color.WHITE
+                    textSize = 40f
                 }
                 canvas.drawText("P14 LOCAL", 48f, 200f, paint)
                 paint.textSize = 25f
@@ -55,7 +59,9 @@ class P14HermeticCatalogGateway @Inject constructor(
                 FileOutputStream(actualFile).use { output ->
                     check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output))
                 }
-            } finally { bitmap.recycle() }
+            } finally {
+                bitmap.recycle()
+            }
         }
         check(actualFile.length() > 1000L) { "P14_FIXTURE_ARTWORK_EMPTY" }
         Artwork(url = "file://" + File(context.filesDir, "p14-image-$index.png").absolutePath)
@@ -84,15 +90,23 @@ class P14HermeticCatalogGateway @Inject constructor(
     override fun appDetails(packageName: String): App? = if (packageName == PACKAGE) {
         detailsCount.incrementAndGet()
         app()
-    } else null
+    } else {
+        null
+    }
 
     override fun featuredReviews(packageName: String): List<Review>? = if (packageName == PACKAGE) {
         reviewCount.incrementAndGet()
-        listOf(Review(
-            userName = "P14 Offline Reviewer", timeStamp = 1745750879,
-            rating = 4, comment = "P14 hermetic featured review. No Play API used."
-        ))
-    } else null
+        listOf(
+            Review(
+                userName = "P14 Offline Reviewer",
+                timeStamp = 1745750879,
+                rating = 4,
+                comment = "P14 hermetic featured review. No Play API used."
+            )
+        )
+    } else {
+        null
+    }
 }
 
 @Module

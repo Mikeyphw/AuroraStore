@@ -65,11 +65,7 @@ internal fun rememberShimmerBrush(): Brush {
 }
 
 @Composable
-private fun ShimmerBlock(
-    modifier: Modifier,
-    brush: Brush,
-    radiusRes: Int = R.dimen.radius_small
-) {
+private fun ShimmerBlock(modifier: Modifier, brush: Brush, radiusRes: Int = R.dimen.radius_small) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(dimensionResource(radiusRes)))

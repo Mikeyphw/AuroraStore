@@ -6,10 +6,10 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.os.SystemClock
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -36,8 +36,11 @@ import org.junit.runner.RunWith
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
 class R4ActivityNavigationDeviceTest {
-    @get:Rule(order = 0) val hiltRule = HiltAndroidRule(this)
-    @get:Rule(order = 1) val composeRule = createEmptyComposeRule()
+    @get:Rule(order = 0)
+    val hiltRule = HiltAndroidRule(this)
+
+    @get:Rule(order = 1)
+    val composeRule = createEmptyComposeRule()
 
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
@@ -101,7 +104,9 @@ class R4ActivityNavigationDeviceTest {
                 if (abs(Color.red(a) - Color.red(b)) +
                     abs(Color.green(a) - Color.green(b)) +
                     abs(Color.blue(a) - Color.blue(b)) >= 72
-                ) changed++
+                ) {
+                    changed++
+                }
             }
         }
         return changed

@@ -7,13 +7,13 @@ import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
-import org.junit.Test
-import org.junit.runner.RunWith
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import org.junit.Test
+import org.junit.runner.RunWith
 
 /** API36 native SAF-stream staging fixtures; no Play or install receipt is fabricated. */
 @RunWith(AndroidJUnit4::class)
@@ -36,38 +36,55 @@ class ArtifactPrivateStagerDeviceTest {
     fun safeArchivePrivatelyExtractsExactApkBytes() {
         val input = archive("base.apk" to ByteArray(2048) { 1 })
         try {
-            val stage = ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
+            val stage = ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) {
+                false
+            }
             try {
                 assertThat(stage.apks).hasSize(1)
                 assertThat(stage.apks.single().byteCount).isEqualTo(2048)
                 assertThat(stage.apks.single().file.canonicalPath)
                     .startsWith(context.cacheDir.canonicalPath)
                 assertThat(stage.apks.single().file.name).isEqualTo("part-000.apk")
-            } finally { stage.discard() }
-        } finally { input.delete() }
+            } finally {
+                stage.discard()
+            }
+        } finally {
+            input.delete()
+        }
 
         // Standalone .apk uses the same private file/byte-boundary model.
         val standalone = File(context.cacheDir, "standalone-${UUID.randomUUID()}.apk")
         standalone.writeBytes(ByteArray(2048) { 2 })
         try {
-            val stage = ArtifactPrivateStager.stage(context,
-                Uri.fromFile(standalone), standalone.name) { false }
+            val stage = ArtifactPrivateStager.stage(
+                context,
+                Uri.fromFile(standalone),
+                standalone.name
+            ) { false }
             try {
                 assertThat(stage.apks).hasSize(1)
                 assertThat(stage.apks.single().byteCount).isEqualTo(2048)
                 assertThat(stage.format).isEqualTo(ArtifactArchivePolicy.Format.APK)
-            } finally { stage.discard() }
-        } finally { standalone.delete() }
+            } finally {
+                stage.discard()
+            }
+        } finally {
+            standalone.delete()
+        }
     }
 
     @Test
     fun zipTraversalNeverEscapesPrivateStaging() {
         val input = archive("../../outside.apk" to byteArrayOf(1, 2))
         try {
-            assertThat(runCatching {
-                ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
-            }.isFailure).isTrue()
-        } finally { input.delete() }
+            assertThat(
+                runCatching {
+                    ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
+                }.isFailure
+            ).isTrue()
+        } finally {
+            input.delete()
+        }
     }
 
     @Test
@@ -77,52 +94,77 @@ class ArtifactPrivateStagerDeviceTest {
             "BASE.apk" to byteArrayOf(4, 5, 6)
         )
         try {
-            assertThat(runCatching {
-                ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
-            }.isFailure).isTrue()
-        } finally { input.delete() }
+            assertThat(
+                runCatching {
+                    ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
+                }.isFailure
+            ).isTrue()
+        } finally {
+            input.delete()
+        }
     }
 
     @Test
     fun archiveWithExpansionAssetsFailsClosed() {
-        val input = archive("base.apk" to ByteArray(256) { 1 }, "Android/obb/test/main.obb" to byteArrayOf(7))
+        val input = archive(
+            "base.apk" to ByteArray(256) { 1 },
+            "Android/obb/test/main.obb" to byteArrayOf(7)
+        )
         try {
-            assertThat(runCatching {
-                ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
-            }.isFailure).isTrue()
-        } finally { input.delete() }
+            assertThat(
+                runCatching {
+                    ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
+                }.isFailure
+            ).isTrue()
+        } finally {
+            input.delete()
+        }
     }
 
     @Test
     fun compressedBombIsRejected() {
         val input = archive("base.apk" to ByteArray(3_000_000))
         try {
-            assertThat(runCatching {
-                ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
-            }.isFailure).isTrue()
-        } finally { input.delete() }
+            assertThat(
+                runCatching {
+                    ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
+                }.isFailure
+            ).isTrue()
+        } finally {
+            input.delete()
+        }
     }
 
     @Test
     fun manyArchiveEntriesRefusedBeforeStagingAnyApks() {
-        val input = archive(*Array(129) { i ->
-            "assets/part-$i.txt" to byteArrayOf(1)
-        })
+        val input = archive(
+            *Array(129) { i ->
+                "assets/part-$i.txt" to byteArrayOf(1)
+            }
+        )
         try {
-            assertThat(runCatching {
-                ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
-            }.isFailure).isTrue()
-        } finally { input.delete() }
+            assertThat(
+                runCatching {
+                    ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
+                }.isFailure
+            ).isTrue()
+        } finally {
+            input.delete()
+        }
     }
 
     @Test
     fun cancelledImportNeverLeavesVerifiedReceipt() {
         val input = archive("base.apk" to ByteArray(128) { 1 })
         try {
-            assertThat(runCatching {
-                ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { true }
-            }.isFailure).isTrue()
-        } finally { input.delete() }
+            assertThat(
+                runCatching {
+                    ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { true }
+                }.isFailure
+            ).isTrue()
+        } finally {
+            input.delete()
+        }
     }
 
     private fun storedArchive(apkName: String, contents: ByteArray): File {
@@ -156,10 +198,14 @@ class ArtifactPrivateStagerDeviceTest {
         val input = storedArchive("base.apk", payload)
         try {
             corruptStoredPayload(input, payload)
-            assertThat(runCatching {
-                ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
-            }.isFailure).isTrue()
-        } finally { input.delete() }
+            assertThat(
+                runCatching {
+                    ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
+                }.isFailure
+            ).isTrue()
+        } finally {
+            input.delete()
+        }
     }
 
     @Test
@@ -182,10 +228,14 @@ class ArtifactPrivateStagerDeviceTest {
         }
         try {
             corruptStoredPayload(input, payload)
-            assertThat(runCatching {
-                ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
-            }.isFailure).isTrue()
-        } finally { input.delete() }
+            assertThat(
+                runCatching {
+                    ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
+                }.isFailure
+            ).isTrue()
+        } finally {
+            input.delete()
+        }
     }
 
     @Test
@@ -194,16 +244,22 @@ class ArtifactPrivateStagerDeviceTest {
         try {
             val bytes = input.readBytes()
             val eocd = (0..bytes.size - 4).last { offset ->
-                bytes[offset] == 0x50.toByte() && bytes[offset + 1] == 0x4b.toByte() &&
-                    bytes[offset + 2] == 5.toByte() && bytes[offset + 3] == 6.toByte()
+                bytes[offset] == 0x50.toByte() &&
+                    bytes[offset + 1] == 0x4b.toByte() &&
+                    bytes[offset + 2] == 5.toByte() &&
+                    bytes[offset + 3] == 6.toByte()
             }
             bytes[eocd + 8] = 0x7f
             bytes[eocd + 10] = 0x7f
             input.writeBytes(bytes)
-            assertThat(runCatching {
-                ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
-            }.isFailure).isTrue()
-        } finally { input.delete() }
+            assertThat(
+                runCatching {
+                    ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
+                }.isFailure
+            ).isTrue()
+        } finally {
+            input.delete()
+        }
     }
 
     @Test
@@ -212,16 +268,22 @@ class ArtifactPrivateStagerDeviceTest {
         try {
             val bytes = input.readBytes()
             val cen = (0..bytes.size - 4).first { offset ->
-                bytes[offset] == 0x50.toByte() && bytes[offset + 1] == 0x4b.toByte() &&
-                    bytes[offset + 2] == 1.toByte() && bytes[offset + 3] == 2.toByte()
+                bytes[offset] == 0x50.toByte() &&
+                    bytes[offset + 1] == 0x4b.toByte() &&
+                    bytes[offset + 2] == 1.toByte() &&
+                    bytes[offset + 3] == 2.toByte()
             }
             bytes[cen + 5] = 3
             bytes[cen + 41] = 0xa0.toByte()
             input.writeBytes(bytes)
-            assertThat(runCatching {
-                ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
-            }.isFailure).isTrue()
-        } finally { input.delete() }
+            assertThat(
+                runCatching {
+                    ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
+                }.isFailure
+            ).isTrue()
+        } finally {
+            input.delete()
+        }
     }
 
     @Test
@@ -235,24 +297,40 @@ class ArtifactPrivateStagerDeviceTest {
             val candidate = File(context.cacheDir, "synthetic-${UUID.randomUUID()}.apks")
             input.copyTo(candidate)
             try {
-                val stage = ArtifactPrivateStager.stage(context,
-                    Uri.fromFile(candidate), candidate.name) { false }
+                val stage = ArtifactPrivateStager.stage(
+                    context,
+                    Uri.fromFile(candidate),
+                    candidate.name
+                ) { false }
                 try {
                     assertThat(stage.apks).hasSize(1)
                     assertThat(stage.apks.single().byteCount).isEqualTo(128)
-                } finally { stage.discard() }
-            } finally { candidate.delete() }
+                } finally {
+                    stage.discard()
+                }
+            } finally {
+                candidate.delete()
+            }
             for (suffix in listOf("apkm", "xapk")) {
                 val wrong = File(context.cacheDir, "relabel-${UUID.randomUUID()}.$suffix")
                 input.copyTo(wrong)
                 try {
-                    assertThat(runCatching {
-                        ArtifactPrivateStager.stage(context,
-                            Uri.fromFile(wrong), wrong.name) { false }
-                    }.isFailure).isTrue()
-                } finally { wrong.delete() }
+                    assertThat(
+                        runCatching {
+                            ArtifactPrivateStager.stage(
+                                context,
+                                Uri.fromFile(wrong),
+                                wrong.name
+                            ) { false }
+                        }.isFailure
+                    ).isTrue()
+                } finally {
+                    wrong.delete()
+                }
             }
-        } finally { input.delete() }
+        } finally {
+            input.delete()
+        }
     }
 
     @Test
@@ -260,10 +338,14 @@ class ArtifactPrivateStagerDeviceTest {
         val input = archive("base.apk" to ByteArray(128) { 1 })
         try {
             input.writeBytes(input.readBytes().dropLast(4).toByteArray())
-            assertThat(runCatching {
-                ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
-            }.isFailure).isTrue()
-        } finally { input.delete() }
+            assertThat(
+                runCatching {
+                    ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) { false }
+                }.isFailure
+            ).isTrue()
+        } finally {
+            input.delete()
+        }
     }
 
     /** C04-02: a real content URI from the app-owned FileProvider, not file://. */
@@ -273,7 +355,9 @@ class ArtifactPrivateStagerDeviceTest {
         input.writeBytes(ByteArray(4096) { (it % 251).toByte() })
         try {
             val uri = androidx.core.content.FileProvider.getUriForFile(
-                context, context.packageName + ".fileProvider", input
+                context,
+                context.packageName + ".fileProvider",
+                input
             )
             assertThat(uri.scheme).isEqualTo("content")
             val stage = ArtifactPrivateStager.stage(context, uri, input.name) { false }
@@ -282,8 +366,12 @@ class ArtifactPrivateStagerDeviceTest {
                     .startsWith(context.cacheDir.canonicalPath)
                 assertThat(stage.originalSize).isEqualTo(4096L)
                 assertThat(stage.apks.single().sha256).isEqualTo(stage.originalSha256)
-            } finally { stage.discard() }
-        } finally { input.delete() }
+            } finally {
+                stage.discard()
+            }
+        } finally {
+            input.delete()
+        }
     }
 
     private fun importChildNames(): Set<String> =
@@ -294,9 +382,11 @@ class ArtifactPrivateStagerDeviceTest {
     fun refusedProviderUriLeavesNoPrivateStaging() {
         val before = importChildNames()
         val uri = Uri.parse("content://com.aurora.store.debug.nonexistent/document/123")
-        assertThat(runCatching {
-            ArtifactPrivateStager.stage(context, uri, "release.apk") { false }
-        }.isFailure).isTrue()
+        assertThat(
+            runCatching {
+                ArtifactPrivateStager.stage(context, uri, "release.apk") { false }
+            }.isFailure
+        ).isTrue()
         assertThat(importChildNames()).isEqualTo(before)
     }
 
@@ -307,14 +397,18 @@ class ArtifactPrivateStagerDeviceTest {
         val before = importChildNames()
         var calls = 0
         try {
-            assertThat(runCatching {
-                ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) {
-                    ++calls
-                    calls >= 5
-                }
-            }.isFailure).isTrue()
+            assertThat(
+                runCatching {
+                    ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name) {
+                        ++calls
+                        calls >= 5
+                    }
+                }.isFailure
+            ).isTrue()
             assertThat(importChildNames()).isEqualTo(before)
-        } finally { input.delete() }
+        } finally {
+            input.delete()
+        }
     }
 
     @Test
@@ -325,12 +419,16 @@ class ArtifactPrivateStagerDeviceTest {
         val lease = ArtifactCopyCancellation()
         lease.cancel()
         try {
-            assertThat(runCatching {
-                ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name, lease) {
-                    lease.isCancelled()
-                }
-            }.isFailure).isTrue()
+            assertThat(
+                runCatching {
+                    ArtifactPrivateStager.stage(context, Uri.fromFile(input), input.name, lease) {
+                        lease.isCancelled()
+                    }
+                }.isFailure
+            ).isTrue()
             assertThat(importChildNames()).isEqualTo(before)
-        } finally { input.delete() }
+        } finally {
+            input.delete()
+        }
     }
 }

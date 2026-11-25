@@ -82,32 +82,72 @@ class R4OfflineAccountSessionDeviceTest {
 
     @Test
     fun aasLoginStoresOnlyAasToken() {
-        AccountProvider.login(context, "synthetic@example.invalid", "synthetic-aas", TokenType.AAS, AccountType.GOOGLE)
+        AccountProvider.login(
+            context,
+            "synthetic@example.invalid",
+            "synthetic-aas",
+            TokenType.AAS,
+            AccountType.GOOGLE
+        )
         assertThat(AccountProvider.isLoggedIn(context)).isTrue()
         assertThat(AccountProvider.getAccountType(context)).isEqualTo(AccountType.GOOGLE)
-        assertThat(AccountProvider.getLoginToken(context)).isEqualTo("synthetic-aas" to TokenType.AAS)
+        assertThat(AccountProvider.getLoginToken(context)).isEqualTo(
+            "synthetic-aas" to TokenType.AAS
+        )
         assertThat(Preferences.getString(context, Constants.ACCOUNT_AUTH_PLAIN)).isEmpty()
     }
 
     @Test
     fun authLoginStoresOnlyAuthToken() {
-        AccountProvider.login(context, "synthetic@example.invalid", "synthetic-auth", TokenType.AUTH, AccountType.GOOGLE)
-        assertThat(AccountProvider.getLoginToken(context)).isEqualTo("synthetic-auth" to TokenType.AUTH)
+        AccountProvider.login(
+            context,
+            "synthetic@example.invalid",
+            "synthetic-auth",
+            TokenType.AUTH,
+            AccountType.GOOGLE
+        )
+        assertThat(AccountProvider.getLoginToken(context)).isEqualTo(
+            "synthetic-auth" to TokenType.AUTH
+        )
         assertThat(Preferences.getString(context, Constants.ACCOUNT_AAS_PLAIN)).isEmpty()
     }
 
     @Test
     fun switchingFromAasToAuthDiscardsOldAas() {
-        AccountProvider.login(context, "synthetic@example.invalid", "old-aas", TokenType.AAS, AccountType.GOOGLE)
-        AccountProvider.login(context, "synthetic@example.invalid", "new-auth", TokenType.AUTH, AccountType.GOOGLE)
+        AccountProvider.login(
+            context,
+            "synthetic@example.invalid",
+            "old-aas",
+            TokenType.AAS,
+            AccountType.GOOGLE
+        )
+        AccountProvider.login(
+            context,
+            "synthetic@example.invalid",
+            "new-auth",
+            TokenType.AUTH,
+            AccountType.GOOGLE
+        )
         assertThat(AccountProvider.getLoginToken(context)).isEqualTo("new-auth" to TokenType.AUTH)
         assertThat(Preferences.getString(context, Constants.ACCOUNT_AAS_PLAIN)).isEmpty()
     }
 
     @Test
     fun switchingFromAuthToAasDiscardsOldAuth() {
-        AccountProvider.login(context, "synthetic@example.invalid", "old-auth", TokenType.AUTH, AccountType.GOOGLE)
-        AccountProvider.login(context, "synthetic@example.invalid", "new-aas", TokenType.AAS, AccountType.GOOGLE)
+        AccountProvider.login(
+            context,
+            "synthetic@example.invalid",
+            "old-auth",
+            TokenType.AUTH,
+            AccountType.GOOGLE
+        )
+        AccountProvider.login(
+            context,
+            "synthetic@example.invalid",
+            "new-aas",
+            TokenType.AAS,
+            AccountType.GOOGLE
+        )
         assertThat(AccountProvider.getLoginToken(context)).isEqualTo("new-aas" to TokenType.AAS)
         assertThat(Preferences.getString(context, Constants.ACCOUNT_AUTH_PLAIN)).isEmpty()
     }
@@ -116,7 +156,13 @@ class R4OfflineAccountSessionDeviceTest {
     fun invalidLoginDoesNotWriteAnyIdentityOrToken() {
         var rejected = false
         try {
-            AccountProvider.login(context, "synthetic@example.invalid", "   ", TokenType.AUTH, AccountType.GOOGLE)
+            AccountProvider.login(
+                context,
+                "synthetic@example.invalid",
+                "   ",
+                TokenType.AUTH,
+                AccountType.GOOGLE
+            )
         } catch (_: IllegalArgumentException) {
             rejected = true
         }
@@ -128,7 +174,13 @@ class R4OfflineAccountSessionDeviceTest {
 
     @Test
     fun logoutRemovesBothCredentialsAndSessionMarkers() {
-        AccountProvider.login(context, "synthetic@example.invalid", "synthetic-aas", TokenType.AAS, AccountType.GOOGLE)
+        AccountProvider.login(
+            context,
+            "synthetic@example.invalid",
+            "synthetic-aas",
+            TokenType.AAS,
+            AccountType.GOOGLE
+        )
         Preferences.putString(context, Constants.ACCOUNT_AUTH_PLAIN, "orphan-auth")
         Preferences.putString(context, Preferences.PREFERENCE_AUTH_DATA, "synthetic-session")
         Preferences.putBoolean(context, Preferences.PREFERENCE_AUTH_VIA_MICROG, true)

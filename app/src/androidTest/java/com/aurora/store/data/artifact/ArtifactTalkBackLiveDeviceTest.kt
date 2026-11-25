@@ -39,11 +39,15 @@ class ArtifactTalkBackLiveDeviceTest {
             as AccessibilityManager
         assertThat(manager.isEnabled).isTrue()
         assertThat(manager.isTouchExplorationEnabled).isTrue()
-        val active = manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-        assertThat(active.any {
-            it.resolveInfo.serviceInfo.packageName == expectedPackage &&
-                it.resolveInfo.serviceInfo.name == expectedService
-        }).isTrue()
+        val active = manager.getEnabledAccessibilityServiceList(
+            AccessibilityServiceInfo.FEEDBACK_ALL_MASK
+        )
+        assertThat(
+            active.any {
+                it.resolveInfo.serviceInfo.packageName == expectedPackage &&
+                    it.resolveInfo.serviceInfo.name == expectedService
+            }
+        ).isTrue()
     }
 
     private fun all(root: View): List<View> = buildList {
@@ -60,8 +64,10 @@ class ArtifactTalkBackLiveDeviceTest {
                 val ui = all(activity.findViewById(android.R.id.content))
                 val headings = ui.filterIsInstance<TextView>().filter {
                     it.text.toString() in listOf(
-                        "Verification receipt", "Android installation outcome",
-                        "Installation permissions for this verified file")
+                        "Verification receipt",
+                        "Android installation outcome",
+                        "Installation permissions for this verified file"
+                    )
                 }
                 assertThat(headings).hasSize(3)
                 assertThat(headings.all { ViewCompat.isAccessibilityHeading(it) }).isTrue()
@@ -89,16 +95,27 @@ class ArtifactTalkBackLiveDeviceTest {
                 else -> MotionEvent.ACTION_MOVE
             }
             val x = start + (end - start) * step.toFloat() / 9f
-            val event = MotionEvent.obtain(downTime, downTime + step * 18L,
-                action, x, y, 0)
-            try { assertThat(automation.injectInputEvent(event, true)).isTrue() }
-            finally { event.recycle() }
+            val event = MotionEvent.obtain(
+                downTime,
+                downTime + step * 18L,
+                action,
+                x,
+                y,
+                0
+            )
+            try {
+                assertThat(automation.injectInputEvent(event, true)).isTrue()
+            } finally {
+                event.recycle()
+            }
         }
     }
 
     @Test fun twoRealTalkBackSwipeFocusEventsChangeTargets() {
         requireLiveTalkBack()
-        val automation = inst.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        val automation = inst.getUiAutomation(
+            UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES
+        )
         ActivityScenario.launch(ArtifactImportActivity::class.java).use { scenario ->
             var width = 0
             var height = 0
@@ -116,18 +133,25 @@ class ArtifactTalkBackLiveDeviceTest {
                     { e: AccessibilityEvent ->
                         e.eventType == AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED &&
                             e.packageName?.toString() == inst.targetContext.packageName
-                    }, 12_000L
+                    },
+                    12_000L
                 )
                 try {
                     val source = event.source
                     try {
-                        val text = listOfNotNull(source?.text?.toString(),
+                        val text = listOfNotNull(
+                            source?.text?.toString(),
                             source?.contentDescription?.toString(),
-                            source?.viewIdResourceName).joinToString(" ").trim()
+                            source?.viewIdResourceName
+                        ).joinToString(" ").trim()
                         assertThat(text).isNotEmpty()
                         focused.add(text)
-                    } finally { source?.recycle() }
-                } finally { event.recycle() }
+                    } finally {
+                        source?.recycle()
+                    }
+                } finally {
+                    event.recycle()
+                }
             }
             assertThat(focused).hasSize(2)
             assertThat(focused[0]).isNotEqualTo(focused[1])

@@ -84,7 +84,11 @@ class ArtifactImportJourneyP03BDeviceTest {
     }
 
     private inline fun Bitmap.useBitmap(action: (Bitmap) -> Unit) {
-        try { action(this) } finally { recycle() }
+        try {
+            action(this)
+        } finally {
+            recycle()
+        }
     }
 
     @Test fun explicitProviderChoiceAndRefusalNeverAutoNavigatesOrInstalls() {
@@ -105,8 +109,12 @@ class ArtifactImportJourneyP03BDeviceTest {
             }
             await(scenario, "Approve this alternative provider")
             scenario.onActivity { activity ->
-                assertThat(texts(views(activity))).doesNotContain("Android reported installation SUCCESS")
-                assertThat(button(views(activity), "Request Android installation").isEnabled).isFalse()
+                assertThat(
+                    texts(views(activity))
+                ).doesNotContain("Android reported installation SUCCESS")
+                assertThat(
+                    button(views(activity), "Request Android installation").isEnabled
+                ).isFalse()
             }
             screenshot("r3c07_p03b_provider_choice.png")
         }
@@ -132,7 +140,9 @@ class ArtifactImportJourneyP03BDeviceTest {
                 assertThat(button(ui, "Retry file selection").visibility).isEqualTo(View.GONE)
                 assertThat(button(ui, "Request Android installation").isEnabled).isFalse()
                 assertThat(ui.filterIsInstance<CheckBox>().all { !it.isChecked }).isTrue()
-                assertThat(texts(ui)).contains("Publisher identity: NOT independently authenticated")
+                assertThat(
+                    texts(ui)
+                ).contains("Publisher identity: NOT independently authenticated")
             }
             screenshot("r3c07_p03b_signed_review.png")
         }

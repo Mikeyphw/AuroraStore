@@ -6,13 +6,13 @@ import android.os.Build
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
-import org.junit.Test
-import org.junit.runner.RunWith
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import org.junit.Test
+import org.junit.runner.RunWith
 
 /** Signed real APK bytes on API36, wrapped in synthetic APKM/XAPK containers.
  * Not evidence of a real-world APKMirror publisher identity or vendor dialect support.
@@ -23,8 +23,12 @@ class ArtifactRealSignedArchiveDeviceTest {
     private val original get() = File(context.applicationInfo.sourceDir)
     private val packageVersion: Long get() = context.packageManager
         .getPackageInfo(context.packageName, 0).longVersionCode
-    private fun source(format: String, pkg: String = context.packageName,
-                       version: Long = packageVersion, tamper: Boolean = false): File {
+    private fun source(
+        format: String,
+        pkg: String = context.packageName,
+        version: Long = packageVersion,
+        tamper: Boolean = false
+    ): File {
         val zip = File(context.cacheDir, "r3c06-signed-${UUID.randomUUID()}.$format")
         ZipOutputStream(FileOutputStream(zip)).use { out ->
             fun add(name: String, bytes: ByteArray) {
@@ -53,8 +57,13 @@ class ArtifactRealSignedArchiveDeviceTest {
             if (format == "apkm") {
                 add("info.json", "{\"pname\":\"$pkg\",\"versioncode\":$version}".toByteArray())
             } else {
-                add("manifest.json", ("{\"package_name\":\"$pkg\",\"version_code\":\"$version\"," +
-                    "\"split_apks\":[{\"file\":\"base.apk\",\"id\":\"base\"}]}").toByteArray())
+                add(
+                    "manifest.json",
+                    (
+                        "{\"package_name\":\"$pkg\",\"version_code\":\"$version\"," +
+                            "\"split_apks\":[{\"file\":\"base.apk\",\"id\":\"base\"}]}"
+                        ).toByteArray()
+                )
             }
         }
         return zip
@@ -62,10 +71,17 @@ class ArtifactRealSignedArchiveDeviceTest {
     private fun verifyFile(file: File): ArtifactApkVerifier.VerifiedImport {
         val stage = ArtifactPrivateStager.stage(context, Uri.fromFile(file), file.name) { false }
         return try {
-            ArtifactApkVerifier.verify(context, stage,
-                ArtifactProvenance(ArtifactSource.LOCAL_DOCUMENT)) { false }
-        } catch (e: Exception) { stage.discard(); throw e }
+            ArtifactApkVerifier.verify(
+                context,
+                stage,
+                ArtifactProvenance(ArtifactSource.LOCAL_DOCUMENT)
+            ) { false }
+        } catch (e: Exception) {
+            stage.discard()
+            throw e
+        }
     }
+
     @Test fun realSignedApkmVerifiesAndRevalidates() {
         assertThat(Build.VERSION.SDK_INT).isEqualTo(36)
         val zip = source("apkm")
@@ -77,9 +93,14 @@ class ArtifactRealSignedArchiveDeviceTest {
                 assertThat(receipt.signerMatchesInstalled).isTrue()
                 assertThat(receipt.isPlayEvidence).isFalse()
                 ArtifactApkVerifier.revalidateForInstall(context, receipt) { false }
-            } finally { receipt.discard() }
-        } finally { zip.delete() }
+            } finally {
+                receipt.discard()
+            }
+        } finally {
+            zip.delete()
+        }
     }
+
     @Test fun realSignedXapkVerifiesAndRevalidates() {
         assertThat(Build.VERSION.SDK_INT).isEqualTo(36)
         val zip = source("xapk")
@@ -89,24 +110,41 @@ class ArtifactRealSignedArchiveDeviceTest {
                 assertThat(receipt.staged.format).isEqualTo(ArtifactArchivePolicy.Format.XAPK)
                 assertThat(receipt.staged.archiveApkEntryNames).containsExactly("base.apk")
                 ArtifactApkVerifier.revalidateForInstall(context, receipt) { false }
-            } finally { receipt.discard() }
-        } finally { zip.delete() }
+            } finally {
+                receipt.discard()
+            }
+        } finally {
+            zip.delete()
+        }
     }
+
     @Test fun signedApkmCannotBorrowDifferentPackageDescriptor() {
-        val zip = source("apkm", pkg="org.different.package")
-        try { assertThat(runCatching { verifyFile(zip).discard() }.isFailure).isTrue() }
-        finally { zip.delete() }
+        val zip = source("apkm", pkg = "org.different.package")
+        try {
+            assertThat(runCatching { verifyFile(zip).discard() }.isFailure).isTrue()
+        } finally {
+            zip.delete()
+        }
     }
+
     @Test fun signedXapkCannotBorrowDifferentVersionDescriptor() {
-        val zip = source("xapk", version=packageVersion + 1)
-        try { assertThat(runCatching { verifyFile(zip).discard() }.isFailure).isTrue() }
-        finally { zip.delete() }
+        val zip = source("xapk", version = packageVersion + 1)
+        try {
+            assertThat(runCatching { verifyFile(zip).discard() }.isFailure).isTrue()
+        } finally {
+            zip.delete()
+        }
     }
+
     @Test fun modifiedSignedApkmCannotPassSignatureVerification() {
-        val zip = source("apkm", tamper=true)
-        try { assertThat(runCatching { verifyFile(zip).discard() }.isFailure).isTrue() }
-        finally { zip.delete() }
+        val zip = source("apkm", tamper = true)
+        try {
+            assertThat(runCatching { verifyFile(zip).discard() }.isFailure).isTrue()
+        } finally {
+            zip.delete()
+        }
     }
+
     @Test fun realSignedManifestDependencyReaderHasNoUnknownFeatureClaim() {
         assertThat(Build.VERSION.SDK_INT).isEqualTo(36)
         // This repository's ordinary debug base APK has no uses-split dependency.

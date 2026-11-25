@@ -22,12 +22,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewWrapper
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.aurora.gplayapi.model.App
 import com.aurora.gplayapi.model.StreamBundle
@@ -92,7 +92,7 @@ fun StreamCarousel(
                     cluster.title.isNotBlank() &&
                     (!filterSingleAppClusters || cluster.apps.size > 1)
             }
-        }
+    }
 
     if (clusters.isEmpty()) {
         Placeholder(
@@ -108,8 +108,11 @@ fun StreamCarousel(
         state = lazyListState,
         contentPadding = PaddingValues(bottom = bottomContentPadding),
         verticalArrangement = Arrangement.spacedBy(
-            if (clusters.size == 1) ListItemDefaults.SegmentedGap
-            else dimensionResource(R.dimen.spacing_xsmall)
+            if (clusters.size == 1) {
+                ListItemDefaults.SegmentedGap
+            } else {
+                dimensionResource(R.dimen.spacing_xsmall)
+            }
         )
     ) {
         if (clusters.size == 1) {

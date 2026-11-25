@@ -12,12 +12,12 @@ import android.util.Base64
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
-import org.junit.Test
-import org.junit.runner.RunWith
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.util.Locale
+import org.junit.Test
+import org.junit.runner.RunWith
 
 /** Manually dispatched, destructive-ONLY-to-its-own-synthetic-fixture API36 gate.
  * The host must explicitly click/reject Android's system installer confirmation.
@@ -34,10 +34,15 @@ class ArtifactActualInstallAcceptanceDeviceTest {
      * real verification, stage or cleanup operation has succeeded.
      */
     private fun reportStatus(key: String, value: String) {
-        require(key in setOf("r3c06_fixture_stage_sha256",
-                             "r3c06_fixture_cleanup_sha256", "r3c06_os_result",
-                             "r3c06_foreground_activity",
-                             "r3c06_unknown_sources_effective")) {
+        require(
+            key in setOf(
+                "r3c06_fixture_stage_sha256",
+                "r3c06_fixture_cleanup_sha256",
+                "r3c06_os_result",
+                "r3c06_foreground_activity",
+                "r3c06_unknown_sources_effective"
+            )
+        ) {
             "Unexpected instrumentation evidence key"
         }
         val status = Bundle()
@@ -82,11 +87,13 @@ class ArtifactActualInstallAcceptanceDeviceTest {
      * cannot be used to qualify the destructive installation test.
      */
     private fun stateForInstallSession(
-        context: Context, session: Int
+        context: Context,
+        session: Int
     ): ArtifactSessionReceiptPolicy.State? {
         require(session > 0) { "Invalid Android installation session" }
         val preferences = context.getSharedPreferences(
-            "artifact_import_session_receipts", Context.MODE_PRIVATE
+            "artifact_import_session_receipts",
+            Context.MODE_PRIVATE
         )
         require(preferences.getInt("last_session", -1) == session) {
             "Another Android session replaced the isolated fixture attempt"
@@ -113,8 +120,10 @@ class ArtifactActualInstallAcceptanceDeviceTest {
         // ineffective, but refuse to stage bytes or request an OS session.
         val target = InstrumentationRegistry.getInstrumentation().targetContext
         val canRequest = target.packageManager.canRequestPackageInstalls()
-        reportStatus("r3c06_unknown_sources_effective",
-            if (canRequest) "ALLOWED" else "DENIED")
+        reportStatus(
+            "r3c06_unknown_sources_effective",
+            if (canRequest) "ALLOWED" else "DENIED"
+        )
         require(canRequest) { "Aurora cannot request package installs on API36" }
         val expected = requiredFixtureDigest()
         val encoded = requireNotNull(
@@ -157,6 +166,7 @@ class ArtifactActualInstallAcceptanceDeviceTest {
         require(!file.exists()) { "Private fixture remains after cleanup" }
         reportStatus("r3c06_fixture_cleanup_sha256", expected)
     }
+
     /** Android 14+ restricts background starts from a broadcast receiver.
      * The real import screen must be visible before the OS confirmation is
      * requested. This is a runtime precondition, not fake approval.
@@ -194,13 +204,23 @@ class ArtifactActualInstallAcceptanceDeviceTest {
         assertThat(fixture.length()).isAtMost(maxFixtureBytes.toLong())
         assertThat(fileDigest(fixture)).isEqualTo(requiredFixtureDigest())
         val expectedPackage = "com.aurora.r3c06.fixture"
-        assertThat(runCatching { context.packageManager.getPackageInfo(expectedPackage, 0) }
-            .isFailure).isTrue()
-        val staged = ArtifactPrivateStager.stage(context, Uri.fromFile(fixture), fixture.name) { false }
+        assertThat(
+            runCatching { context.packageManager.getPackageInfo(expectedPackage, 0) }
+                .isFailure
+        ).isTrue()
+        val staged = ArtifactPrivateStager.stage(context, Uri.fromFile(fixture), fixture.name) {
+            false
+        }
         val verified = try {
-            ArtifactApkVerifier.verify(context, staged,
-                ArtifactProvenance(ArtifactSource.LOCAL_DOCUMENT)) { false }
-        } catch (e: Exception) { staged.discard(); throw e }
+            ArtifactApkVerifier.verify(
+                context,
+                staged,
+                ArtifactProvenance(ArtifactSource.LOCAL_DOCUMENT)
+            ) { false }
+        } catch (e: Exception) {
+            staged.discard()
+            throw e
+        }
         assertThat(verified.attempt.packageName).isEqualTo(expectedPackage)
         assertThat(verified.installedVersion).isNull()
         assertThat(verified.signerMatchesInstalled).isNull()
@@ -210,8 +230,11 @@ class ArtifactActualInstallAcceptanceDeviceTest {
         // User-app consent is explicit. Android system consent still must be
         // separately exercised by a human or a tightly verified host UI driver.
         val session = ArtifactInstallSession.install(
-            context, verified, approvedInstall=true,
-            approvedUnknownPublisher=true, approvedDowngrade=false
+            context,
+            verified,
+            approvedInstall = true,
+            approvedUnknownPublisher = true,
+            approvedDowngrade = false
         ) { false }
         assertThat(session).isGreaterThan(0)
         val timeout = SystemClock.elapsedRealtime() + 180_000L
@@ -219,24 +242,32 @@ class ArtifactActualInstallAcceptanceDeviceTest {
         while (true) {
             state = stateForInstallSession(context, session)
             if (state == ArtifactSessionReceiptPolicy.State.INSTALLED_BY_ANDROID ||
-                state == ArtifactSessionReceiptPolicy.State.ANDROID_REJECTED) break
+                state == ArtifactSessionReceiptPolicy.State.ANDROID_REJECTED
+            ) {
+                break
+            }
             if (state == ArtifactSessionReceiptPolicy.State.APPROVAL_UI_UNAVAILABLE) {
                 throw AssertionError("Android could not present fixture installer confirmation")
             }
             if (SystemClock.elapsedRealtime() >= timeout) {
-                throw AssertionError("System installation callback never became terminal: state=$state; " +
-                    ArtifactInstallSession.lastResult(context))
+                throw AssertionError(
+                    "System installation callback never became terminal: state=$state; " +
+                        ArtifactInstallSession.lastResult(context)
+                )
             }
             SystemClock.sleep(450)
         }
         if (expected == "deny") {
             assertThat(state).isEqualTo(ArtifactSessionReceiptPolicy.State.ANDROID_REJECTED)
-            assertThat(runCatching { context.packageManager.getPackageInfo(expectedPackage, 0) }
-                .isFailure).isTrue()
+            assertThat(
+                runCatching { context.packageManager.getPackageInfo(expectedPackage, 0) }
+                    .isFailure
+            ).isTrue()
         } else {
             assertThat(state).isEqualTo(ArtifactSessionReceiptPolicy.State.INSTALLED_BY_ANDROID)
             val installed = context.packageManager.getPackageInfo(
-                expectedPackage, PackageManager.GET_SIGNING_CERTIFICATES
+                expectedPackage,
+                PackageManager.GET_SIGNING_CERTIFICATES
             )
             assertThat(installed.longVersionCode).isEqualTo(17L)
             val installedCerts = installed.signingInfo?.apkContentsSigners.orEmpty().map {

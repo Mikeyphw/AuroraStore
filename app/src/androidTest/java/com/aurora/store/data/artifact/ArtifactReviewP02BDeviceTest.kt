@@ -53,10 +53,7 @@ class ArtifactReviewP02BDeviceTest {
         InstrumentationRegistry.getInstrumentation().sendStatus(0, bundle)
     }
 
-    private fun waitFor(
-        scenario: ActivityScenario<ArtifactImportActivity>,
-        wanted: String
-    ) {
+    private fun waitFor(scenario: ActivityScenario<ArtifactImportActivity>, wanted: String) {
         var last = ""
         repeat(200) {
             scenario.onActivity { activity ->
@@ -66,7 +63,9 @@ class ArtifactReviewP02BDeviceTest {
             if (last.contains(wanted)) return
             SystemClock.sleep(250)
         }
-        throw AssertionError("P02B real activity did not reach expected state: $wanted; ${last.take(350)}")
+        throw AssertionError(
+            "P02B real activity did not reach expected state: $wanted; ${last.take(350)}"
+        )
     }
 
     @Test fun realSystemFontScaleChangesActivityConfigurationWithoutConsent() {
@@ -93,7 +92,8 @@ class ArtifactReviewP02BDeviceTest {
                 val ui = views(activity)
                 val headings = ui.filterIsInstance<TextView>().filter {
                     it.text.toString() in listOf(
-                        "Verification receipt", "Android installation outcome",
+                        "Verification receipt",
+                        "Android installation outcome",
                         "Installation permissions for this verified file"
                     )
                 }
@@ -105,10 +105,14 @@ class ArtifactReviewP02BDeviceTest {
                         assertThat(node).isNotNull()
                         assertThat(node.isHeading).isTrue()
                         assertThat(node.text.toString()).isEqualTo(heading.text.toString())
-                    } finally { node.recycle() }
+                    } finally {
+                        node.recycle()
+                    }
                 }
                 val spinner = ui.filterIsInstance<Spinner>().single()
-                assertThat(spinner.contentDescription.toString()).contains("Import source or provider")
+                assertThat(
+                    spinner.contentDescription.toString()
+                ).contains("Import source or provider")
                 val action = install(ui)
                 val node = requireNotNull(action.createAccessibilityNodeInfo())
                 try {
@@ -118,8 +122,12 @@ class ArtifactReviewP02BDeviceTest {
                     // uppercase AccessibilityNodeInfo text. Verify the actual
                     // action label modulo case, not a hard-coded display casing.
                     val accessibleLabel = node.text.toString()
-                    assertThat(accessibleLabel.equals(action.text.toString(), ignoreCase = true)).isTrue()
-                } finally { node.recycle() }
+                    assertThat(
+                        accessibleLabel.equals(action.text.toString(), ignoreCase = true)
+                    ).isTrue()
+                } finally {
+                    node.recycle()
+                }
                 val announcements = ui.filterIsInstance<TextView>()
                     .count { it.accessibilityLiveRegion == View.ACCESSIBILITY_LIVE_REGION_POLITE }
                 assertThat(announcements).isAtLeast(3)
@@ -145,8 +153,11 @@ class ArtifactReviewP02BDeviceTest {
         }
         assertThat(ArtifactReviewPresentation.androidResult(null))
             .contains("No authenticated Android install outcome")
-        assertThat(ArtifactReviewPresentation.androidResult(
-            ArtifactSessionReceiptPolicy.State.INSTALLED_BY_ANDROID)).contains("SUCCESS")
+        assertThat(
+            ArtifactReviewPresentation.androidResult(
+                ArtifactSessionReceiptPolicy.State.INSTALLED_BY_ANDROID
+            )
+        ).contains("SUCCESS")
         // These are state-string tests only, not forged Android OS callbacks.
     }
 
@@ -162,8 +173,10 @@ class ArtifactReviewP02BDeviceTest {
         scenario.onActivity { activity ->
             val pickerResult = cls.getDeclaredMethod("handlePickedFile", Uri::class.java)
             pickerResult.isAccessible = true
-            pickerResult.invoke(activity,
-                Uri.parse("content://com.aurora.store.debug.r3c07p02/signed.apk"))
+            pickerResult.invoke(
+                activity,
+                Uri.parse("content://com.aurora.store.debug.r3c07p02/signed.apk")
+            )
         }
         waitFor(scenario, "SIGNED APK FILES VERIFIED — NOT INSTALLED")
         scenario.onActivity { activity ->
@@ -175,9 +188,11 @@ class ArtifactReviewP02BDeviceTest {
             assertThat(consent.isChecked).isFalse()
             consent.isChecked = true
             assertThat(install(ui).isEnabled).isTrue()
-            assertThat(ui.filterIsInstance<TextView>().joinToString(" ") {
-                it.text.toString()
-            }).contains("Publisher identity: NOT independently authenticated")
+            assertThat(
+                ui.filterIsInstance<TextView>().joinToString(" ") {
+                    it.text.toString()
+                }
+            ).contains("Publisher identity: NOT independently authenticated")
         }
         reportPid("r3c07_p02b_seed_pid")
     }
@@ -193,9 +208,11 @@ class ArtifactReviewP02BDeviceTest {
                     it.text.toString()
                 }
                 assertThat(labels).contains("No verified files")
-                assertThat(ui.filterIsInstance<Button>().single {
-                    it.text.toString() == "Show technical verification details"
-                }.visibility).isEqualTo(View.GONE)
+                assertThat(
+                    ui.filterIsInstance<Button>().single {
+                        it.text.toString() == "Show technical verification details"
+                    }.visibility
+                ).isEqualTo(View.GONE)
             }
             reportPid("r3c07_p02b_reopen_pid")
         }

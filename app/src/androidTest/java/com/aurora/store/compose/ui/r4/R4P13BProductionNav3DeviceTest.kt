@@ -6,8 +6,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.os.SystemClock
-import java.io.File
-import kotlin.math.abs
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -24,6 +22,8 @@ import com.aurora.store.R
 import com.aurora.store.compose.navigation.Screen
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import java.io.File
+import kotlin.math.abs
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -37,8 +37,11 @@ import org.junit.runner.RunWith
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
 class R4P13BProductionNav3DeviceTest {
-    @get:Rule(order = 0) val hiltRule = HiltAndroidRule(this)
-    @get:Rule(order = 1) val composeRule = createEmptyComposeRule()
+    @get:Rule(order = 0)
+    val hiltRule = HiltAndroidRule(this)
+
+    @get:Rule(order = 1)
+    val composeRule = createEmptyComposeRule()
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
     @Before
@@ -52,11 +55,12 @@ class R4P13BProductionNav3DeviceTest {
         checkNotNull(WorkManager.getInstance(context)) { "P13B_WORKMANAGER_MISSING" }
     }
 
-    private fun launchMain(): ActivityScenario<ComposeActivity> =
-        ActivityScenario.launch(Intent(context, ComposeActivity::class.java).apply {
+    private fun launchMain(): ActivityScenario<ComposeActivity> = ActivityScenario.launch(
+        Intent(context, ComposeActivity::class.java).apply {
             putExtra(Screen.PARCEL_KEY, Screen.Main(initialTab = 0))
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-        })
+        }
+    )
 
     private fun expect(label: String) {
         composeRule.waitUntil(timeoutMillis = 20_000L) {
@@ -102,7 +106,11 @@ class R4P13BProductionNav3DeviceTest {
         val frame = checkNotNull(
             InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
         ) { "P13B_BASELINE_SCREENSHOT_NULL" }
-        previousBodySignature = try { bodySignature(frame) } finally { frame.recycle() }
+        previousBodySignature = try {
+            bodySignature(frame)
+        } finally {
+            frame.recycle()
+        }
     }
 
     private fun capture(filename: String) {
@@ -110,15 +118,23 @@ class R4P13BProductionNav3DeviceTest {
         var observed = 0
         for (attempt in 1..12) {
             R4ScreenshotEvidence.capture(context, filename) { composeRule.waitForIdle() }
-            val image = checkNotNull(BitmapFactory.decodeFile(
-                File(context.filesDir, filename).absolutePath
-            )) { "P13B_FRAME_DECODE_FAILED $filename" }
-            val sample = try { bodySignature(image) } finally { image.recycle() }
+            val image = checkNotNull(
+                BitmapFactory.decodeFile(
+                    File(context.filesDir, filename).absolutePath
+                )
+            ) { "P13B_FRAME_DECODE_FAILED $filename" }
+            val sample = try {
+                bodySignature(image)
+            } finally {
+                image.recycle()
+            }
             observed = changedBody(prior, sample)
             if (attempt == 1 || attempt == 12) {
-                android.util.Log.i("P13BVisualEvidence",
+                android.util.Log.i(
+                    "P13BVisualEvidence",
                     "P13B_FRAME_READBACK file=$filename attempt=$attempt " +
-                        "changedPixels=$observed required=12 sampleSize=${sample.size}")
+                        "changedPixels=$observed required=12 sampleSize=${sample.size}"
+                )
             }
             if (observed >= 12) {
                 previousBodySignature = sample

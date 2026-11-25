@@ -20,8 +20,10 @@ import org.junit.runner.RunWith
 class ArtifactProviderDiscoveryDeviceTest {
     private fun allViews(root: View): List<View> = buildList {
         add(root)
-        if (root is ViewGroup) for (i in 0 until root.childCount) {
-            addAll(allViews(root.getChildAt(i)))
+        if (root is ViewGroup) {
+            for (i in 0 until root.childCount) {
+                addAll(allViews(root.getChildAt(i)))
+            }
         }
     }
 
@@ -40,12 +42,17 @@ class ArtifactProviderDiscoveryDeviceTest {
 
     @Test fun alternativeVisitsAreNotPreapproved() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        context.getSharedPreferences("artifact_source_preferences", 0).edit().putBoolean("apkpure_opt_in", false).commit()
+        context.getSharedPreferences(
+            "artifact_source_preferences",
+            0
+        ).edit().putBoolean("apkpure_opt_in", false).commit()
         ActivityScenario.launch(ArtifactImportActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 val checks = allViews(activity.findViewById(android.R.id.content))
                     .filterIsInstance<CheckBox>()
-                val mirror = checks.single { it.text.toString().contains("explicitly choose this alternative") }
+                val mirror = checks.single {
+                    it.text.toString().contains("explicitly choose this alternative")
+                }
                 val apkpure = checks.single { it.text.toString().contains("Enable APKPure") }
                 assertThat(mirror.isChecked).isFalse()
                 assertThat(apkpure.isChecked).isFalse()

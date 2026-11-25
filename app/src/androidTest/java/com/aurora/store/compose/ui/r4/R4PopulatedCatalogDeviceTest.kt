@@ -22,12 +22,12 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.aurora.gplayapi.model.App
 import com.aurora.gplayapi.model.Artwork
 import com.aurora.gplayapi.model.Category
-import com.aurora.gplayapi.model.StreamCluster
 import com.aurora.gplayapi.model.StreamBundle
+import com.aurora.gplayapi.model.StreamCluster
 import com.aurora.store.IsolatedTest
 import com.aurora.store.R
-import com.aurora.store.compose.composable.StreamCarousel
 import com.aurora.store.compose.composable.SectionHeader
+import com.aurora.store.compose.composable.StreamCarousel
 import com.aurora.store.compose.composable.app.AppUpdateItem
 import com.aurora.store.compose.preview.AppPreviewProvider
 import com.aurora.store.compose.ui.apps.CategoriesBody
@@ -55,7 +55,10 @@ class R4PopulatedCatalogDeviceTest : IsolatedTest() {
 
     private fun fixtureApps(): List<App> {
         val sample = AppPreviewProvider().values.first()
-        return listOf("P12 Offline Atlas", "P12 Offline Beacon", "P12 Offline Cedar").mapIndexed { index, title ->
+        return listOf("P12 Offline Atlas", "P12 Offline Beacon", "P12 Offline Cedar").mapIndexed {
+                index,
+                title
+            ->
             sample.copy(
                 id = 7001 + index,
                 packageName = "invalid.aurora.p12.fixture$index",
@@ -112,7 +115,11 @@ class R4PopulatedCatalogDeviceTest : IsolatedTest() {
                         id = "p12-home",
                         clusters = listOf(
                             StreamCluster(id = "p12-featured", title = "P12 Featured", apps = apps),
-                            StreamCluster(id = "p12-popular", title = "P12 Popular", apps = apps.reversed())
+                            StreamCluster(
+                                id = "p12-popular",
+                                title = "P12 Popular",
+                                apps = apps.reversed()
+                            )
                         )
                     ),
                     showHomeActions = true,
@@ -229,7 +236,10 @@ class R4PopulatedCatalogDeviceTest : IsolatedTest() {
         var updates = 0
         var cancellations = 0
         rendered {
-            Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier.padding(top = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 SectionHeader(title = "P12 Install controls offline")
                 AppUpdateItem(update = update, onUpdate = { updates++ })
                 AppUpdateItem(

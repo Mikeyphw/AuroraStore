@@ -61,7 +61,9 @@ internal object R4ScreenshotEvidence {
                 val color = bitmap.getPixel(x, y)
                 if (abs(Color.red(color) - r) + abs(Color.green(color) - g) +
                     abs(Color.blue(color) - b) >= 52
-                ) changed++
+                ) {
+                    changed++
+                }
             }
         }
         return changed

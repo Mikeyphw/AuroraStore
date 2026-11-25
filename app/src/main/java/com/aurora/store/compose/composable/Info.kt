@@ -51,7 +51,7 @@ fun Info(
     titleMaxLines: Int = 1,
     trailing: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
-    horizontalPadding: Dp = 0.dp,
+    horizontalPadding: Dp = 0.dp
 ) {
     val itemModifier = modifier
         .padding(horizontal = horizontalPadding)

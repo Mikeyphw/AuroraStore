@@ -41,9 +41,11 @@ class ArtifactReviewUxDeviceTest {
                     it.text.toString() == "Show technical verification details"
                 }
                 assertThat(toggle.visibility).isEqualTo(View.GONE)
-                assertThat(views.filterIsInstance<TextView>().single {
-                    it.text.toString().contains("Technical verification details unavailable")
-                }.visibility).isEqualTo(View.GONE)
+                assertThat(
+                    views.filterIsInstance<TextView>().single {
+                        it.text.toString().contains("Technical verification details unavailable")
+                    }.visibility
+                ).isEqualTo(View.GONE)
                 assertThat(install(views).isEnabled).isFalse()
             }
         }
@@ -55,14 +57,18 @@ class ArtifactReviewUxDeviceTest {
             scenario.onActivity { activity ->
                 val views = root(activity)
                 assertThat(install(views).isEnabled).isFalse()
-                assertThat(views.filterIsInstance<CheckBox>().filter {
-                    it.text.toString().contains("approve installation") ||
-                        it.text.toString().contains("unverified") ||
-                        it.text.toString().contains("older version")
-                }.all { !it.isChecked }).isTrue()
-                assertThat(views.filterIsInstance<TextView>().joinToString(" ") {
-                    it.text.toString()
-                }).contains("No verified files")
+                assertThat(
+                    views.filterIsInstance<CheckBox>().filter {
+                        it.text.toString().contains("approve installation") ||
+                            it.text.toString().contains("unverified") ||
+                            it.text.toString().contains("older version")
+                    }.all { !it.isChecked }
+                ).isTrue()
+                assertThat(
+                    views.filterIsInstance<TextView>().joinToString(" ") {
+                        it.text.toString()
+                    }
+                ).contains("No verified files")
             }
         }
     }
@@ -72,8 +78,10 @@ class ArtifactReviewUxDeviceTest {
             scenario.onActivity { activity ->
                 val sections = root(activity).filterIsInstance<TextView>().filter {
                     it.text.toString() in listOf(
-                        "Verification receipt", "Android installation outcome",
-                        "Installation permissions for this verified file")
+                        "Verification receipt",
+                        "Android installation outcome",
+                        "Installation permissions for this verified file"
+                    )
                 }
                 assertThat(sections).hasSize(3)
                 assertThat(sections.all { ViewCompat.isAccessibilityHeading(it) }).isTrue()
@@ -90,7 +98,11 @@ class ArtifactReviewUxDeviceTest {
                 assertThat(status.accessibilityLiveRegion)
                     .isEqualTo(View.ACCESSIBILITY_LIVE_REGION_POLITE)
                 val outcome = root(activity).filterIsInstance<TextView>()
-                    .firstOrNull { it.accessibilityLiveRegion == View.ACCESSIBILITY_LIVE_REGION_POLITE && it !== status }
+                    .firstOrNull {
+                        it.accessibilityLiveRegion ==
+                            View.ACCESSIBILITY_LIVE_REGION_POLITE &&
+                            it !== status
+                    }
                 assertThat(outcome).isNotNull()
             }
         }
@@ -102,10 +114,14 @@ class ArtifactReviewUxDeviceTest {
                 val views = root(activity)
                 views.filterIsInstance<Spinner>().single().setSelection(6)
                 assertThat(install(root(activity)).isEnabled).isFalse()
-                assertThat(root(activity).filterIsInstance<ScrollView>().single().isFillViewport).isTrue()
-                assertThat(root(activity).filterIsInstance<Button>().single {
-                    it.text.toString() == "Show technical verification details"
-                }.visibility).isEqualTo(View.GONE)
+                assertThat(
+                    root(activity).filterIsInstance<ScrollView>().single().isFillViewport
+                ).isTrue()
+                assertThat(
+                    root(activity).filterIsInstance<Button>().single {
+                        it.text.toString() == "Show technical verification details"
+                    }.visibility
+                ).isEqualTo(View.GONE)
             }
         }
     }

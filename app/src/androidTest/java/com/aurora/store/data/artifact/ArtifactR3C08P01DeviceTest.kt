@@ -47,7 +47,10 @@ class ArtifactR3C08P01DeviceTest {
         if (method == "revoke") grantMayExist = false
     }
     private fun permission(): Int = target.checkUriPermission(
-        doc, Process.myPid(), Process.myUid(), Intent.FLAG_GRANT_READ_URI_PERMISSION
+        doc,
+        Process.myPid(),
+        Process.myUid(),
+        Intent.FLAG_GRANT_READ_URI_PERMISSION
     )
     private fun all(view: View): List<View> = buildList {
         add(view)
@@ -96,7 +99,9 @@ class ArtifactR3C08P01DeviceTest {
         assertThat(permission()).isEqualTo(PackageManager.PERMISSION_DENIED)
         control("grant")
         assertThat(permission()).isEqualTo(PackageManager.PERMISSION_GRANTED)
-        val firstByte = requireNotNull(target.contentResolver.openInputStream(doc)).use { it.read() }
+        val firstByte = requireNotNull(target.contentResolver.openInputStream(doc)).use {
+            it.read()
+        }
         assertThat(firstByte).isAtLeast(0)
         control("revoke")
         assertThat(permission()).isEqualTo(PackageManager.PERMISSION_DENIED)
@@ -125,7 +130,9 @@ class ArtifactR3C08P01DeviceTest {
             waitFor(scenario, "Import refused")
             scenario.onActivity { activity ->
                 assertNoActiveSelection(activity)
-                assertThat(labels(ui(activity))).doesNotContain("Android reported installation SUCCESS")
+                assertThat(
+                    labels(ui(activity))
+                ).doesNotContain("Android reported installation SUCCESS")
                 assertThat(labels(ui(activity))).doesNotContain("content://")
             }
         }

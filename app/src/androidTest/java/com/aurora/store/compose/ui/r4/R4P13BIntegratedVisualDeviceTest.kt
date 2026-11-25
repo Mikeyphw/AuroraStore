@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -35,7 +36,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -78,16 +78,18 @@ class R4P13BIntegratedVisualDeviceTest : IsolatedTest() {
     private val apps: List<App> get() {
         val sample = AppPreviewProvider().values.first()
         return listOf("P13 Offline Atlas", "P13 Offline Beacon", "P13 Offline Cedar")
-            .mapIndexed { i, name -> sample.copy(
-                id = 13100 + i,
-                packageName = "invalid.aurora.p13b.fixture$i",
-                displayName = name,
-                developerName = "P13 Hermetic Fixture",
-                isInstalled = false,
-                isFree = true,
-                containsAds = false,
-                iconArtwork = Artwork(url = "")
-            ) }
+            .mapIndexed { i, name ->
+                sample.copy(
+                    id = 13100 + i,
+                    packageName = "invalid.aurora.p13b.fixture$i",
+                    displayName = name,
+                    developerName = "P13 Hermetic Fixture",
+                    isInstalled = false,
+                    isFree = true,
+                    containsAds = false,
+                    iconArtwork = Artwork(url = "")
+                )
+            }
     }
     private val categories = listOf("P13 Art", "P13 Business", "P13 Education", "P13 Games")
         .map { Category(title = it, imageUrl = "") }
@@ -97,6 +99,7 @@ class R4P13BIntegratedVisualDeviceTest : IsolatedTest() {
             Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) { content() }
         }
     }
+
     // Only *newly painted* content is evidence. On API36, UIAutomation may return
     // a complete but stale preceding frame even after Compose semantics update.
     // Do not accept a changed clock/status bar or merely distinct PNG bytes.
@@ -137,16 +140,25 @@ class R4P13BIntegratedVisualDeviceTest : IsolatedTest() {
             val screenshot = checkNotNull(
                 BitmapFactory.decodeFile(File(context.filesDir, filename).absolutePath)
             ) { "P13B_SCREENSHOT_DECODE_FAILED $filename" }
-            val candidate = try { bodySignature(screenshot) } finally { screenshot.recycle() }
-            lastChangeCount = if (before == null) candidate.size
-                else changedBodySamples(before, candidate)
+            val candidate = try {
+                bodySignature(screenshot)
+            } finally {
+                screenshot.recycle()
+            }
+            lastChangeCount = if (before == null) {
+                candidate.size
+            } else {
+                changedBodySamples(before, candidate)
+            }
             if (before == null || lastChangeCount >= 12) {
                 previousBodySignature = candidate
                 return
             }
             if (attempt < 12) SystemClock.sleep(250)
         }
-        error("P13B_REFUSED_STALE_BODY_FRAME $filename body_samples_changed=$lastChangeCount attempts=12")
+        error(
+            "P13B_REFUSED_STALE_BODY_FRAME $filename body_samples_changed=$lastChangeCount attempts=12"
+        )
     }
 
     /** These three files are *input app artwork*, not evidence screenshots. */
@@ -155,8 +167,11 @@ class R4P13BIntegratedVisualDeviceTest : IsolatedTest() {
         val bitmap = Bitmap.createBitmap(320, 560, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        paint.color = listOf(Color.rgb(66, 91, 172), Color.rgb(57, 128, 114),
-            Color.rgb(154, 83, 122))[index]
+        paint.color = listOf(
+            Color.rgb(66, 91, 172),
+            Color.rgb(57, 128, 114),
+            Color.rgb(154, 83, 122)
+        )[index]
         canvas.drawColor(paint.color)
         paint.color = Color.WHITE
         paint.textSize = 38f
@@ -177,23 +192,44 @@ class R4P13BIntegratedVisualDeviceTest : IsolatedTest() {
         render {
             var tab by remember { mutableStateOf("Home") }
             Column(modifier = Modifier.fillMaxSize()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(horizontal = 12.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                ) {
                     listOf("Home", "Charts", "Categories").forEach { name ->
-                        FilterChip(selected = tab == name, onClick = { tab = name },
-                            label = { Text("P13 $name") })
+                        FilterChip(
+                            selected = tab == name,
+                            onClick = { tab = name },
+                            label = { Text("P13 $name") }
+                        )
                     }
                 }
                 Box(modifier = Modifier.weight(1f)) {
                     when (tab) {
                         "Home" -> StreamCarousel(
-                            streamBundle = StreamBundle(id = "p13b-home", clusters = listOf(
-                                StreamCluster(id = "p13b-featured", title = "P13 Featured", apps = all),
-                                StreamCluster(id = "p13b-popular", title = "P13 Popular", apps = all.reversed())
-                            )), showHomeActions = true, onAppAction = { actionCount++ })
+                            streamBundle = StreamBundle(
+                                id = "p13b-home",
+                                clusters = listOf(
+                                    StreamCluster(
+                                        id = "p13b-featured",
+                                        title = "P13 Featured",
+                                        apps = all
+                                    ),
+                                    StreamCluster(
+                                        id = "p13b-popular",
+                                        title = "P13 Popular",
+                                        apps = all.reversed()
+                                    )
+                                )
+                            ),
+                            showHomeActions = true,
+                            onAppAction = { actionCount++ }
+                        )
                         "Charts" -> TopChartsBody(
-                            state = ViewState.Success(cluster), cluster = cluster,
-                            bottomContentPadding = 0.dp)
+                            state = ViewState.Success(cluster),
+                            cluster = cluster,
+                            bottomContentPadding = 0.dp
+                        )
                         else -> CategoriesBody(list = categories)
                     }
                 }
@@ -222,8 +258,12 @@ class R4P13BIntegratedVisualDeviceTest : IsolatedTest() {
     fun typedOfflineSearchOpensDetailsArtworkAndReview() {
         val all = apps
         val inputArt = offlineArtwork()
-        val review = Review(userName = "P13 Test Reviewer", timeStamp = 1745750879,
-            rating = 4, comment = "P13 hermetic review. No Play account or network.")
+        val review = Review(
+            userName = "P13 Test Reviewer",
+            timeStamp = 1745750879,
+            rating = 4,
+            comment = "P13 hermetic review. No Play account or network."
+        )
         var actions = 0
         var filterClicks = 0
         render {
@@ -234,27 +274,38 @@ class R4P13BIntegratedVisualDeviceTest : IsolatedTest() {
             if (selected == null) {
                 Column {
                     Text("P13 Offline Search", modifier = Modifier.padding(12.dp))
-                    TextField(value = query, onValueChange = { query = it },
+                    TextField(
+                        value = query,
+                        onValueChange = { query = it },
                         label = { Text("P13 Query") },
-                        modifier = Modifier.fillMaxWidth().testTag("p13-query"))
+                        modifier = Modifier.fillMaxWidth().testTag("p13-query")
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(selected = freeOnly, onClick = {
                             freeOnly = !freeOnly
                             filterClicks++
                         }, label = { Text("P13 Free filter") })
-                        FilterChip(selected = true, onClick = {},
-                            label = { Text("P13 Offline only") })
+                        FilterChip(
+                            selected = true,
+                            onClick = {},
+                            label = { Text("P13 Offline only") }
+                        )
                     }
                     if (query.isNotBlank()) {
-                        FilterChip(selected = false,
+                        FilterChip(
+                            selected = false,
                             onClick = { query = "Atlas" },
-                            label = { Text("P13 Suggest Atlas") })
+                            label = { Text("P13 Suggest Atlas") }
+                        )
                     }
                     LazyColumn {
-                        items(all.filter {
-                            it.displayName.contains(query, ignoreCase = true) &&
-                                (!freeOnly || it.isFree)
-                        }, key = { it.packageName }) { app ->
+                        items(
+                            all.filter {
+                                it.displayName.contains(query, ignoreCase = true) &&
+                                    (!freeOnly || it.isFree)
+                            },
+                            key = { it.packageName }
+                        ) { app ->
                             SearchResultListItem(app = app, onClick = {
                                 keyboard?.hide()
                                 selected = app
@@ -265,24 +316,38 @@ class R4P13BIntegratedVisualDeviceTest : IsolatedTest() {
             } else {
                 val app = checkNotNull(selected)
                 Column {
-                    FilterChip(selected = true, onClick = { selected = null },
-                        label = { Text("P13 Back to search") })
+                    FilterChip(
+                        selected = true,
+                        onClick = { selected = null },
+                        label = { Text("P13 Back to search") }
+                    )
                     LazyColumn(modifier = Modifier.testTag("p13-details-list")) {
                         item { Details(app = app) }
-                        item { Actions(
-                            primaryActionDisplayName = context.getString(R.string.action_install),
-                            secondaryActionDisplayName = context.getString(R.string.title_manual_download),
-                            onPrimaryAction = { actions++ }
-                        ) }
+                        item {
+                            Actions(
+                                primaryActionDisplayName = context.getString(
+                                    R.string.action_install
+                                ),
+                                secondaryActionDisplayName = context.getString(
+                                    R.string.title_manual_download
+                                ),
+                                onPrimaryAction = { actions++ }
+                            )
+                        }
                         item { Screenshots(screenshots = inputArt) }
                         item {
                             Column {
                                 Text("P13 Review", modifier = Modifier.padding(12.dp))
-                                RatingAndReviews(rating = app.rating, featuredReviews = listOf(review))
-                                DetailsPortalCard(title = "P13 More about app",
+                                RatingAndReviews(
+                                    rating = app.rating,
+                                    featuredReviews = listOf(review)
+                                )
+                                DetailsPortalCard(
+                                    title = "P13 More about app",
                                     description = "Deterministic in-memory metadata",
                                     icon = painterResource(R.drawable.ic_apps),
-                                    onClick = {})
+                                    onClick = {}
+                                )
                             }
                         }
                     }
@@ -314,16 +379,29 @@ class R4P13BIntegratedVisualDeviceTest : IsolatedTest() {
             Column {
                 if (selected == null) {
                     SectionHeader(title = "P13 Category browser")
-                    CategoriesBody(list = categories,
-                        onCategoryClick = { selected = it.title })
+                    CategoriesBody(
+                        list = categories,
+                        onCategoryClick = { selected = it.title }
+                    )
                 } else {
-                    FilterChip(selected = true, onClick = { selected = null },
-                        label = { Text("P13 Back to categories") })
-                    StreamCarousel(streamBundle = StreamBundle(
-                        id = "p13b-category-results", clusters = listOf(
-                            StreamCluster(id = "p13b-selected", title = "P13 Selected Art", apps = all)
-                        )
-                    ), showHomeActions = false)
+                    FilterChip(
+                        selected = true,
+                        onClick = { selected = null },
+                        label = { Text("P13 Back to categories") }
+                    )
+                    StreamCarousel(
+                        streamBundle = StreamBundle(
+                            id = "p13b-category-results",
+                            clusters = listOf(
+                                StreamCluster(
+                                    id = "p13b-selected",
+                                    title = "P13 Selected Art",
+                                    apps = all
+                                )
+                            )
+                        ),
+                        showHomeActions = false
+                    )
                 }
             }
         }

@@ -47,7 +47,8 @@ class ArtifactReviewP02DeviceTest {
         // Simulate the OS picker delivering its content URI. This calls the exact
         // production post-picker function, not a fake verification or receipt.
         val method = ArtifactImportActivity::class.java.getDeclaredMethod(
-            "handlePickedFile", Uri::class.java
+            "handlePickedFile",
+            Uri::class.java
         )
         method.isAccessible = true
         method.invoke(activity, uri(filename))
@@ -64,10 +65,7 @@ class ArtifactReviewP02DeviceTest {
         waitFor(scenario, "Local file not selected or verified")
     }
 
-    private fun waitFor(
-        scenario: ActivityScenario<ArtifactImportActivity>,
-        needle: String
-    ) {
+    private fun waitFor(scenario: ActivityScenario<ArtifactImportActivity>, needle: String) {
         var text = ""
         repeat(240) {
             scenario.onActivity { activity ->
@@ -77,7 +75,9 @@ class ArtifactReviewP02DeviceTest {
             if (needle in text) return
             SystemClock.sleep(250)
         }
-        throw AssertionError("P02A UI never reached expected state: $needle; final=${text.take(400)}")
+        throw AssertionError(
+            "P02A UI never reached expected state: $needle; final=${text.take(400)}"
+        )
     }
 
     @Test fun signedRealContentUriHasTruthfulSourceAndFreshConsent() {
@@ -105,9 +105,12 @@ class ArtifactReviewP02DeviceTest {
                 }
                 assertThat(toggle.visibility).isEqualTo(View.VISIBLE)
                 toggle.performClick()
-                assertThat(ui.filterIsInstance<TextView>().any {
-                    it.visibility == View.VISIBLE && it.text.toString().contains("APK signing certificate SHA-256")
-                }).isTrue()
+                assertThat(
+                    ui.filterIsInstance<TextView>().any {
+                        it.visibility == View.VISIBLE &&
+                            it.text.toString().contains("APK signing certificate SHA-256")
+                    }
+                ).isTrue()
                 assertThat(install(ui).isEnabled).isFalse()
             }
         }
@@ -135,9 +138,11 @@ class ArtifactReviewP02DeviceTest {
                     it.text.toString()
                 }
                 assertThat(text).contains("No verified files")
-                assertThat(ui.filterIsInstance<Button>().single {
-                    it.text.toString() == "Show technical verification details"
-                }.visibility).isEqualTo(View.GONE)
+                assertThat(
+                    ui.filterIsInstance<Button>().single {
+                        it.text.toString() == "Show technical verification details"
+                    }.visibility
+                ).isEqualTo(View.GONE)
             }
         }
     }
@@ -171,12 +176,15 @@ class ArtifactReviewP02DeviceTest {
                 assertThat(scroll.isFillViewport).isTrue()
                 val spinner = ui.filterIsInstance<Spinner>().single()
                 assertThat(spinner.contentDescription.toString()).contains("source")
-                assertThat(ui.filterIsInstance<TextView>().filter {
-                    it.text.toString() in listOf(
-                        "Verification receipt", "Android installation outcome",
-                        "Installation permissions for this verified file"
-                    )
-                }.all { ViewCompat.isAccessibilityHeading(it) }).isTrue()
+                assertThat(
+                    ui.filterIsInstance<TextView>().filter {
+                        it.text.toString() in listOf(
+                            "Verification receipt",
+                            "Android installation outcome",
+                            "Installation permissions for this verified file"
+                        )
+                    }.all { ViewCompat.isAccessibilityHeading(it) }
+                ).isTrue()
                 // Large SP text stress inside the actual scroll surface. No global
                 // device font setting or accessibility service is modified.
                 ui.filterIsInstance<TextView>().filter { it.visibility == View.VISIBLE }

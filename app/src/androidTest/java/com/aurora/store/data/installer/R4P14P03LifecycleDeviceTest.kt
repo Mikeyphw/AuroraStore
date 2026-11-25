@@ -38,7 +38,9 @@ class R4P14P03LifecycleDeviceTest {
         dao = database.downloadDao()
     }
 
-    @After fun tearDown() { database.close() }
+    @After fun tearDown() {
+        database.close()
+    }
 
     private fun fixture(status: DownloadStatus, pkg: String = PACKAGE): Download = Download(
         packageName = pkg, versionCode = VERSION, offerType = 0, isInstalled = false,
@@ -77,38 +79,76 @@ class R4P14P03LifecycleDeviceTest {
         assertThat(retry.status).isEqualTo(DownloadStatus.QUEUED)
         assertThat(dao.updateWorkerStatus(PACKAGE, VERSION, ATTEMPT, DownloadStatus.COMPLETED))
             .isEqualTo(0)
-        assertThat(dao.updateWorkerStatus(PACKAGE, VERSION, retry.downloadedAt,
-            DownloadStatus.DOWNLOADING)).isEqualTo(1)
-        assertThat(dao.updateWorkerProgress(PACKAGE, VERSION, retry.downloadedAt,
-            42, 1000L, 12L)).isEqualTo(1)
+        assertThat(
+            dao.updateWorkerStatus(
+                PACKAGE,
+                VERSION,
+                retry.downloadedAt,
+                DownloadStatus.DOWNLOADING
+            )
+        ).isEqualTo(1)
+        assertThat(
+            dao.updateWorkerProgress(
+                PACKAGE,
+                VERSION,
+                retry.downloadedAt,
+                42,
+                1000L,
+                12L
+            )
+        ).isEqualTo(1)
         assertThat(dao.getDownload(PACKAGE).progress).isEqualTo(42)
     }
 
     @Test
     fun newerUpdateVersionRejectsOldCancellationAndInstallerResult() = runBlocking {
         dao.insert(fixture(DownloadStatus.DOWNLOADING))
-        dao.insert(fixture(DownloadStatus.QUEUED).copy(versionCode = VERSION + 1L,
-            downloadedAt = ATTEMPT + 1L))
+        dao.insert(
+            fixture(DownloadStatus.QUEUED).copy(
+                versionCode = VERSION + 1L,
+                downloadedAt = ATTEMPT + 1L
+            )
+        )
         assertThat(dao.cancelActiveDownload(PACKAGE, VERSION, ATTEMPT)).isEqualTo(0)
         assertThat(dao.updateWorkerStatus(PACKAGE, VERSION, ATTEMPT, DownloadStatus.FAILED))
             .isEqualTo(0)
-        assertThat(dao.transitionInstallAttempt(PACKAGE, VERSION, ATTEMPT,
-            DownloadStatus.QUEUED, DownloadStatus.INSTALLED)).isEqualTo(0)
+        assertThat(
+            dao.transitionInstallAttempt(
+                PACKAGE,
+                VERSION,
+                ATTEMPT,
+                DownloadStatus.QUEUED,
+                DownloadStatus.INSTALLED
+            )
+        ).isEqualTo(0)
         assertThat(dao.getDownload(PACKAGE).versionCode).isEqualTo(VERSION + 1L)
     }
 
     @Test
     fun installerUserDeclineWithCachedApkRemainsPendingNotInstalled() = runBlocking {
         dao.insert(fixture(DownloadStatus.INSTALLING))
-        val pending = InstallResultPolicy.next(DownloadStatus.INSTALLING,
-            InstallResultPolicy.Outcome.PENDING_USER_ACTION, true)
+        val pending = InstallResultPolicy.next(
+            DownloadStatus.INSTALLING,
+            InstallResultPolicy.Outcome.PENDING_USER_ACTION,
+            true
+        )
         assertThat(pending).isEqualTo(DownloadStatus.AWAITING_INSTALL)
-        assertThat(dao.transitionInstallAttempt(PACKAGE, VERSION, ATTEMPT,
-            DownloadStatus.INSTALLING, pending!!)).isEqualTo(1)
+        assertThat(
+            dao.transitionInstallAttempt(
+                PACKAGE,
+                VERSION,
+                ATTEMPT,
+                DownloadStatus.INSTALLING,
+                pending!!
+            )
+        ).isEqualTo(1)
         // Android STATUS_FAILURE_ABORTED is mapped to Outcome.FAILURE by the receiver.
         // Available cached APKs permit explicit retry; declining MUST NOT mark installed.
-        val declined = InstallResultPolicy.next(DownloadStatus.AWAITING_INSTALL,
-            InstallResultPolicy.Outcome.FAILURE, true)
+        val declined = InstallResultPolicy.next(
+            DownloadStatus.AWAITING_INSTALL,
+            InstallResultPolicy.Outcome.FAILURE,
+            true
+        )
         assertThat(declined).isNull()
         assertThat(dao.getDownload(PACKAGE).status).isEqualTo(DownloadStatus.AWAITING_INSTALL)
         assertThat(DownloadUiPolicy.canRetry(DownloadStatus.AWAITING_INSTALL, true)).isFalse()
@@ -117,24 +157,45 @@ class R4P14P03LifecycleDeviceTest {
     @Test
     fun installerUserDeclineWithoutCachedApkFailsThenAllowsRetry() = runBlocking {
         dao.insert(fixture(DownloadStatus.INSTALLING))
-        val declined = InstallResultPolicy.next(DownloadStatus.INSTALLING,
-            InstallResultPolicy.Outcome.FAILURE, false)
+        val declined = InstallResultPolicy.next(
+            DownloadStatus.INSTALLING,
+            InstallResultPolicy.Outcome.FAILURE,
+            false
+        )
         assertThat(declined).isEqualTo(DownloadStatus.FAILED)
-        assertThat(dao.transitionInstallAttempt(PACKAGE, VERSION, ATTEMPT,
-            DownloadStatus.INSTALLING, declined!!)).isEqualTo(1)
+        assertThat(
+            dao.transitionInstallAttempt(
+                PACKAGE,
+                VERSION,
+                ATTEMPT,
+                DownloadStatus.INSTALLING,
+                declined!!
+            )
+        ).isEqualTo(1)
         assertThat(dao.retryWithNewAttempt(PACKAGE, VERSION, ATTEMPT, ATTEMPT + 5L)).isEqualTo(1)
         val next = dao.getDownload(PACKAGE)
         assertThat(next.status).isEqualTo(DownloadStatus.QUEUED)
-        assertThat(dao.transitionInstallAttempt(PACKAGE, VERSION, ATTEMPT,
-            DownloadStatus.INSTALLING, DownloadStatus.INSTALLED)).isEqualTo(0)
+        assertThat(
+            dao.transitionInstallAttempt(
+                PACKAGE,
+                VERSION,
+                ATTEMPT,
+                DownloadStatus.INSTALLING,
+                DownloadStatus.INSTALLED
+            )
+        ).isEqualTo(0)
     }
 
     @Test
     fun interruptedInstallRecoveryWithCachedApkRestoresPendingState() = runBlocking {
         dao.insert(fixture(DownloadStatus.INSTALLING))
-        val recovered = InstallRecoveryPolicy.resolve(DownloadStatus.INSTALLING,
-            installedVersion = 0L, targetVersion = VERSION, hasLiveSession = false,
-            hasCachedApks = true)
+        val recovered = InstallRecoveryPolicy.resolve(
+            DownloadStatus.INSTALLING,
+            installedVersion = 0L,
+            targetVersion = VERSION,
+            hasLiveSession = false,
+            hasCachedApks = true
+        )
         assertThat(recovered).isEqualTo(DownloadStatus.AWAITING_INSTALL)
         assertThat(dao.reconcileInstallStatus(PACKAGE, VERSION, ATTEMPT, recovered!!)).isEqualTo(1)
         assertThat(dao.getDownload(PACKAGE).status).isEqualTo(DownloadStatus.AWAITING_INSTALL)
@@ -144,9 +205,13 @@ class R4P14P03LifecycleDeviceTest {
     @Test
     fun missingSessionAndApkCannotRemainInstallingForever() = runBlocking {
         dao.insert(fixture(DownloadStatus.INSTALLING))
-        val recovered = InstallRecoveryPolicy.resolve(DownloadStatus.INSTALLING,
-            installedVersion = 0L, targetVersion = VERSION, hasLiveSession = false,
-            hasCachedApks = false)
+        val recovered = InstallRecoveryPolicy.resolve(
+            DownloadStatus.INSTALLING,
+            installedVersion = 0L,
+            targetVersion = VERSION,
+            hasLiveSession = false,
+            hasCachedApks = false
+        )
         assertThat(recovered).isEqualTo(DownloadStatus.FAILED)
         assertThat(dao.reconcileInstallStatus(PACKAGE, VERSION, ATTEMPT, recovered!!)).isEqualTo(1)
         assertThat(dao.getDownload(PACKAGE).status).isEqualTo(DownloadStatus.FAILED)

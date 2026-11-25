@@ -119,7 +119,9 @@ class RoomV15ToV16MigrationDeviceTest {
                     assertThat(row.getInt(0)).isEqualTo(if (fork) 1 else 0)
                 }
                 if (fork) {
-                    db.query("SELECT versionCode, attemptGeneration, state FROM play_delivery_evidence").use { row ->
+                    db.query(
+                        "SELECT versionCode, attemptGeneration, state FROM play_delivery_evidence"
+                    ).use { row ->
                         assertThat(row.moveToFirst()).isTrue()
                         assertThat(row.getLong(0)).isEqualTo(737L)
                         assertThat(row.getLong(1)).isEqualTo(9001L)
@@ -143,7 +145,14 @@ class RoomV15ToV16MigrationDeviceTest {
 
         private const val FORK_V16_IDENTITY_HASH = "daa8dbc1dc7b57377b22b569846b7c85"
         private const val UPSTREAM_V16_IDENTITY_HASH = "f65ba0d37b1f92e464f095e617ff09e1"
-        private const val FORK_EVIDENCE_TABLE = "CREATE TABLE IF NOT EXISTS `play_delivery_evidence` (`packageName` TEXT NOT NULL, `versionCode` INTEGER NOT NULL, `attemptGeneration` INTEGER NOT NULL, `accountBinding` TEXT NOT NULL, `variant` TEXT NOT NULL, `state` TEXT NOT NULL, `verifiedApkVersion` INTEGER, `unavailableVersion` INTEGER, `resolvedFileCount` INTEGER NOT NULL, PRIMARY KEY(`packageName`))"
+        private const val FORK_EVIDENCE_TABLE =
+            "CREATE TABLE IF NOT EXISTS `play_delivery_evidence` " +
+                "(`packageName` TEXT NOT NULL, `versionCode` INTEGER NOT NULL, " +
+                "`attemptGeneration` INTEGER NOT NULL, `accountBinding` TEXT NOT " +
+                "NULL, `variant` TEXT NOT NULL, `state` TEXT NOT NULL, " +
+                "`verifiedApkVersion` INTEGER, `unavailableVersion` INTEGER, " +
+                "`resolvedFileCount` INTEGER NOT NULL, PRIMARY " +
+                "KEY(`packageName`))"
 
         // Exact v15 CREATE TABLE definitions. Source CI checks these against 15.json.
         private val V15_TABLES = listOf(

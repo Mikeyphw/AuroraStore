@@ -4,9 +4,6 @@ package com.aurora.store.compose.ui.r4
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.SystemClock
-import java.io.File
-import java.io.FileOutputStream
-import kotlin.math.abs
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -19,6 +16,9 @@ import com.aurora.store.compose.ui.sheets.DownloadActionsSheet
 import com.aurora.store.data.model.DownloadStatus
 import com.aurora.store.data.room.download.Download
 import com.google.common.truth.Truth.assertThat
+import java.io.File
+import java.io.FileOutputStream
+import kotlin.math.abs
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -43,10 +43,15 @@ class R4P14P03DownloadUiDeviceTest : IsolatedTest() {
     )
 
     private fun screenshot(filename: String) {
-        check(filename in setOf(
-            "r4_p14p03_queued.png", "r4_p14p03_downloading.png", "r4_p14p03_failed.png",
-            "r1g_awaiting_retry.png", "r1g_cancelled.png"
-        )) { "P14P03_REFUSED_SCREENSHOT_NAME" }
+        check(
+            filename in setOf(
+                "r4_p14p03_queued.png",
+                "r4_p14p03_downloading.png",
+                "r4_p14p03_failed.png",
+                "r1g_awaiting_retry.png",
+                "r1g_cancelled.png"
+            )
+        ) { "P14P03_REFUSED_SCREENSHOT_NAME" }
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         var accepted: Bitmap? = null
         var observed = -1
@@ -124,8 +129,13 @@ class R4P14P03DownloadUiDeviceTest : IsolatedTest() {
         setContent {
             DownloadActionsSheet(
                 download = fixture(DownloadStatus.FAILED),
-                onDismiss = {}, onShowDetails = {}, onCancel = {},
-                onRetry = { retries++ }, onInstall = {}, onExport = {}, onClear = {}
+                onDismiss = {},
+                onShowDetails = {},
+                onCancel = {},
+                onRetry = { retries++ },
+                onInstall = {},
+                onExport = {},
+                onClear = {}
             )
         }
         composeTestRule.onNodeWithText(context.getString(R.string.r1f_download_retry))
@@ -140,9 +150,13 @@ class R4P14P03DownloadUiDeviceTest : IsolatedTest() {
         setContent {
             DownloadActionsSheet(
                 download = fixture(DownloadStatus.VERIFYING),
-                onDismiss = {}, onShowDetails = {},
-                onCancel = { cancellations++ }, onRetry = {},
-                onInstall = {}, onExport = {}, onClear = {}
+                onDismiss = {},
+                onShowDetails = {},
+                onCancel = { cancellations++ },
+                onRetry = {},
+                onInstall = {},
+                onExport = {},
+                onClear = {}
             )
         }
         composeTestRule.onNodeWithText(context.getString(R.string.action_cancel))
@@ -157,8 +171,13 @@ class R4P14P03DownloadUiDeviceTest : IsolatedTest() {
         setContent {
             DownloadActionsSheet(
                 download = fixture(DownloadStatus.AWAITING_INSTALL),
-                onDismiss = {}, onShowDetails = {}, onCancel = {},
-                onRetry = { retries++ }, onInstall = {}, onExport = {}, onClear = {}
+                onDismiss = {},
+                onShowDetails = {},
+                onCancel = {},
+                onRetry = { retries++ },
+                onInstall = {},
+                onExport = {},
+                onClear = {}
             )
         }
         composeTestRule.onNodeWithText(context.getString(R.string.r1f_download_retry))
@@ -177,8 +196,13 @@ class R4P14P03DownloadUiDeviceTest : IsolatedTest() {
         setContent {
             DownloadActionsSheet(
                 download = fixture(DownloadStatus.INSTALLING),
-                onDismiss = {}, onShowDetails = {}, onCancel = {},
-                onRetry = {}, onInstall = {}, onExport = {}, onClear = {}
+                onDismiss = {},
+                onShowDetails = {},
+                onCancel = {},
+                onRetry = {},
+                onInstall = {},
+                onExport = {},
+                onClear = {}
             )
         }
         composeTestRule.onNodeWithText(context.getString(R.string.action_cancel))

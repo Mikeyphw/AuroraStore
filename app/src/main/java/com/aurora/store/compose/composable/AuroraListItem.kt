@@ -67,14 +67,22 @@ fun AuroraListItem(
             null
         }
     val itemModifier = modifier.fillMaxWidth().then(
-        if (onLongClick != null) Modifier.combinedClickable(
-            enabled = enabled,
-            onClick = { onClick?.invoke() },
-            onLongClick = onLongClick
-        ) else Modifier
+        if (onLongClick != null) {
+            Modifier.combinedClickable(
+                enabled = enabled,
+                onClick = { onClick?.invoke() },
+                onLongClick = onLongClick
+            )
+        } else {
+            Modifier
+        }
     )
     val itemColors = ListItemDefaults.colors(
-        containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
+        containerColor = if (selected) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            Color.Transparent
+        }
     )
     val contentPadding = PaddingValues(
         horizontal = dimensionResource(R.dimen.spacing_large),

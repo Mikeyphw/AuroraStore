@@ -7,28 +7,28 @@
 
 package com.aurora.store.compose.composable
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.background
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenuPopup
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.toggleableState
-import androidx.compose.ui.state.ToggleableState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 
 /** A popup container for Material 3 Expressive menu groups. */
@@ -52,11 +52,7 @@ fun ExpressiveMenuPopup(
 
 /** A visually distinct group within an expressive menu popup. */
 @Composable
-fun ExpressiveMenuGroup(
-    index: Int,
-    count: Int,
-    content: @Composable ColumnScope.() -> Unit
-) {
+fun ExpressiveMenuGroup(index: Int, count: Int, content: @Composable ColumnScope.() -> Unit) {
     DropdownMenuGroup(
         shapes = MenuDefaults.groupShape(index, count),
         content = content
@@ -103,7 +99,11 @@ fun ExpressiveSelectableMenuItem(
         shape = itemShape,
         modifier = modifier
             .background(
-                color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.secondaryContainer
+                } else {
+                    Color.Transparent
+                },
                 shape = itemShape
             )
             .semantics { this.selected = selected },
@@ -132,7 +132,11 @@ fun ExpressiveCheckableMenuItem(
         shape = itemShape,
         modifier = modifier
             .background(
-                color = if (checked) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                color = if (checked) {
+                    MaterialTheme.colorScheme.secondaryContainer
+                } else {
+                    Color.Transparent
+                },
                 shape = itemShape
             )
             .semantics { toggleableState = ToggleableState(checked) },
@@ -152,10 +156,7 @@ private fun menuItemShape(index: Int, count: Int): Shape = when {
 
 /** A menu leading icon with the standard Material menu icon size. */
 @Composable
-fun ExpressiveMenuIcon(
-    painter: Painter,
-    contentDescription: String? = null
-) {
+fun ExpressiveMenuIcon(painter: Painter, contentDescription: String? = null) {
     Icon(
         painter = painter,
         contentDescription = contentDescription,

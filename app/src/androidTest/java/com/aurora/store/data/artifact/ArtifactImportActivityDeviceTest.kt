@@ -20,8 +20,10 @@ import org.junit.runner.RunWith
 class ArtifactImportActivityDeviceTest {
     private fun descendants(root: View): List<View> = buildList {
         add(root)
-        if (root is ViewGroup) for (index in 0 until root.childCount) {
-            addAll(descendants(root.getChildAt(index)))
+        if (root is ViewGroup) {
+            for (index in 0 until root.childCount) {
+                addAll(descendants(root.getChildAt(index)))
+            }
         }
     }
 
@@ -33,9 +35,11 @@ class ArtifactImportActivityDeviceTest {
                     it.text.toString() == "Request Android installation"
                 }
                 assertThat(install.isEnabled).isFalse()
-                assertThat(all.filterIsInstance<CheckBox>().filter {
-                    it.text.toString().contains("approve installation")
-                }.all { it.visibility == View.GONE }).isTrue()
+                assertThat(
+                    all.filterIsInstance<CheckBox>().filter {
+                        it.text.toString().contains("approve installation")
+                    }.all { it.visibility == View.GONE }
+                ).isTrue()
                 val text = all.filterIsInstance<TextView>().joinToString(" ") { it.text.toString() }
                 assertThat(text).contains("No verified files")
                 // Previous fixture installs are allowed: do not demand an empty OS receipt.
@@ -47,13 +51,17 @@ class ArtifactImportActivityDeviceTest {
         ActivityScenario.launch(ArtifactImportActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 val all = descendants(activity.findViewById(android.R.id.content))
-                val text = all.filterIsInstance<TextView>().joinToString("\n") { it.text.toString() }
+                val text = all.filterIsInstance<TextView>().joinToString("\n") {
+                    it.text.toString()
+                }
                 assertThat(text).contains("Verification receipt")
                 assertThat(text).contains("Android installation outcome")
                 assertThat(text).contains("Browser links are manual handoffs")
-                assertThat(all.filterIsInstance<Button>().any {
-                    it.text.toString() == "Refresh Android install outcome"
-                }).isTrue()
+                assertThat(
+                    all.filterIsInstance<Button>().any {
+                        it.text.toString() == "Refresh Android install outcome"
+                    }
+                ).isTrue()
             }
         }
     }
@@ -66,8 +74,11 @@ class ArtifactImportActivityDeviceTest {
                 assertThat(scroll.isFillViewport).isTrue()
                 assertThat(scroll.paddingTop).isAtLeast(0)
                 assertThat(scroll.paddingBottom).isAtLeast(0)
-                assertThat(scroll.canScrollVertically(1) || scroll.canScrollVertically(-1) ||
-                    scroll.height > 0).isTrue()
+                assertThat(
+                    scroll.canScrollVertically(1) ||
+                        scroll.canScrollVertically(-1) ||
+                        scroll.height > 0
+                ).isTrue()
             }
         }
     }

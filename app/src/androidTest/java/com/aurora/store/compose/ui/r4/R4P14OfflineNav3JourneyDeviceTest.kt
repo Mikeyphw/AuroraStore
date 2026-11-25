@@ -8,19 +8,19 @@ import android.graphics.Color
 import android.os.SystemClock
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.hasClickAction
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onAllNodesWithTag
-import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
-import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -31,12 +31,12 @@ import com.aurora.store.R
 import com.aurora.store.compose.navigation.Screen
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import java.io.File
+import kotlin.math.abs
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.io.File
-import kotlin.math.abs
 
 /**
  * P14-P01: actual Android ComposeActivity and production Navigation3, offline only.
@@ -46,25 +46,30 @@ import kotlin.math.abs
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
 class R4P14OfflineNav3JourneyDeviceTest {
-    @get:Rule(order = 0) val hiltRule = HiltAndroidRule(this)
-    @get:Rule(order = 1) val composeRule = createEmptyComposeRule()
+    @get:Rule(order = 0)
+    val hiltRule = HiltAndroidRule(this)
+
+    @get:Rule(order = 1)
+    val composeRule = createEmptyComposeRule()
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
     @Before
     fun initialize() {
         hiltRule.inject()
-        try { WorkManager.getInstance(context) }
-        catch (_: IllegalStateException) {
+        try {
+            WorkManager.getInstance(context)
+        } catch (_: IllegalStateException) {
             WorkManager.initialize(context, Configuration.Builder().build())
         }
         checkNotNull(WorkManager.getInstance(context)) { "P14_WORKMANAGER_MISSING" }
     }
 
-    private fun launchMain(): ActivityScenario<ComposeActivity> =
-        ActivityScenario.launch(Intent(context, ComposeActivity::class.java).apply {
+    private fun launchMain(): ActivityScenario<ComposeActivity> = ActivityScenario.launch(
+        Intent(context, ComposeActivity::class.java).apply {
             putExtra(Screen.PARCEL_KEY, Screen.Main(initialTab = 0))
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-        })
+        }
+    )
 
     private fun expect(label: String) {
         composeRule.waitUntil(timeoutMillis = 20_000L) {
@@ -116,7 +121,11 @@ class R4P14OfflineNav3JourneyDeviceTest {
         val frame = checkNotNull(
             InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
         ) { "P14_BASELINE_SCREENSHOT_NULL" }
-        previousBodySignature = try { bodySignature(frame) } finally { frame.recycle() }
+        previousBodySignature = try {
+            bodySignature(frame)
+        } finally {
+            frame.recycle()
+        }
     }
 
     private fun capture(filename: String) {
@@ -124,15 +133,23 @@ class R4P14OfflineNav3JourneyDeviceTest {
         var observed = 0
         for (attempt in 1..12) {
             R4ScreenshotEvidence.capture(context, filename) { composeRule.waitForIdle() }
-            val image = checkNotNull(BitmapFactory.decodeFile(
-                File(context.filesDir, filename).absolutePath
-            )) { "P14_FRAME_DECODE_FAILED $filename" }
-            val sample = try { bodySignature(image) } finally { image.recycle() }
+            val image = checkNotNull(
+                BitmapFactory.decodeFile(
+                    File(context.filesDir, filename).absolutePath
+                )
+            ) { "P14_FRAME_DECODE_FAILED $filename" }
+            val sample = try {
+                bodySignature(image)
+            } finally {
+                image.recycle()
+            }
             observed = changedBody(prior, sample)
             if (attempt == 1 || attempt == 12) {
-                android.util.Log.i("P14VisualEvidence",
+                android.util.Log.i(
+                    "P14VisualEvidence",
                     "P14_FRAME_READBACK file=$filename attempt=$attempt " +
-                        "changedPixels=$observed required=12 sampleSize=${sample.size}")
+                        "changedPixels=$observed required=12 sampleSize=${sample.size}"
+                )
             }
             if (observed >= 12) {
                 previousBodySignature = sample
@@ -167,7 +184,9 @@ class R4P14OfflineNav3JourneyDeviceTest {
             composeRule.onNodeWithContentDescription(context.getString(R.string.action_back))
                 .performClick()
             expect(context.getString(R.string.title_apps))
-            composeRule.onNodeWithContentDescription(context.getString(R.string.title_download_manager))
+            composeRule.onNodeWithContentDescription(
+                context.getString(R.string.title_download_manager)
+            )
                 .performClick()
             expect(context.getString(R.string.title_download_manager))
             capture("r4_p14_downloads_route.png")
@@ -232,8 +251,10 @@ class R4P14OfflineNav3JourneyDeviceTest {
                     .fetchSemanticsNodes().isNotEmpty()
             }
             expect("P14 Offline Atlas")
-            check(P14HermeticCatalogGateway.detailsCount.get() > priorDetails &&
-                P14HermeticCatalogGateway.reviewCount.get() > priorReviews) {
+            check(
+                P14HermeticCatalogGateway.detailsCount.get() > priorDetails &&
+                    P14HermeticCatalogGateway.reviewCount.get() > priorReviews
+            ) {
                 "P14_REFUSED_DETAILS_VIEWMODEL_OR_REVIEWS_NOT_EXERCISED"
             }
             capture("r4_p14_details_identity.png")
