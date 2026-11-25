@@ -11,8 +11,10 @@ internal object ArtifactArchiveDescriptorParser {
     private const val MAX_INDEX_BYTES = 64 * 1024
     private const val MAX_INDEX_ITEMS = ArtifactArchivePolicy.MAX_APKS
 
-    fun parse(format: ArtifactArchivePolicy.Format, raw: ByteArray?):
-        ArtifactArchiveDescriptorPolicy.Claim? {
+    fun parse(
+        format: ArtifactArchivePolicy.Format,
+        raw: ByteArray?
+    ): ArtifactArchiveDescriptorPolicy.Claim? {
         if (raw == null) return null
         if (raw.isEmpty() || raw.size > MAX_INDEX_BYTES) {
             throw ApkVerificationException("Archive index size invalid")
@@ -25,17 +27,21 @@ internal object ArtifactArchiveDescriptorParser {
         } catch (_: Exception) {
             throw ApkVerificationException("Archive metadata is not UTF-8")
         }
-        val json = try { JSONObject(content) } catch (_: Exception) {
+        val json = try {
+            JSONObject(content)
+        } catch (_: Exception) {
             throw ApkVerificationException("Archive metadata is not valid JSON")
         }
         val packageKey: String
         val versionKey: String
         when (format) {
             ArtifactArchivePolicy.Format.APKM -> {
-                packageKey = "pname"; versionKey = "versioncode"
+                packageKey = "pname"
+                versionKey = "versioncode"
             }
             ArtifactArchivePolicy.Format.XAPK -> {
-                packageKey = "package_name"; versionKey = "version_code"
+                packageKey = "package_name"
+                versionKey = "version_code"
             }
             else -> throw ApkVerificationException("Unexpected archive descriptor")
         }
@@ -50,7 +56,11 @@ internal object ArtifactArchiveDescriptorParser {
         if (pkg.isBlank()) throw ApkVerificationException("Archive descriptor package is missing")
         if (format == ArtifactArchivePolicy.Format.XAPK &&
             json.optJSONArray("expansions")?.length()?.let { it > 0 } == true
-        ) throw ApkVerificationException("XAPK OBB expansion assets require separate authorization")
+        ) {
+            throw ApkVerificationException(
+                "XAPK OBB expansion assets require separate authorization"
+            )
+        }
 
         var splitIds: Map<String, String?>? = null
         if (format == ArtifactArchivePolicy.Format.XAPK && json.has("split_apks")) {
@@ -65,9 +75,14 @@ internal object ArtifactArchiveDescriptorParser {
                     ?: throw ApkVerificationException("XAPK split index element invalid")
                 val file = record.optString("file", "")
                 val split = record.optString("id", "")
-                if (file.isBlank() || split.isBlank() || file.startsWith('/') ||
-                    '\\' in file || file.split('/').any { it.isBlank() || it == "." || it == ".." }
-                ) throw ApkVerificationException("XAPK split index path invalid")
+                if (file.isBlank() ||
+                    split.isBlank() ||
+                    file.startsWith('/') ||
+                    '\\' in file ||
+                    file.split('/').any { it.isBlank() || it == "." || it == ".." }
+                ) {
+                    throw ApkVerificationException("XAPK split index path invalid")
+                }
                 if (result.containsKey(file)) {
                     throw ApkVerificationException("Duplicate XAPK split index path")
                 }

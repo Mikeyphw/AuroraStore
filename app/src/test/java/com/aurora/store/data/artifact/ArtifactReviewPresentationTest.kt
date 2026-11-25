@@ -8,7 +8,8 @@ import org.junit.Test
 
 class ArtifactReviewPresentationTest {
     private fun facts(
-        source: ArtifactProvenance = ArtifactProvenance(ArtifactSource.LOCAL_DOCUMENT, "selected.apks"),
+        source: ArtifactProvenance =
+            ArtifactProvenance(ArtifactSource.LOCAL_DOCUMENT, "selected.apks"),
         installedVersion: Long? = null,
         matches: Boolean? = null,
         trust: ArtifactTrustTier = ArtifactTrustTier.APK_SIGNER_VALID_PUBLISHER_UNANCHORED
@@ -32,17 +33,22 @@ class ArtifactReviewPresentationTest {
     }
 
     @Test fun browserClaimDoesNotBecomeAuthenticatedDownload() {
-        val display = ArtifactReviewPresentation.verification(facts(
-            source = ArtifactProvenance(ArtifactSource.GITHUB_RELEASE, "github.com")
-        ))
+        val display = ArtifactReviewPresentation.verification(
+            facts(
+                source = ArtifactProvenance(ArtifactSource.GITHUB_RELEASE, "github.com")
+            )
+        )
         assertThat(display).contains("GitHub Releases (browser claim)")
         assertThat(display).contains("unverified reference: github.com")
         assertThat(display).doesNotContain("Verified GitHub publisher")
     }
 
     @Test fun installedContinuityIsNotPublisherProof() {
-        val f = facts(installedVersion = 31L, matches = true,
-            trust = ArtifactTrustTier.INSTALLED_SIGNER_CONTINUITY)
+        val f = facts(
+            installedVersion = 31L,
+            matches = true,
+            trust = ArtifactTrustTier.INSTALLED_SIGNER_CONTINUITY
+        )
         assertThat(ArtifactReviewPresentation.consentNeedsUnknownPublisher(f)).isFalse()
         assertThat(ArtifactReviewPresentation.trust(f))
             .contains("does not independently prove who published")
@@ -50,10 +56,15 @@ class ArtifactReviewPresentationTest {
     }
 
     @Test fun downgradeIsSeparateFromPublisherAcknowledgement() {
-        val f = facts(installedVersion = 40L, matches = true,
-            trust = ArtifactTrustTier.INSTALLED_SIGNER_CONTINUITY)
+        val f = facts(
+            installedVersion = 40L,
+            matches = true,
+            trust = ArtifactTrustTier.INSTALLED_SIGNER_CONTINUITY
+        )
         assertThat(ArtifactReviewPresentation.consentNeedsDowngrade(f)).isTrue()
-        assertThat(ArtifactReviewPresentation.verification(f)).contains("Separate approval required")
+        assertThat(
+            ArtifactReviewPresentation.verification(f)
+        ).contains("Separate approval required")
     }
 
     @Test fun unanchoredNewInstallationNeedsPublisherConsent() {
@@ -62,18 +73,22 @@ class ArtifactReviewPresentationTest {
     }
 
     @Test fun mismatchCannotBePresentedAsTrust() {
-        val display = ArtifactReviewPresentation.verification(facts(installedVersion = 40L, matches = false))
+        val display = ArtifactReviewPresentation.verification(
+            facts(installedVersion = 40L, matches = false)
+        )
         assertThat(display).contains("MISMATCH — blocked")
-        assertThat(ArtifactReviewPresentation.trust(facts(installedVersion=40L,matches=false)))
+        assertThat(ArtifactReviewPresentation.trust(facts(installedVersion = 40L, matches = false)))
             .contains("installation must be blocked")
     }
 
     @Test fun humanReadableConsentBlockersMapToSeparateControls() {
-        val text = ArtifactReviewPresentation.blockerDescription(setOf(
-            ArtifactImportDecision.Blocker.EXPLICIT_INSTALL_CONSENT_REQUIRED,
-            ArtifactImportDecision.Blocker.UNANCHORED_PUBLISHER_CONSENT_REQUIRED,
-            ArtifactImportDecision.Blocker.DOWNGRADE_CONSENT_REQUIRED
-        ))
+        val text = ArtifactReviewPresentation.blockerDescription(
+            setOf(
+                ArtifactImportDecision.Blocker.EXPLICIT_INSTALL_CONSENT_REQUIRED,
+                ArtifactImportDecision.Blocker.UNANCHORED_PUBLISHER_CONSENT_REQUIRED,
+                ArtifactImportDecision.Blocker.DOWNGRADE_CONSENT_REQUIRED
+            )
+        )
         assertThat(text).contains("Approve installation")
         assertThat(text).contains("Acknowledge unverified publisher")
         assertThat(text).contains("Approve version downgrade separately")
@@ -88,15 +103,23 @@ class ArtifactReviewPresentationTest {
             assertThat(ArtifactReviewPresentation.androidResult(state)).contains("NOT confirmed")
             assertThat(ArtifactReviewPresentation.androidResult(state)).doesNotContain("SUCCESS")
         }
-        assertThat(ArtifactReviewPresentation.androidResult(
-            ArtifactSessionReceiptPolicy.State.INSTALLED_BY_ANDROID)).contains("SUCCESS")
-        assertThat(ArtifactReviewPresentation.androidResult(
-            ArtifactSessionReceiptPolicy.State.ANDROID_REJECTED)).contains("REJECTED")
+        assertThat(
+            ArtifactReviewPresentation.androidResult(
+                ArtifactSessionReceiptPolicy.State.INSTALLED_BY_ANDROID
+            )
+        ).contains("SUCCESS")
+        assertThat(
+            ArtifactReviewPresentation.androidResult(
+                ArtifactSessionReceiptPolicy.State.ANDROID_REJECTED
+            )
+        ).contains("REJECTED")
     }
 
     @Test fun androidFailureReasonsAreReadable() {
         assertThat(ArtifactReviewPresentation.androidFailureReason(2)).contains("policy blocked")
-        assertThat(ArtifactReviewPresentation.androidFailureReason(6)).contains("Insufficient storage")
+        assertThat(
+            ArtifactReviewPresentation.androidFailureReason(6)
+        ).contains("Insufficient storage")
         assertThat(ArtifactReviewPresentation.androidFailureReason(-1)).contains("Unknown")
     }
 
@@ -104,6 +127,7 @@ class ArtifactReviewPresentationTest {
         assertThat(ArtifactReviewPresentation.androidResult(null))
             .contains("No authenticated Android install outcome")
     }
+
     @Test fun claimedVerifiedPublisherEnumCannotHideUnknownPublisherConsent() {
         val f = facts(trust = ArtifactTrustTier.VERIFIED_PUBLISHER_IDENTITY)
         assertThat(ArtifactReviewPresentation.consentNeedsUnknownPublisher(f)).isTrue()

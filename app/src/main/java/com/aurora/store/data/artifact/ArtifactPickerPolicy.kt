@@ -10,20 +10,30 @@ internal object ArtifactPickerPolicy {
 
     /** Never trust a provider's display name as a path or store a provider URI. */
     fun safeDocumentName(name: String?): String? = name?.takeIf {
-        it.isNotBlank() && it.length <= 240 && it == it.trim() &&
-            !it.any(Char::isISOControl) && !it.contains("://") && !it.contains('?') &&
-            !it.contains('\\') && '/' !in it
+        it.isNotBlank() &&
+            it.length <= 240 &&
+            it == it.trim() &&
+            !it.any(Char::isISOControl) &&
+            !it.contains("://") &&
+            !it.contains('?') &&
+            !it.contains('\\') &&
+            '/' !in it
     }
 
     fun safeDisplayLabel(displayName: String): String? {
-        if (displayName.contains("://") || displayName.contains('?') ||
+        if (displayName.contains("://") ||
+            displayName.contains('?') ||
             displayName.any(Char::isISOControl)
-        ) return null
+        ) {
+            return null
+        }
         val label = displayName.substringAfterLast('/').take(150)
         return label.takeIf {
-            it.isNotBlank() && it == it.trim() &&
+            it.isNotBlank() &&
+                it == it.trim() &&
                 !it.any(Char::isISOControl) &&
-                !it.contains("://") && !it.contains('?')
+                !it.contains("://") &&
+                !it.contains('?')
         }
     }
 }

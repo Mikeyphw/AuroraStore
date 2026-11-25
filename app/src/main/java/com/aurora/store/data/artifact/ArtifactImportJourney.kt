@@ -12,8 +12,13 @@ import java.io.IOException
  * Android installation result. No network I/O or installation side effects.
  */
 internal object ArtifactImportJourney {
-    enum class Failure { PICKER_UNAVAILABLE, DOCUMENT_INACCESSIBLE, PERMISSION_REVOKED,
-        INVALID_OR_INCOMPATIBLE, UNKNOWN }
+    enum class Failure {
+        PICKER_UNAVAILABLE,
+        DOCUMENT_INACCESSIBLE,
+        PERMISSION_REVOKED,
+        INVALID_OR_INCOMPATIBLE,
+        UNKNOWN
+    }
 
     fun failureKind(error: Throwable): Failure = when (error) {
         is SecurityException -> Failure.PERMISSION_REVOKED
@@ -25,9 +30,11 @@ internal object ArtifactImportJourney {
 
     fun failureMessage(error: Throwable): String = when (failureKind(error)) {
         Failure.PICKER_UNAVAILABLE -> "Android document picker is unavailable."
-        Failure.DOCUMENT_INACCESSIBLE -> "File access failed or the document is no longer available."
+        Failure.DOCUMENT_INACCESSIBLE ->
+            "File access failed or the document is no longer available."
         Failure.PERMISSION_REVOKED -> "Android denied access to the selected document."
-        Failure.INVALID_OR_INCOMPATIBLE -> "The selected file failed verification or compatibility checks."
+        Failure.INVALID_OR_INCOMPATIBLE ->
+            "The selected file failed verification or compatibility checks."
         Failure.UNKNOWN -> "The selected document could not be verified."
     } + " Nothing installed. Choose a file again manually; no automatic provider fallback."
 
@@ -36,9 +43,12 @@ internal object ArtifactImportJourney {
         ArtifactHistoricalVersionPolicy.matchesVerified(reference, verifiedVersion)
 
     fun versionMessage(reference: String, verifiedVersion: Long): String =
-        if (versionMatches(reference, verifiedVersion)) "" else
+        if (versionMatches(reference, verifiedVersion)) {
+            ""
+        } else {
             "Selected APK version does not match your requested version reference. " +
                 "No installation approval is possible; choose a matching file or clear the reference and reverify."
+        }
 
     fun providerHandoffMessage(provider: ArtifactProviderDiscovery.Provider): String =
         when (provider) {
@@ -48,7 +58,8 @@ internal object ArtifactImportJourney {
                 "Official listing navigation only; historical version availability remains UNKNOWN."
             ArtifactProviderDiscovery.Provider.APKPURE ->
                 "Optional browser visit only, disabled until explicit opt-in. No automatic fallback."
-            else -> "Manual HTTPS browser visit only; download availability and publisher identity are UNKNOWN."
+            else ->
+                "Manual HTTPS browser visit only; download availability and publisher identity are UNKNOWN."
         }
 
     fun retryMessage(): String =

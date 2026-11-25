@@ -18,55 +18,85 @@ class ArtifactApkIdentityPolicyTest {
     }
 
     @Test fun invalidSplitNamesCannotMasqueradeAsBase() {
-        for (name in listOf("", " ", "base", "config", ".hidden", "config.",
-            "a..b", "a--b", "../base", "\\base", "config/en", "config en", "😎")) {
-            assertThat(runCatching { policy.requireManifestIdentity(validPackage, 7, name) }.isFailure).isTrue()
+        for (name in listOf(
+            "", " ", "base", "config", ".hidden", "config.",
+            "a..b", "a--b", "../base", "\\base", "config/en", "config en", "😎"
+        )) {
+            assertThat(
+                runCatching {
+                    policy.requireManifestIdentity(validPackage, 7, name)
+                }.isFailure
+            ).isTrue()
         }
     }
 
     @Test fun longSplitNamesAndControlCharactersAreRejected() {
         for (name in listOf("a".repeat(129), "foo\nbar", "foo\u0000bar")) {
-            assertThat(runCatching { policy.requireManifestIdentity(validPackage, 9, name) }.isFailure).isTrue()
+            assertThat(
+                runCatching {
+                    policy.requireManifestIdentity(validPackage, 9, name)
+                }.isFailure
+            ).isTrue()
         }
     }
 
     @Test fun packageAndVersionMustBeExactAndPositive() {
         for (name in listOf("", "org", "org..app", "org/app", "a.b ")) {
-            assertThat(runCatching { policy.requireManifestIdentity(name, 1, null) }.isFailure).isTrue()
+            assertThat(
+                runCatching {
+                    policy.requireManifestIdentity(name, 1, null)
+                }.isFailure
+            ).isTrue()
         }
         for (version in listOf(-1L, 0L)) {
-            assertThat(runCatching { policy.requireManifestIdentity(validPackage, version, null) }.isFailure).isTrue()
+            assertThat(
+                runCatching {
+                    policy.requireManifestIdentity(validPackage, version, null)
+                }.isFailure
+            ).isTrue()
         }
     }
 
     @Test fun baseRequiresAndroidArchiveParse() {
-        assertThat(runCatching {
-            policy.requirePlatformAgreement(validPackage, 42L, true, null, null)
-        }.isFailure).isTrue()
+        assertThat(
+            runCatching {
+                policy.requirePlatformAgreement(validPackage, 42L, true, null, null)
+            }.isFailure
+        ).isTrue()
     }
 
     @Test fun basePlatformIdentityMatchesExactly() {
         policy.requirePlatformAgreement(validPackage, 42L, true, validPackage, 42L)
-        assertThat(runCatching {
-            policy.requirePlatformAgreement(validPackage, 42L, true, "org.example.other", 42L)
-        }.isFailure).isTrue()
-        assertThat(runCatching {
-            policy.requirePlatformAgreement(validPackage, 42L, true, validPackage, 43L)
-        }.isFailure).isTrue()
+        assertThat(
+            runCatching {
+                policy.requirePlatformAgreement(validPackage, 42L, true, "org.example.other", 42L)
+            }.isFailure
+        ).isTrue()
+        assertThat(
+            runCatching {
+                policy.requirePlatformAgreement(validPackage, 42L, true, validPackage, 43L)
+            }.isFailure
+        ).isTrue()
     }
 
     @Test fun splitPlatformIdentityCannotContradictSignedManifest() {
         policy.requirePlatformAgreement(validPackage, 42L, false, null, null)
         policy.requirePlatformAgreement(validPackage, 42L, false, validPackage, 42L)
-        assertThat(runCatching {
-            policy.requirePlatformAgreement(validPackage, 42L, false, validPackage, 43L)
-        }.isFailure).isTrue()
-        assertThat(runCatching {
-            policy.requirePlatformAgreement(validPackage, 42L, false, "org.evil.app", 42L)
-        }.isFailure).isTrue()
-        assertThat(runCatching {
-            policy.requirePlatformAgreement(validPackage, 42L, false, null, 42L)
-        }.isFailure).isTrue()
+        assertThat(
+            runCatching {
+                policy.requirePlatformAgreement(validPackage, 42L, false, validPackage, 43L)
+            }.isFailure
+        ).isTrue()
+        assertThat(
+            runCatching {
+                policy.requirePlatformAgreement(validPackage, 42L, false, "org.evil.app", 42L)
+            }.isFailure
+        ).isTrue()
+        assertThat(
+            runCatching {
+                policy.requirePlatformAgreement(validPackage, 42L, false, null, 42L)
+            }.isFailure
+        ).isTrue()
     }
 
     @Test fun exactlyMatchingActiveInstalledSignersAreAccepted() {
@@ -78,7 +108,9 @@ class ArtifactApkIdentityPolicyTest {
     @Test fun historyOnlySignerIsNotAcceptedAsActiveContinuity() {
         val prior = "a".repeat(64)
         val current = "b".repeat(64)
-        assertThat(policy.installedSignerStatus(setOf(prior), setOf(current), setOf(prior, current)))
+        assertThat(
+            policy.installedSignerStatus(setOf(prior), setOf(current), setOf(prior, current))
+        )
             .isEqualTo(ArtifactApkIdentityPolicy.InstalledSignerStatus.HISTORY_ONLY_UNVERIFIED)
     }
 
@@ -104,9 +136,11 @@ class ArtifactApkIdentityPolicyTest {
     }
 
     @Test fun duplicateManifestSplitIdentitiesAreRejectedEvenWhenFilenamesDiffer() {
-        assertThat(runCatching {
-            policy.requireUniqueSplitNames(listOf(null, "config.en", "config.en"))
-        }.isFailure).isTrue()
+        assertThat(
+            runCatching {
+                policy.requireUniqueSplitNames(listOf(null, "config.en", "config.en"))
+            }.isFailure
+        ).isTrue()
     }
 
     @Test fun missingOrMultipleBaseManifestsAreRejected() {

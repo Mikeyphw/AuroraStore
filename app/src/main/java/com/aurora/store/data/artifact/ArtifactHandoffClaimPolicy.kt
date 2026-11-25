@@ -19,7 +19,8 @@ internal object ArtifactHandoffClaimPolicy {
     )
 
     fun afterSuccessfulLaunch(
-        input: String, handoff: ArtifactSourceHandoff.Handoff,
+        input: String,
+        handoff: ArtifactSourceHandoff.Handoff,
         nowMonotonicMs: Long = System.nanoTime() / 1_000_000L
     ): BrowserLaunch = BrowserLaunch(handoff.source, handoff.host, input, nowMonotonicMs)
 
@@ -32,12 +33,19 @@ internal object ArtifactHandoffClaimPolicy {
         alternativeConsent: Boolean = true,
         nowMonotonicMs: Long = System.nanoTime() / 1_000_000L
     ): ArtifactProvenance {
-        if (launched != null && launched.source == selected && launched.exactInput == enteredUrl &&
+        if (launched != null &&
+            launched.source == selected &&
+            launched.exactInput == enteredUrl &&
             (selected != ArtifactSource.APKPURE_OPT_IN || apkPureOptIn) &&
             selected != ArtifactSource.LOCAL_DOCUMENT &&
-            (selected !in setOf(ArtifactSource.APKMIRROR_BROWSER_HANDOFF,
-                ArtifactSource.FDROID_REPOSITORY, ArtifactSource.APKPURE_OPT_IN) ||
-                alternativeConsent) &&
+            (
+                selected !in setOf(
+                    ArtifactSource.APKMIRROR_BROWSER_HANDOFF,
+                    ArtifactSource.FDROID_REPOSITORY,
+                    ArtifactSource.APKPURE_OPT_IN
+                ) ||
+                    alternativeConsent
+                ) &&
             nowMonotonicMs >= launched.openedAtMonotonicMs &&
             nowMonotonicMs - launched.openedAtMonotonicMs <= MAX_CLAIM_AGE_MS
         ) {

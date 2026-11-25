@@ -26,7 +26,9 @@ internal object ArtifactDowngradeSafetyPolicy {
         if (candidateVersionCode <= 0L ||
             (installedVersionCode == null && installedSignerMatches != null) ||
             (installedVersionCode != null && installedVersionCode <= 0L)
-        ) return Assessment(Relation.INVALID, true, false)
+        ) {
+            return Assessment(Relation.INVALID, true, false)
+        }
         if (installedVersionCode == null) {
             return Assessment(Relation.NOT_INSTALLED, false, false)
         }
@@ -38,22 +40,31 @@ internal object ArtifactDowngradeSafetyPolicy {
         // A historical signing certificate is not permission to replace an installed app.
         // Require positive ACTIVE signer continuity; no user checkbox can override this.
         return Assessment(
-            kind, installedSignerMatches != true,
-            kind == Relation.DOWNGRADE, kind == Relation.DOWNGRADE
+            kind,
+            installedSignerMatches != true,
+            kind == Relation.DOWNGRADE,
+            kind == Relation.DOWNGRADE
         )
     }
 
-    fun notice(candidateVersionCode: Long, installedVersionCode: Long?,
-               installedSignerMatches: Boolean?): String {
+    fun notice(
+        candidateVersionCode: Long,
+        installedVersionCode: Long?,
+        installedSignerMatches: Boolean?
+    ): String {
         val status = assess(candidateVersionCode, installedVersionCode, installedSignerMatches)
         return when {
             status.installedIdentityBlocked ->
-                "Installed package or signing identity cannot be confirmed. Installation is blocked. " +
+                "Installed package or signing identity cannot be confirmed. Installation is " +
+                    "blocked. " +
                     "Historical listings and consent cannot override a signer mismatch.\n"
             status.relation == Relation.DOWNGRADE ->
                 "Historical version: downgrade from installed version $installedVersionCode " +
-                    "to verified version $candidateVersionCode. Back up important app data first: " +
-                    "downgrading may fail or risk app data. Data preservation is NOT guaranteed. AuroraStore has NOT verified any backup. " +
+                    "to verified version $candidateVersionCode. Back up important app data " +
+                    "first: " +
+                    "downgrading may fail or risk app data. " +
+                    "Data preservation is NOT guaranteed. " +
+                    "AuroraStore has NOT verified any backup. " +
                     "Separate approval is required; Android may refuse. " +
                     "No automatic uninstall, data wipe or root bypass.\n"
             status.relation == Relation.UPGRADE ->

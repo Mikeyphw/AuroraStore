@@ -19,8 +19,16 @@ class ArtifactArchivePolicyTest {
 
     @Test
     fun archivePathsRejectTraversalAndAbsoluteNames() {
-        for (name in listOf("../evil.apk", "root/../evil.apk", "/root.apk", ".//evil.apk",
-            "foo\\evil.apk", "foo//evil.apk", "x\n.apk", "./base.apk")) {
+        for (name in listOf(
+            "../evil.apk",
+            "root/../evil.apk",
+            "/root.apk",
+            ".//evil.apk",
+            "foo\\evil.apk",
+            "foo//evil.apk",
+            "x\n.apk",
+            "./base.apk"
+        )) {
             assertThat(ArtifactArchivePolicy.classify(name, false)).isNull()
         }
     }

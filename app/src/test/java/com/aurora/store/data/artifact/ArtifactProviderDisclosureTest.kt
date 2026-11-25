@@ -12,8 +12,12 @@ class ArtifactProviderDisclosureTest {
     @Test fun everyProviderReportsUnknownExactVersion() {
         for (provider in providers) {
             val facts = ArtifactProviderDisclosure.beforeSelection(provider)
-            assertThat(facts.availability).isEqualTo(ArtifactProviderDisclosure.Availability.UNKNOWN)
-            assertThat(facts.downloadedBytes).isEqualTo(ArtifactProviderDisclosure.DownloadedBytes.NOT_SELECTED)
+            assertThat(
+                facts.availability
+            ).isEqualTo(ArtifactProviderDisclosure.Availability.UNKNOWN)
+            assertThat(
+                facts.downloadedBytes
+            ).isEqualTo(ArtifactProviderDisclosure.DownloadedBytes.NOT_SELECTED)
         }
     }
 
@@ -21,9 +25,15 @@ class ArtifactProviderDisclosureTest {
         for (provider in providers) {
             val facts = ArtifactProviderDisclosure.beforeSelection(provider)
             assertThat(facts.signature).isEqualTo(ArtifactProviderDisclosure.Signature.NOT_VERIFIED)
-            assertThat(facts.publisher).isEqualTo(ArtifactProviderDisclosure.Publisher.NOT_AUTHENTICATED)
-            assertThat(facts.compatibility).isEqualTo(ArtifactProviderDisclosure.Compatibility.NOT_ASSESSED)
-            assertThat(facts.installResult).isEqualTo(ArtifactProviderDisclosure.InstallResult.NOT_REQUESTED)
+            assertThat(
+                facts.publisher
+            ).isEqualTo(ArtifactProviderDisclosure.Publisher.NOT_AUTHENTICATED)
+            assertThat(
+                facts.compatibility
+            ).isEqualTo(ArtifactProviderDisclosure.Compatibility.NOT_ASSESSED)
+            assertThat(
+                facts.installResult
+            ).isEqualTo(ArtifactProviderDisclosure.InstallResult.NOT_REQUESTED)
         }
     }
 
@@ -53,7 +63,15 @@ class ArtifactProviderDisclosureTest {
     @Test fun optionalApkPureRemainsDisabledWithoutPreference() {
         val pure = ArtifactProviderDiscovery.Provider.APKPURE
         assertThat(ArtifactProviderDiscovery.status(pure)).contains("disabled by default")
-        assertThat(ArtifactProviderDiscovery.decide(pure, "https://apkpure.com/app/demo", true, false, true)
-            is ArtifactProviderDiscovery.Outcome.Refused).isTrue()
+        assertThat(
+            ArtifactProviderDiscovery.decide(
+                pure,
+                "https://apkpure.com/app/demo",
+                true,
+                false,
+                true
+            )
+                is ArtifactProviderDiscovery.Outcome.Refused
+        ).isTrue()
     }
 }

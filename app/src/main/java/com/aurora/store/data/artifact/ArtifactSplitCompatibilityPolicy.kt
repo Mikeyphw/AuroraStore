@@ -17,7 +17,12 @@ import java.util.Locale
  */
 internal object ArtifactSplitCompatibilityPolicy {
     private val supportedAbiTokens = setOf(
-        "arm64_v8a", "armeabi_v7a", "armeabi", "x86", "x86_64", "riscv64"
+        "arm64_v8a",
+        "armeabi_v7a",
+        "armeabi",
+        "x86",
+        "x86_64",
+        "riscv64"
     )
     private val densityTokens = setOf(
         "ldpi", "mdpi", "tvdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi", "nodpi", "anydpi"
@@ -38,9 +43,12 @@ internal object ArtifactSplitCompatibilityPolicy {
         splitNames: List<String?>,
         deviceAbis: List<String>
     ): Assessment {
-        if (splitNames.isEmpty() || splitNames.count { it == null } != 1 ||
+        if (splitNames.isEmpty() ||
+            splitNames.count { it == null } != 1 ||
             splitNames.filterNotNull().distinct().size != splitNames.size - 1
-        ) throw ApkVerificationException("APK set base/split topology is ambiguous")
+        ) {
+            throw ApkVerificationException("APK set base/split topology is ambiguous")
+        }
         if (format == ArtifactArchivePolicy.Format.APK && splitNames.size != 1) {
             throw ApkVerificationException("Standalone APK cannot contain multiple staged splits")
         }
@@ -61,11 +69,17 @@ internal object ArtifactSplitCompatibilityPolicy {
                 continue
             }
             val owner = if (separator >= 0) name.substring(0, separator) else null
-            val qualifier = if (separator >= 0) name.substring(separator + 8)
-                else name.removePrefix("config.")
-            if (qualifier.isBlank() || qualifier.contains('.') ||
+            val qualifier = if (separator >= 0) {
+                name.substring(separator + 8)
+            } else {
+                name.removePrefix("config.")
+            }
+            if (qualifier.isBlank() ||
+                qualifier.contains('.') ||
                 (owner != null && (owner.isBlank() || owner !in names))
-            ) throw ApkVerificationException("Split qualifier/dependency is ambiguous")
+            ) {
+                throw ApkVerificationException("Split qualifier/dependency is ambiguous")
+            }
             when {
                 qualifier in supportedAbiTokens -> abi.add(qualifier)
                 qualifier in densityTokens -> densities.add(qualifier)

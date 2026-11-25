@@ -48,20 +48,32 @@ internal object ArtifactHistoricalVersionPolicy {
     private val packagePattern = Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+")
     private val digits = Regex("[0-9]{1,19}")
 
-    fun validPackageName(text: String): Boolean =
-        text.length <= 255 && packagePattern.matches(text)
+    fun validPackageName(text: String): Boolean = text.length <= 255 && packagePattern.matches(text)
 
     /** Exact decimal version code; no signs, whitespace, Unicode numerals or overflow. */
     fun parseVersion(text: String): Long? =
         if (digits.matches(text)) text.toLongOrNull()?.takeIf { it > 0L } else null
 
     private fun safeOrigin(label: String?): Boolean = label == null ||
-        (label.isNotBlank() && label.length <= 200 && label == label.trim() &&
-            label.none(Char::isISOControl) && "://" !in label && "?" !in label &&
-            "#" !in label && "@" !in label && "/" !in label && "\\" !in label)
+        (
+            label.isNotBlank() &&
+                label.length <= 200 &&
+                label == label.trim() &&
+                label.none(Char::isISOControl) &&
+                "://" !in label &&
+                "?" !in label &&
+                "#" !in label &&
+                "@" !in label &&
+                "/" !in label &&
+                "\\" !in label
+            )
 
-    fun reference(packageName: String, version: String, source: ArtifactSource,
-                  originLabel: String? = null): Reference? {
+    fun reference(
+        packageName: String,
+        version: String,
+        source: ArtifactSource,
+        originLabel: String? = null
+    ): Reference? {
         if (!validPackageName(packageName) || !safeOrigin(originLabel)) return null
         return Reference(packageName, parseVersion(version) ?: return null, source, originLabel)
     }
@@ -102,9 +114,13 @@ internal object ArtifactHistoricalVersionPolicy {
      * APK set, never provider text. Unknown evidence stays UNKNOWN; even a pass
      * cannot predict Android policy, split targeting, sessions, or data retention.
      */
-    fun preflight(declaredMinSdk: Int?, deviceSdk: Int,
-                  selectedAbi: String?, deviceAbis: List<String>,
-                  checkedSignedSplitLayout: Boolean): DevicePreflight {
+    fun preflight(
+        declaredMinSdk: Int?,
+        deviceSdk: Int,
+        selectedAbi: String?,
+        deviceAbis: List<String>,
+        checkedSignedSplitLayout: Boolean
+    ): DevicePreflight {
         val minSdk = declaredMinSdk?.takeIf { it > 0 }
         val normalizedAbis = deviceAbis.map { it.lowercase(Locale.ROOT).replace('-', '_') }
         val abi = selectedAbi?.lowercase(Locale.ROOT)?.replace('-', '_')
@@ -127,12 +143,16 @@ internal object ArtifactHistoricalVersionPolicy {
         Compatibility.LIMITED_PREFLIGHT_ONLY ->
             "Read-only device compatibility: basic signed-file SDK/ABI checks passed. " +
                 "Final installability and app data retention are NOT confirmed.\n"
-        else -> "Read-only device compatibility: UNKNOWN or incomplete metadata. " +
-            "An unverified provider listing cannot establish compatibility.\n"
+        else ->
+            "Read-only device compatibility: UNKNOWN or incomplete metadata. " +
+                "An unverified provider listing cannot establish compatibility.\n"
     }
 
     fun displayReference(packageName: String, reference: Reference): String =
-        if (reference.packageName != packageName) "REFUSED cross-package reference" else
+        if (reference.packageName != packageName) {
+            "REFUSED cross-package reference"
+        } else {
             "${reference.versionCode} — ${reference.claimedSource.name} " +
                 "(unverified reference; availability UNKNOWN)"
+        }
 }

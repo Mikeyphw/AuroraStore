@@ -4,8 +4,8 @@
 package com.aurora.store.data.artifact
 
 import com.google.common.truth.Truth.assertThat
-import org.junit.Test
 import java.io.File
+import org.junit.Test
 
 /** Contract-level tests: fabricated test fixtures are NOT proof of cryptographic signature verification. */
 class ArtifactOriginBoundaryTest {
@@ -23,11 +23,18 @@ class ArtifactOriginBoundaryTest {
             ArtifactPrivateStager.CopiedApk(File("part-001.apk"), "b".repeat(64), 103L)
         )
         val staged = ArtifactPrivateStager.Staged(
-            File("fake-private-cache"), ArtifactArchivePolicy.Format.APKS, apks,
-            "c".repeat(64), 204L
+            File("fake-private-cache"),
+            ArtifactArchivePolicy.Format.APKS,
+            apks,
+            "c".repeat(64),
+            204L
         )
-        val attempt = ArtifactAttempt("org.example.safe", version, generation,
-            ArtifactProvenance(source, "selected.apks"))
+        val attempt = ArtifactAttempt(
+            "org.example.safe",
+            version,
+            generation,
+            ArtifactProvenance(source, "selected.apks")
+        )
         return ArtifactApkVerifier.VerifiedImport(
             staged, attempt, setOf("d".repeat(64)), tier,
             installedVersion, continuity, listOf(null, "config.en"), 204L,
@@ -53,7 +60,9 @@ class ArtifactOriginBoundaryTest {
     }
 
     @Test fun developerBrowserClaimNeverBecomesOfficialPublisherProof() {
-        val r = ArtifactIndependentEvidence.fromVerifiedImport(verified(ArtifactSource.DEVELOPER_WEBSITE))
+        val r = ArtifactIndependentEvidence.fromVerifiedImport(
+            verified(ArtifactSource.DEVELOPER_WEBSITE)
+        )
         assertThat(r.distribution).isEqualTo(ArtifactOriginFamily.DEVELOPER_RELEASE)
         assertThat(r.assurance).isEqualTo(ArtifactOriginAssurance.SIGNED_APK_PUBLISHER_UNANCHORED)
         assertThat(r.hasPublisherAttestation).isFalse()
@@ -61,14 +70,18 @@ class ArtifactOriginBoundaryTest {
     }
 
     @Test fun githubBrowserClaimNeverBecomesAuthenticatedReleaseProof() {
-        val r = ArtifactIndependentEvidence.fromVerifiedImport(verified(ArtifactSource.GITHUB_RELEASE))
+        val r = ArtifactIndependentEvidence.fromVerifiedImport(
+            verified(ArtifactSource.GITHUB_RELEASE)
+        )
         assertThat(r.distribution).isEqualTo(ArtifactOriginFamily.GITHUB_RELEASE)
         assertThat(r.hasPublisherAttestation).isFalse()
         assertThat(r.isPlayEvidence).isFalse()
     }
 
     @Test fun exactPackageVersionGenerationAndDigestsAreRetained() {
-        val r = ArtifactIndependentEvidence.fromVerifiedImport(verified(generation=123L, version=23L))
+        val r = ArtifactIndependentEvidence.fromVerifiedImport(
+            verified(generation = 123L, version = 23L)
+        )
         assertThat(r.packageName).isEqualTo("org.example.safe")
         assertThat(r.versionCode).isEqualTo(23L)
         assertThat(r.attemptGeneration).isEqualTo(123L)
@@ -78,43 +91,85 @@ class ArtifactOriginBoundaryTest {
     }
 
     @Test fun installedContinuityDoesNotProvePublisherOrPlay() {
-        val r = ArtifactIndependentEvidence.fromVerifiedImport(verified(
-            installedVersion=30L, continuity=true,
-            tier=ArtifactTrustTier.INSTALLED_SIGNER_CONTINUITY
-        ))
+        val r = ArtifactIndependentEvidence.fromVerifiedImport(
+            verified(
+                installedVersion = 30L,
+                continuity = true,
+                tier = ArtifactTrustTier.INSTALLED_SIGNER_CONTINUITY
+            )
+        )
         assertThat(r.assurance).isEqualTo(ArtifactOriginAssurance.INSTALLED_CERTIFICATE_CONTINUITY)
         assertThat(r.hasPublisherAttestation).isFalse()
         assertThat(r.isPlayEvidence).isFalse()
     }
 
     @Test fun forgedVerifiedPublisherTierIsRejected() {
-        assertThat(runCatching { ArtifactIndependentEvidence.fromVerifiedImport(verified(
-            tier=ArtifactTrustTier.VERIFIED_PUBLISHER_IDENTITY
-        )) }.isFailure).isTrue()
+        assertThat(
+            runCatching {
+                ArtifactIndependentEvidence.fromVerifiedImport(
+                    verified(
+                        tier = ArtifactTrustTier.VERIFIED_PUBLISHER_IDENTITY
+                    )
+                )
+            }.isFailure
+        ).isTrue()
     }
 
     @Test fun unknownTrustCannotMintSignerEvidence() {
-        assertThat(runCatching { ArtifactIndependentEvidence.fromVerifiedImport(verified(
-            tier=ArtifactTrustTier.UNKNOWN
-        )) }.isFailure).isTrue()
+        assertThat(
+            runCatching {
+                ArtifactIndependentEvidence.fromVerifiedImport(
+                    verified(
+                        tier = ArtifactTrustTier.UNKNOWN
+                    )
+                )
+            }.isFailure
+        ).isTrue()
     }
 
     @Test fun invalidPerApkHashIsRejected() {
-        assertThat(runCatching { ArtifactIndependentEvidence.fromVerifiedImport(verified(
-            sha="0".repeat(63)
-        )) }.isFailure).isTrue()
+        assertThat(
+            runCatching {
+                ArtifactIndependentEvidence.fromVerifiedImport(
+                    verified(
+                        sha = "0".repeat(63)
+                    )
+                )
+            }.isFailure
+        ).isTrue()
     }
 
     @Test fun impossibleSignerContinuityIsRejected() {
-        assertThat(runCatching { ArtifactIndependentEvidence.fromVerifiedImport(verified(
-            installedVersion=10L, continuity=false
-        )) }.isFailure).isTrue()
-        assertThat(runCatching { ArtifactIndependentEvidence.fromVerifiedImport(verified(
-            installedVersion=10L, continuity=true
-        )) }.isFailure).isTrue()
-        assertThat(runCatching { ArtifactIndependentEvidence.fromVerifiedImport(verified(
-            installedVersion=null, continuity=true
-        )) }.isFailure).isTrue()
+        assertThat(
+            runCatching {
+                ArtifactIndependentEvidence.fromVerifiedImport(
+                    verified(
+                        installedVersion = 10L,
+                        continuity = false
+                    )
+                )
+            }.isFailure
+        ).isTrue()
+        assertThat(
+            runCatching {
+                ArtifactIndependentEvidence.fromVerifiedImport(
+                    verified(
+                        installedVersion = 10L,
+                        continuity = true
+                    )
+                )
+            }.isFailure
+        ).isTrue()
+        assertThat(
+            runCatching {
+                ArtifactIndependentEvidence.fromVerifiedImport(
+                    verified(
+                        installedVersion = null,
+                        continuity = true
+                    )
+                )
+            }.isFailure
+        ).isTrue()
     }
 
     @Test fun independentTrustedConstructorsAreNotExposedToBrowserClaims() {
@@ -123,7 +178,9 @@ class ArtifactOriginBoundaryTest {
             AuthenticatedArtifactOrigin.OfficialDeveloperVerified::class.java,
             AuthenticatedArtifactOrigin.GitHubReleaseVerified::class.java,
             ArtifactIndependentEvidence::class.java
-        )) assertThat(clazz.constructors.any { !it.isSynthetic }).isFalse()
+        )) {
+            assertThat(clazz.constructors.any { !it.isSynthetic }).isFalse()
+        }
     }
 
     @Test fun forgedSignedBytesCannotBeReinterpretedAsPlayProof() {

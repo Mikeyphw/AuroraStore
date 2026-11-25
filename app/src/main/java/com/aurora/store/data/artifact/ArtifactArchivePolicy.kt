@@ -24,10 +24,15 @@ internal object ArtifactArchivePolicy {
     }
 
     fun classify(name: String, directory: Boolean): Entry? {
-        if (name.isBlank() || name.length > 240 || name.startsWith('/') ||
-            name.contains('\\') || name.any(Char::isISOControl) ||
+        if (name.isBlank() ||
+            name.length > 240 ||
+            name.startsWith('/') ||
+            name.contains('\\') ||
+            name.any(Char::isISOControl) ||
             name.split('/').any { it.isEmpty() || it == "." || it == ".." }
-        ) return null
+        ) {
+            return null
+        }
         if (directory) return Entry.DIRECTORY
         val extension = name.substringAfterLast('.', "").lowercase()
         return when (extension) {
@@ -53,9 +58,13 @@ internal object ArtifactArchivePolicy {
         if (size > 0L && compressed == 0L) return false
         // Exact ratio comparison, without overflow from compressed * MAX_RATIO.
         if (compressed > 0L &&
-            (size / compressed > MAX_RATIO ||
-                (size / compressed == MAX_RATIO && size % compressed != 0L))
-        ) return false
+            (
+                size / compressed > MAX_RATIO ||
+                    (size / compressed == MAX_RATIO && size % compressed != 0L)
+                )
+        ) {
+            return false
+        }
         return true
     }
 }

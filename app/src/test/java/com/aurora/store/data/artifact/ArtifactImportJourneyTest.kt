@@ -11,8 +11,11 @@ import org.junit.Test
 class ArtifactImportJourneyTest {
     @Test fun noRequestedVersionDoesNotInventProviderAvailability() {
         assertThat(ArtifactImportJourney.versionMatches("", 123L)).isTrue()
-        assertThat(ArtifactImportJourney.providerHandoffMessage(
-            ArtifactProviderDiscovery.Provider.GOOGLE_PLAY)).contains("UNKNOWN")
+        assertThat(
+            ArtifactImportJourney.providerHandoffMessage(
+                ArtifactProviderDiscovery.Provider.GOOGLE_PLAY
+            )
+        ).contains("UNKNOWN")
     }
 
     @Test fun exactRequestedVersionAllowsOnlyMatchingVerifiedVersion() {
@@ -23,15 +26,24 @@ class ArtifactImportJourneyTest {
     }
 
     @Test fun invalidReferenceAndOverflowFailClosed() {
-        for (bad in listOf("0", "-1", "1.0", "+1", "abc", " 5", "9223372036854775808",
-            "999999999999999999999")) {
+        for (bad in listOf(
+            "0",
+            "-1",
+            "1.0",
+            "+1",
+            "abc",
+            " 5",
+            "9223372036854775808",
+            "999999999999999999999"
+        )) {
             assertThat(ArtifactImportJourney.versionMatches(bad, 5L)).isFalse()
         }
     }
 
     @Test fun revokedPermissionIsSafeAndDoesNotLeakRawUri() {
         val message = ArtifactImportJourney.failureMessage(
-            SecurityException("content://secret.example/id/token"))
+            SecurityException("content://secret.example/id/token")
+        )
         assertThat(message).contains("denied access")
         assertThat(message).doesNotContain("secret.example")
     }
@@ -44,8 +56,11 @@ class ArtifactImportJourneyTest {
     }
 
     @Test fun ioAndMalformedFilesNeverShowAndroidSuccess() {
-        for (error in listOf(IOException("network secret"), IllegalStateException("raw error"),
-            RuntimeException("raw error"))) {
+        for (error in listOf(
+            IOException("network secret"),
+            IllegalStateException("raw error"),
+            RuntimeException("raw error")
+        )) {
             val message = ArtifactImportJourney.failureMessage(error)
             assertThat(message).contains("Nothing installed")
             assertThat(message).doesNotContain("SUCCESS")

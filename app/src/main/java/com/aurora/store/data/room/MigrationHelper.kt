@@ -399,6 +399,4 @@ object MigrationHelper {
             database.endTransaction()
         }
     }
-
-
 }

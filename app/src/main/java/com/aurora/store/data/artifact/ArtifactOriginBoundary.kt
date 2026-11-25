@@ -79,7 +79,9 @@ internal class ArtifactIndependentEvidence private constructor(
         private val hex = Regex("[0-9a-f]{64}")
 
         /** C04-03 verifier owns cryptographic verification of the staged bytes. */
-        fun fromVerifiedImport(imported: ArtifactApkVerifier.VerifiedImport): ArtifactIndependentEvidence {
+        fun fromVerifiedImport(
+            imported: ArtifactApkVerifier.VerifiedImport
+        ): ArtifactIndependentEvidence {
             val attempt = imported.attempt
             require(attempt.attemptGeneration > 0L && attempt.versionCode > 0L)
             require(imported.staged.originalSize > 0L)
@@ -90,7 +92,9 @@ internal class ArtifactIndependentEvidence private constructor(
             require(apks.sumOf { it.byteCount } == imported.totalApkBytes)
             require(imported.signerSha256.isNotEmpty() && imported.signerSha256.all(hex::matches))
             require(imported.installedVersion == null || imported.installedVersion > 0L)
-            require((imported.installedVersion == null) == (imported.signerMatchesInstalled == null))
+            require(
+                (imported.installedVersion == null) == (imported.signerMatchesInstalled == null)
+            )
             require(imported.signerMatchesInstalled != false)
             // C04 browser claims have no independently checked publisher identity.
             // A future authenticated release path requires its own proof producer.

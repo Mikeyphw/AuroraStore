@@ -42,7 +42,9 @@ class ArtifactZipPreflightTest {
             assertThat(found).hasSize(2)
             assertThat(found[0].name).isEqualTo("base.apk")
             assertThat(found[1].name).isEqualTo("toc.pb")
-        } finally { file.delete() }
+        } finally {
+            file.delete()
+        }
     }
 
     @Test fun falsifiedEntryCountFailsBeforeZipFile() {
@@ -54,7 +56,9 @@ class ArtifactZipPreflightTest {
                 bytes[eocd + 10] = 0x7f
             }
             assertThat(runCatching { ArtifactZipPreflight.inspect(file) }.isFailure).isTrue()
-        } finally { file.delete() }
+        } finally {
+            file.delete()
+        }
     }
 
     @Test fun zip64SentinelFailsClosed() {
@@ -66,7 +70,9 @@ class ArtifactZipPreflightTest {
                 bytes[eocd + 11] = 0xff.toByte()
             }
             assertThat(runCatching { ArtifactZipPreflight.inspect(file) }.isFailure).isTrue()
-        } finally { file.delete() }
+        } finally {
+            file.delete()
+        }
     }
 
     @Test fun zip64ExtraFieldWithoutSentinelFailsClosed() {
@@ -86,7 +92,9 @@ class ArtifactZipPreflightTest {
                 bytes[first + 1] = 0
             }
             assertThat(runCatching { ArtifactZipPreflight.inspect(file) }.isFailure).isTrue()
-        } finally { file.delete() }
+        } finally {
+            file.delete()
+        }
     }
 
     @Test fun symlinkUnixModeFailsClosed() {
@@ -99,7 +107,9 @@ class ArtifactZipPreflightTest {
                 bytes[cen + 41] = 0xa0.toByte() // 0xa000 Unix symlink type
             }
             assertThat(runCatching { ArtifactZipPreflight.inspect(file) }.isFailure).isTrue()
-        } finally { file.delete() }
+        } finally {
+            file.delete()
+        }
     }
 
     @Test fun localHeaderNameDisagreementFailsClosed() {
@@ -107,7 +117,9 @@ class ArtifactZipPreflightTest {
         try {
             mutate(file) { bytes -> bytes[30] = 'x'.code.toByte() }
             assertThat(runCatching { ArtifactZipPreflight.inspect(file) }.isFailure).isTrue()
-        } finally { file.delete() }
+        } finally {
+            file.delete()
+        }
     }
 
     @Test fun trailingDataIsRefused() {
@@ -115,21 +127,29 @@ class ArtifactZipPreflightTest {
         try {
             file.appendBytes(byteArrayOf(1, 2))
             assertThat(runCatching { ArtifactZipPreflight.inspect(file) }.isFailure).isTrue()
-        } finally { file.delete() }
+        } finally {
+            file.delete()
+        }
     }
 
     @Test fun duplicateOrTraversalNamesAreRefused() {
         val file = make("safe/base.apk" to byteArrayOf(2), "safe/../escape.apk" to byteArrayOf(3))
         try {
             assertThat(runCatching { ArtifactZipPreflight.inspect(file) }.isFailure).isTrue()
-        } finally { file.delete() }
+        } finally {
+            file.delete()
+        }
     }
 
     @Test fun metadataBombLimitIsEnforcedBeforeExtraction() {
-        val file = make("base.apk" to ByteArray(128) { 1 },
-            "payload.txt" to ByteArray(2 * 1024 * 1024 + 1) { 5 })
+        val file = make(
+            "base.apk" to ByteArray(128) { 1 },
+            "payload.txt" to ByteArray(2 * 1024 * 1024 + 1) { 5 }
+        )
         try {
             assertThat(runCatching { ArtifactZipPreflight.inspect(file) }.isFailure).isTrue()
-        } finally { file.delete() }
+        } finally {
+            file.delete()
+        }
     }
 }

@@ -18,7 +18,9 @@ internal object ArtifactArchiveDescriptorPolicy {
     private val packagePattern = Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+")
     private val splitPattern = Regex("[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")
     private val apkmSignatureEntries = setOf(
-        "META-INF/MANIFEST.MF", "META-INF/APKMIRRO.SF", "META-INF/APKMIRRO.RSA"
+        "META-INF/MANIFEST.MF",
+        "META-INF/APKMIRRO.SF",
+        "META-INF/APKMIRRO.RSA"
     )
 
     /** Applied *after* the ZIP preflight's generic safe-entry classification. */
@@ -26,10 +28,14 @@ internal object ArtifactArchiveDescriptorPolicy {
         val common = setOf("icon.png", "icon.webp", "icon.jpg", "icon.jpeg")
         return when (format) {
             ArtifactArchivePolicy.Format.APK -> false
-            ArtifactArchivePolicy.Format.APKS -> path == "toc.pb" ||
-                (path.endsWith(".json") && path.startsWith("metadata/"))
-            ArtifactArchivePolicy.Format.APKM -> path in common || path == "info.json" ||
-                path == "APKM_installer.url" || path in apkmSignatureEntries
+            ArtifactArchivePolicy.Format.APKS ->
+                path == "toc.pb" ||
+                    (path.endsWith(".json") && path.startsWith("metadata/"))
+            ArtifactArchivePolicy.Format.APKM ->
+                path in common ||
+                    path == "info.json" ||
+                    path == "APKM_installer.url" ||
+                    path in apkmSignatureEntries
             ArtifactArchivePolicy.Format.XAPK -> path in common || path == "manifest.json"
         }
     }
@@ -42,9 +48,12 @@ internal object ArtifactArchiveDescriptorPolicy {
             throw ApkVerificationException("Duplicate archive metadata paths")
         }
         val included = members.filter { it in apkmSignatureEntries }.toSet()
-        if (format == ArtifactArchivePolicy.Format.APKM && included.isNotEmpty() &&
+        if (format == ArtifactArchivePolicy.Format.APKM &&
+            included.isNotEmpty() &&
             included != apkmSignatureEntries
-        ) throw ApkVerificationException("Incomplete APKM outer signature metadata")
+        ) {
+            throw ApkVerificationException("Incomplete APKM outer signature metadata")
+        }
         if (format != ArtifactArchivePolicy.Format.APKM && included.isNotEmpty()) {
             throw ApkVerificationException("Unexpected APKM signature metadata")
         }
@@ -56,20 +65,32 @@ internal object ArtifactArchiveDescriptorPolicy {
     }
 
     fun checkAgainstSignedApks(
-        claim: Claim?, format: ArtifactArchivePolicy.Format,
-        packageName: String, versionCode: Long,
-        archiveEntryNames: List<String>, signedSplitNames: List<String?>
+        claim: Claim?,
+        format: ArtifactArchivePolicy.Format,
+        packageName: String,
+        versionCode: Long,
+        archiveEntryNames: List<String>,
+        signedSplitNames: List<String?>
     ) {
         if (claim == null) return // Unsigned toc.pb never supplies a selection.
-        if (claim.format != format || !packagePattern.matches(claim.packageName) ||
-            claim.versionCode <= 0L || claim.packageName != packageName ||
+        if (claim.format != format ||
+            !packagePattern.matches(claim.packageName) ||
+            claim.versionCode <= 0L ||
+            claim.packageName != packageName ||
             claim.versionCode != versionCode
-        ) throw ApkVerificationException("Unsigned archive metadata contradicts signed APK identity")
+        ) {
+            throw ApkVerificationException(
+                "Unsigned archive metadata contradicts signed APK identity"
+            )
+        }
         val ids = claim.splitIdsByEntry ?: return
         if (format != ArtifactArchivePolicy.Format.XAPK ||
             archiveEntryNames.size != signedSplitNames.size ||
-            ids.size != archiveEntryNames.size || ids.keys != archiveEntryNames.toSet()
-        ) throw ApkVerificationException("XAPK split index does not match archived APK files")
+            ids.size != archiveEntryNames.size ||
+            ids.keys != archiveEntryNames.toSet()
+        ) {
+            throw ApkVerificationException("XAPK split index does not match archived APK files")
+        }
         for ((position, name) in archiveEntryNames.withIndex()) {
             val id = ids[name]
             if (id != null && (!splitPattern.matches(id) || id == "base")) {

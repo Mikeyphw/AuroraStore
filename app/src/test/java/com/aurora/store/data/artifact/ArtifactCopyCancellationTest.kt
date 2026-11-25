@@ -11,7 +11,10 @@ import org.junit.Test
 class ArtifactCopyCancellationTest {
     @Test fun cancelsOpenSourceExactlyOnce() {
         val closed = AtomicInteger(0)
-        val cancellation = ArtifactCopyCancellation { closed.incrementAndGet(); it.close() }
+        val cancellation = ArtifactCopyCancellation {
+            closed.incrementAndGet()
+            it.close()
+        }
         val stream = ByteArrayInputStream(byteArrayOf(1, 2))
         cancellation.attach(stream)
         cancellation.cancel()
@@ -22,11 +25,16 @@ class ArtifactCopyCancellationTest {
 
     @Test fun attachAfterCancellationRefusedAndClosed() {
         val closed = AtomicInteger(0)
-        val cancellation = ArtifactCopyCancellation { closed.incrementAndGet(); it.close() }
+        val cancellation = ArtifactCopyCancellation {
+            closed.incrementAndGet()
+            it.close()
+        }
         cancellation.cancel()
-        assertThat(runCatching {
-            cancellation.attach(ByteArrayInputStream(byteArrayOf(1)))
-        }.isFailure).isTrue()
+        assertThat(
+            runCatching {
+                cancellation.attach(ByteArrayInputStream(byteArrayOf(1)))
+            }.isFailure
+        ).isTrue()
         assertThat(closed.get()).isEqualTo(1)
     }
 

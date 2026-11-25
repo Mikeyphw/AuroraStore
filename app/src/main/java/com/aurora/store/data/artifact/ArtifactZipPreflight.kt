@@ -57,8 +57,10 @@ internal object ArtifactZipPreflight {
         fun tail16(i: Int) = (tail[i].toInt() and 255) or ((tail[i + 1].toInt() and 255) shl 8)
         var endAt = -1
         for (i in tailLength - 22 downTo 0) {
-            if (tail[i] == 0x50.toByte() && tail[i + 1] == 0x4b.toByte() &&
-                tail[i + 2] == 5.toByte() && tail[i + 3] == 6.toByte() &&
+            if (tail[i] == 0x50.toByte() &&
+                tail[i + 1] == 0x4b.toByte() &&
+                tail[i + 2] == 5.toByte() &&
+                tail[i + 3] == 6.toByte() &&
                 i + 22 + tail16(i + 20) == tailLength
             ) {
                 endAt = i
@@ -75,9 +77,14 @@ internal object ArtifactZipPreflight {
         val directoryBytes = zip.u32()
         val directoryOffset = zip.u32()
         if (disk != 0 || centralDisk != 0 || diskEntries != count) fail("multivolume ZIP")
-        if (count == 0 || count == 0xffff || count > ArtifactArchivePolicy.MAX_ITEMS ||
-            directoryBytes == 0xffffffffL || directoryOffset == 0xffffffffL
-        ) fail("unbounded or ZIP64 directory")
+        if (count == 0 ||
+            count == 0xffff ||
+            count > ArtifactArchivePolicy.MAX_ITEMS ||
+            directoryBytes == 0xffffffffL ||
+            directoryOffset == 0xffffffffL
+        ) {
+            fail("unbounded or ZIP64 directory")
+        }
         if (directoryOffset == 0L) fail("missing local entry headers")
         if (checkedAdd(directoryOffset, directoryBytes, eocd, "central directory") != eocd) {
             fail("central directory extent or prepended payload")
@@ -90,7 +97,11 @@ internal object ArtifactZipPreflight {
         var totalExpanded = 0L
         var apks = 0
         repeat(count) {
-            if (zip.filePointer + 46 > eocd || zip.u32() != 0x02014b50L) fail("central entry header")
+            if (zip.filePointer + 46 > eocd ||
+                zip.u32() != 0x02014b50L
+            ) {
+                fail("central entry header")
+            }
             val madeBy = zip.u16()
             zip.u16() // version needed
             val flags = zip.u16()
@@ -109,11 +120,19 @@ internal object ArtifactZipPreflight {
             if (flags and (0xffff xor 0x080e) != 0 || method !in listOf(0, 8) || startDisk != 0) {
                 fail("encryption, unsupported flags/method or disk")
             }
-            if (nameLen !in 1..240 || compressed == 0xffffffffL || size == 0xffffffffL ||
+            if (nameLen !in 1..240 ||
+                compressed == 0xffffffffL ||
+                size == 0xffffffffL ||
                 localOffset == 0xffffffffL
-            ) fail("ZIP64 or invalid entry lengths")
-            val after = checkedAdd(zip.filePointer, nameLen + extraLen + commentLen.toLong(), eocd,
-                "central entry extent")
+            ) {
+                fail("ZIP64 or invalid entry lengths")
+            }
+            val after = checkedAdd(
+                zip.filePointer,
+                nameLen + extraLen + commentLen.toLong(),
+                eocd,
+                "central entry extent"
+            )
             val nameBytes = ByteArray(nameLen)
             zip.readFully(nameBytes)
             // Fail closed on encoding ambiguities between central and local names.
@@ -134,13 +153,27 @@ internal object ArtifactZipPreflight {
             if (isDirectory && (size != 0L || kind != ArtifactArchivePolicy.Entry.DIRECTORY)) {
                 fail("directory with content")
             }
-            if (!isDirectory && !ArtifactArchivePolicy.safeSize(size, compressed,
-                    kind == ArtifactArchivePolicy.Entry.APK)) fail("entry size or ratio")
-            if (kind == ArtifactArchivePolicy.Entry.APK && ++apks > ArtifactArchivePolicy.MAX_APKS) {
+            if (!isDirectory &&
+                !ArtifactArchivePolicy.safeSize(
+                    size,
+                    compressed,
+                    kind == ArtifactArchivePolicy.Entry.APK
+                )
+            ) {
+                fail("entry size or ratio")
+            }
+            if (kind == ArtifactArchivePolicy.Entry.APK &&
+                ++apks > ArtifactArchivePolicy.MAX_APKS
+            ) {
                 fail("too many APKs")
             }
-            totalExpanded = checkedAdd(totalExpanded, size, ArtifactArchivePolicy.MAX_TOTAL_APK_BYTES,
-                "total expanded data")
+            totalExpanded =
+                checkedAdd(
+                    totalExpanded,
+                    size,
+                    ArtifactArchivePolicy.MAX_TOTAL_APK_BYTES,
+                    "total expanded data"
+                )
             zip.seek(after)
             val nextCentral = zip.filePointer
 
@@ -161,15 +194,21 @@ internal object ArtifactZipPreflight {
             if (localFlags != flags || localMethod != method || localNameLen != nameLen) {
                 fail("local/central entry disagreement")
             }
-            val dataStart = checkedAdd(zip.filePointer, localNameLen + localExtraLen.toLong(),
-                directoryOffset, "local entry bounds")
+            val dataStart = checkedAdd(
+                zip.filePointer,
+                localNameLen + localExtraLen.toLong(),
+                directoryOffset,
+                "local entry bounds"
+            )
             val localName = ByteArray(localNameLen)
             zip.readFully(localName)
             if (!localName.contentEquals(nameBytes)) fail("local/central entry name mismatch")
             checkExtraFields(zip, localExtraLen, dataStart)
             if (flags and 8 == 0 &&
                 (localCrc != crc || localCompressed != compressed || localSize != size)
-            ) fail("local entry content descriptors disagree")
+            ) {
+                fail("local entry content descriptors disagree")
+            }
             val dataEnd = checkedAdd(dataStart, compressed, directoryOffset, "compressed entry")
             occupied.add(localOffset to dataEnd)
             zip.seek(nextCentral)

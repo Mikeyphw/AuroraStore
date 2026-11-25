@@ -85,8 +85,11 @@ internal object ArtifactPrivateStager {
 
     /** Check every metadata stream too: ignored bytes must not hide corruption or bombs. */
     private fun verifyMetadata(
-        input: InputStream, expectedSize: Long, expectedCrc: Long,
-        cancelled: () -> Boolean, captureIndex: Boolean = false
+        input: InputStream,
+        expectedSize: Long,
+        expectedCrc: Long,
+        cancelled: () -> Boolean,
+        captureIndex: Boolean = false
     ): ByteArray? {
         val crc = CRC32()
         val buffer = ByteArray(64 * 1024)
@@ -103,7 +106,11 @@ internal object ArtifactPrivateStager {
             }
             crc.update(buffer, 0, n)
             if (output != null) {
-                if (size > 64L * 1024) throw ApkVerificationException("Archive index exceeds size limit")
+                if (size >
+                    64L * 1024
+                ) {
+                    throw ApkVerificationException("Archive index exceeds size limit")
+                }
                 output.write(buffer, 0, n)
             }
         }
@@ -133,8 +140,12 @@ internal object ArtifactPrivateStager {
                 try {
                     sourceCancellation?.attach(stream)
                     checkActive(cancelled)
-                    copyBounded(stream, File(directory, "selected-source.bin"),
-                        ArtifactArchivePolicy.MAX_SOURCE_BYTES, cancelled)
+                    copyBounded(
+                        stream,
+                        File(directory, "selected-source.bin"),
+                        ArtifactArchivePolicy.MAX_SOURCE_BYTES,
+                        cancelled
+                    )
                 } finally {
                     sourceCancellation?.detach(stream)
                 }
@@ -149,8 +160,13 @@ internal object ArtifactPrivateStager {
                     throw ApkVerificationException("Private APK staging failed")
                 }
                 checkActive(cancelled)
-                return Staged(directory, format, listOf(copied.copy(file = dest)),
-                    copied.sha256, copied.byteCount)
+                return Staged(
+                    directory,
+                    format,
+                    listOf(copied.copy(file = dest)),
+                    copied.sha256,
+                    copied.byteCount
+                )
             }
             // ZipFile internally indexes the WHOLE central directory before entries()
             // is available. Preflight bounds count, layout, modes and symlink attributes.
@@ -175,10 +191,17 @@ internal object ArtifactPrivateStager {
                     checkActive(cancelled)
                     val expected = inspected.getOrNull(entryCount - 1)
                         ?: throw ApkVerificationException("ZIP entry count changed after preflight")
-                    if (entry.name != expected.name || entry.isDirectory != expected.directory ||
-                        entry.size != expected.size || entry.compressedSize != expected.compressed ||
-                        entry.crc != expected.crc || entry.method != expected.method
-                    ) throw ApkVerificationException("ZIP changed after central-directory preflight")
+                    if (entry.name != expected.name ||
+                        entry.isDirectory != expected.directory ||
+                        entry.size != expected.size ||
+                        entry.compressedSize != expected.compressed ||
+                        entry.crc != expected.crc ||
+                        entry.method != expected.method
+                    ) {
+                        throw ApkVerificationException(
+                            "ZIP changed after central-directory preflight"
+                        )
+                    }
                     val safeName = entry.name.removeSuffix("/")
                     val kind = ArtifactArchivePolicy.classify(safeName, entry.isDirectory)
                         ?: throw ApkVerificationException("Unsafe or unsupported archive entry")
@@ -220,10 +243,16 @@ internal object ArtifactPrivateStager {
                     if (entries.size >= ArtifactArchivePolicy.MAX_APKS) {
                         throw ApkVerificationException("Too many split APKs")
                     }
-                    val path = File(directory, "part-${entries.size.toString().padStart(3, '0')}.apk")
+                    val path =
+                        File(directory, "part-${entries.size.toString().padStart(3, '0')}.apk")
                     val apk = archive.getInputStream(entry).use { stream ->
-                        copyBounded(stream, path, ArtifactArchivePolicy.MAX_APK_BYTES,
-                            cancelled, entry.crc)
+                        copyBounded(
+                            stream,
+                            path,
+                            ArtifactArchivePolicy.MAX_APK_BYTES,
+                            cancelled,
+                            entry.crc
+                        )
                     }
                     if (apk.byteCount != entry.size) {
                         throw ApkVerificationException("Archive entry uncompressed length differs")
@@ -243,12 +272,22 @@ internal object ArtifactPrivateStager {
                 throw ApkVerificationException("Cannot discard original ZIP after staging")
             }
             checkActive(cancelled)
-            return Staged(directory, format, entries, copied.sha256, copied.byteCount,
-                archiveApkEntryNames, descriptor)
+            return Staged(
+                directory,
+                format,
+                entries,
+                copied.sha256,
+                copied.byteCount,
+                archiveApkEntryNames,
+                descriptor
+            )
         } catch (error: Exception) {
             directory.deleteRecursively()
-            throw if (error is ApkVerificationException) error else
+            throw if (error is ApkVerificationException) {
+                error
+            } else {
                 ApkVerificationException("Document archive invalid or unreadable")
+            }
         }
     }
 

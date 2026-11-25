@@ -22,7 +22,8 @@ internal object ArtifactProviderDiscovery {
         GOOGLE_PLAY(
             "Google Play (separate official listing)",
             "Open the exact package listing in Google Play. This does not prove that " +
-                "a historical version is available, or produce a Play verification receipt.", null
+                "a historical version is available, or produce a Play verification receipt.",
+            null
         ),
         LOCAL_DOCUMENT(
             "Local APK or bundle (Android document picker)",
@@ -86,7 +87,9 @@ internal object ArtifactProviderDiscovery {
         }
         if (provider == Provider.GOOGLE_PLAY) {
             if (!packageName.matches(userInput) || userInput.length > 255) {
-                return Outcome.Refused("Enter an exact package ID for Google Play (for example, org.example.app).")
+                return Outcome.Refused(
+                    "Enter an exact package ID for Google Play (for example, org.example.app)."
+                )
             }
             // A Play listing is NOT a URL offered as a non-Play artifact source.
             return Outcome.Ready(
@@ -95,17 +98,23 @@ internal object ArtifactProviderDiscovery {
             )
         }
         if (provider.isAlternative && !allowAlternativeThisTime) {
-            return Outcome.Refused("Approve this alternative provider for this browser visit first.")
+            return Outcome.Refused(
+                "Approve this alternative provider for this browser visit first."
+            )
         }
         if (provider == Provider.APKPURE && !apkPureEnabled) {
             return Outcome.Refused("APKPure is disabled; enable its optional setting first.")
         }
         if (provider == Provider.FDROID && !fossEligibilityAcknowledged) {
-            return Outcome.Refused("Confirm that this is an appropriate FOSS app and that signing can differ.")
+            return Outcome.Refused(
+                "Confirm that this is an appropriate FOSS app and that signing can differ."
+            )
         }
         val source = provider.source ?: return Outcome.Refused("Unknown provider")
         val handoff = ArtifactSourceHandoff.parse(userInput, source, apkPureEnabled)
-            ?: return Outcome.Refused("Enter an allowed HTTPS provider page. Links are not verified publisher proof.")
+            ?: return Outcome.Refused(
+                "Enter an allowed HTTPS provider page. Links are not verified publisher proof."
+            )
         return Outcome.Ready(Route.EXTERNAL_PROVIDER_PAGE, handoff.uri, source)
     }
 
@@ -116,7 +125,8 @@ internal object ArtifactProviderDiscovery {
      */
     fun status(provider: Provider): String {
         val providerNote = when (provider) {
-            Provider.GOOGLE_PLAY -> "Google Play listing only; exact-version availability is UNKNOWN here"
+            Provider.GOOGLE_PLAY ->
+                "Google Play listing only; exact-version availability is UNKNOWN here"
             Provider.LOCAL_DOCUMENT -> "Local file not selected or verified"
             Provider.DEVELOPER_WEBSITE, Provider.GITHUB_RELEASE ->
                 "Publisher not authenticated; open a page manually and verify the downloaded APK"

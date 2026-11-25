@@ -17,7 +17,9 @@ class ArtifactSourceHandoffTest {
             "https://github.com/owner/repo/releases",
             "https://github.com/owner/repo/releases/latest",
             "https://github.com/owner/repo/releases/tag/v1.2.3"
-        )) assertThat(parse(url, source)).isNotNull()
+        )) {
+            assertThat(parse(url, source)).isNotNull()
+        }
     }
 
     @Test
@@ -32,16 +34,31 @@ class ArtifactSourceHandoffTest {
             "https://github.com/owner/repo/releases/%2Fother",
             "https://github.com.evil.example/owner/repo/releases",
             "https://raw.githubusercontent.com/owner/repo/releases"
-        )) assertThat(parse(url, source)).isNull()
+        )) {
+            assertThat(parse(url, source)).isNull()
+        }
     }
 
     @Test
     fun apkmirrorAndFdroidOpenBrowserPagesNotDownloadProof() {
-        assertThat(parse("https://www.apkmirror.com/apk/example", ArtifactSource.APKMIRROR_BROWSER_HANDOFF)).isNotNull()
-        assertThat(parse("https://f-droid.org/packages/org.example", ArtifactSource.FDROID_REPOSITORY)).isNotNull()
-        assertThat(parse("https://f-droid.org/en/packages/org.example", ArtifactSource.FDROID_REPOSITORY)).isNotNull()
-        assertThat(parse("https://fdroid.org/packages/org.example", ArtifactSource.FDROID_REPOSITORY)).isNull()
-        assertThat(parse("https://apkmirror.com.evil.example/apk/app", ArtifactSource.APKMIRROR_BROWSER_HANDOFF)).isNull()
+        assertThat(
+            parse("https://www.apkmirror.com/apk/example", ArtifactSource.APKMIRROR_BROWSER_HANDOFF)
+        ).isNotNull()
+        assertThat(
+            parse("https://f-droid.org/packages/org.example", ArtifactSource.FDROID_REPOSITORY)
+        ).isNotNull()
+        assertThat(
+            parse("https://f-droid.org/en/packages/org.example", ArtifactSource.FDROID_REPOSITORY)
+        ).isNotNull()
+        assertThat(
+            parse("https://fdroid.org/packages/org.example", ArtifactSource.FDROID_REPOSITORY)
+        ).isNull()
+        assertThat(
+            parse(
+                "https://apkmirror.com.evil.example/apk/app",
+                ArtifactSource.APKMIRROR_BROWSER_HANDOFF
+            )
+        ).isNull()
         assertThat(parse("https://f-droid.org/login", ArtifactSource.FDROID_REPOSITORY)).isNull()
     }
 
@@ -50,7 +67,9 @@ class ArtifactSourceHandoffTest {
         val url = "https://apkpure.com/app"
         assertThat(parse(url, ArtifactSource.APKPURE_OPT_IN)).isNull()
         assertThat(parse(url, ArtifactSource.APKPURE_OPT_IN, true)).isNotNull()
-        assertThat(parse("https://apkpure.com.evil.example/app", ArtifactSource.APKPURE_OPT_IN, true)).isNull()
+        assertThat(
+            parse("https://apkpure.com.evil.example/app", ArtifactSource.APKPURE_OPT_IN, true)
+        ).isNull()
     }
 
     @Test
@@ -69,12 +88,16 @@ class ArtifactSourceHandoffTest {
             "https://router.internal/release",
             "https://xn--fake-developer.example/releases",
             "https://app.xn--fake-developer.example/releases"
-        )) assertThat(parse(url, source)).isNull()
+        )) {
+            assertThat(parse(url, source)).isNull()
+        }
     }
 
     @Test
     fun untrustedLocalDocumentCannotPretendToBeBrowserSource() {
-        assertThat(parse("https://developer.example/download", ArtifactSource.LOCAL_DOCUMENT)).isNull()
+        assertThat(
+            parse("https://developer.example/download", ArtifactSource.LOCAL_DOCUMENT)
+        ).isNull()
     }
 
     @Test
