@@ -4,6 +4,7 @@ name: Aurora R4 P13-B — Nav3 Multi-Size Visual Qualification
 on:
   push:
     branches:
+      - feature/aurora-consolidated-integration-20261125
       - feature/aurora-r4-p13b-nav3-multisize-20261114
   workflow_dispatch:
 permissions:
@@ -30,7 +31,7 @@ jobs:
           bash -n scripts/ci/r4_p13b_emulator_acceptance.sh
           python3 -B scripts/ci/test_r4_p13b_source_contract.py
           python3 -B scripts/ci/test_r4_p13b_visual_signoff.py
-          python3 -B scripts/ci/r4_p13b_source_contract.py --root .
+          python3 -B scripts/ci/r4_p13b_source_contract.py --root . --integration
           python3 -B scripts/ci/test_r4_p06_screenshot_audit.py
           git diff --check 3ea10b6f4b0fed5a8913e4edef3536cfc93fc52f HEAD
   real-api36-p13b:

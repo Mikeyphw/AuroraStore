@@ -110,7 +110,6 @@ private fun ExodusListItemPreview() {
         tracker = ExodusTracker(
             name = "Google Analytics",
             signature = "com.google.android.apps.analytics.|com.google.analytics.",
-            date = "2017-09-24",
             url = "http://www.google.com/analytics/",
             categories = listOf("Analytics", "Advertisement")
         )

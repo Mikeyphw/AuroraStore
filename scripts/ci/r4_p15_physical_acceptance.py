@@ -98,9 +98,13 @@ def verify_artifact(root):
  need(workflow.get('head_sha')==source and workflow.get('conclusion')=='success' and
       workflow.get('status')=='completed' and workflow.get('name')==RUN_WORKFLOW,
       'GH_HOSTED_BUILD_NOT_VERIFIED')
- remote_head=gh_api('git/ref/heads/feature/aurora-r4-p15-physical-arm64-20261115')
+ branch=workflow.get('head_branch')
+ need(branch=='feature/aurora-consolidated-integration-20261125','P15_INTEGRATION_BRANCH_REQUIRED')
+ need(type(manifest.get('run_attempt')) is int and manifest['run_attempt']>=1 and
+      workflow.get('run_attempt')==manifest['run_attempt'],'P15_RUN_ATTEMPT_DRIFT')
+ remote_head=gh_api('git/ref/heads/'+branch)
  need(remote_head.get('object',{}).get('sha')==source,'P15_BRANCH_HEAD_CHANGED')
- other_runs=gh_api('actions/runs?branch=feature/aurora-r4-p15-physical-arm64-20261115&per_page=100').get('workflow_runs',[])
+ other_runs=gh_api('actions/runs?branch='+branch+'&per_page=100').get('workflow_runs',[])
  need(any(r.get('head_sha')==source and r.get('name')=='Aurora — Targeted CI'
           and r.get('conclusion')=='success' for r in other_runs),
       'P15_TARGETED_CI_NOT_GREEN_FOR_SOURCE')

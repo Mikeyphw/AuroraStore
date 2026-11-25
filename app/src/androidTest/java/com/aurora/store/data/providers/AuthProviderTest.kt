@@ -38,7 +38,7 @@ class AuthProviderTest {
     @Before
     fun setup() {
         hiltAndroidRule.inject()
-        spoofProvider.removeSpoofLocale()
+        spoofProvider.setLanguages(emptyList())
         spoofProvider.removeSpoofDeviceProperties()
         devices = spoofProvider.availableSpoofDeviceProperties
         assertThat(devices.size).isAtLeast(2)
@@ -46,7 +46,7 @@ class AuthProviderTest {
 
     @After
     fun tearDown() {
-        spoofProvider.removeSpoofLocale()
+        spoofProvider.setLanguages(emptyList())
         spoofProvider.removeSpoofDeviceProperties()
     }
 
@@ -84,7 +84,7 @@ class AuthProviderTest {
     @Test
     fun sessionBuiltForAnotherLocaleIsRejected() {
         spoofProvider.setSpoofDeviceProperties(devices.first())
-        spoofProvider.setSpoofLocale(Locale.JAPAN)
+        spoofProvider.setLanguages(listOf(Locale.JAPAN))
 
         assertThat(
             authProvider.matchesActiveSpoof(deviceFor(devices.first()), Locale.getDefault())

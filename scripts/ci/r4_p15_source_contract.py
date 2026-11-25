@@ -98,7 +98,10 @@ def verify(root):
  return git(root,'rev-parse','HEAD')
 def main():
  a=argparse.ArgumentParser();a.add_argument('--source-only',action='store_true')
- a.add_argument('--root',default='.',type=Path);p=a.parse_args()
+ a.add_argument('--root',default='.',type=Path);a.add_argument('--integration',action='store_true');p=a.parse_args()
+ if p.integration:
+  from check_aur_int01 import verify as integration_verify
+  integration_verify(p.root,'p15');return
  try:print('P15_SOURCE_PASS',source_only(p.root) if p.source_only else verify(p.root))
  except (Refused,OSError,ValueError,KeyError,TypeError) as e:
   print(str(e),file=sys.stderr);raise SystemExit(2)

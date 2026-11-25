@@ -33,7 +33,7 @@ manual = require("app/src/main/java/com/aurora/store/compose/ui/details/ManualDo
     'HistoricalVersionPolicy.mayConfirmDowngrade(',
     'metadataReady && !state.inProgress()',
     'remember(currentVersionCode)',
-    'canonicalVersionCode(report.versionCode)',
+    'canonicalVersionCode(report.versionCode.toString())',
     'pendingDowngrade', 'r3_downgrade_warning', 'r3_downgrade_try',
     'fileList = emptyList()', 'dependentLibraries = emptyList()',
     'PackageUtil.getInstalledVersionCode(context, packageName)',
@@ -46,7 +46,7 @@ print('R3A_DOWNGRADE_GUARD_PASS: consent and exact-version revalidation')
 if 'versionCode.text.toLong()' in manual or 'lib.copy(versionCode = versionCode)' in manual:
     raise SystemExit('R3A_REFUSED: unsafe unparsed code or fabricated library version')
 picker = require("app/src/main/java/com/aurora/store/compose/ui/sheets/VersionPickerSheet.kt", (
-    'HistoricalVersionPolicy.parseVersionCode(report.versionCode)',
+    'HistoricalVersionPolicy.parseVersionCode(report.versionCode.toString())',
     '.distinctBy { it.first }', '.sortedByDescending { it.first }',
     'r3_history_source_warning', 'r3_history_older',
 ))
@@ -63,11 +63,15 @@ vm = require("app/src/main/java/com/aurora/store/viewmodel/details/AppDetailsVie
     'Version history lookup failed for $packageName',
     '_versionLookupInProgress.value = false',
     'lookupVersions()',
-    '_exodusReport.value = reports.firstOrNull()',
+    'exodusRepository.fetchVersions(packageName)',
+    '_exodusVersions.value = versions',
+    'if (app.value?.packageName == packageName)',
     'catch (cancelled: CancellationException)',
 ))
-if 'private fun fetchExodusPrivacyReport' in vm:
-    raise SystemExit('R3A_REFUSED: unsafe duplicate Exodus fetch path')
+if vm.count('exodusRepository.fetchVersions(packageName)') != 1:
+    raise SystemExit('R3A_REFUSED: duplicate version history fetch path')
+if vm.count('exodusRepository.fetchReports(packageName)') != 1:
+    raise SystemExit('R3A_REFUSED: duplicate privacy report fetch path')
 if 'app!!' in manual:
     raise SystemExit('R3A_REFUSED: nullable app metadata force-unwrapped')
 require("app/src/main/res/values/strings_r3.xml", (

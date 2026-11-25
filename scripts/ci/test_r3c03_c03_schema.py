@@ -36,7 +36,7 @@ require(v15['identityHash'] in test, 'Room v15 identity hash differs from checke
 
 migration = MIGRATION.read_text()
 start = migration.find('val MIGRATION_15_16 =')
-end = migration.find('private const val TAG', start)
+end = migration.find('val MIGRATION_16_17', start)
 require(0 <= start < end, 'missing isolated MIGRATION_15_16')
 body = migration[start:end]
 parts = re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', body)

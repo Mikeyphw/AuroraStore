@@ -217,7 +217,10 @@ def verify(root):
 if __name__=='__main__':
  try:
   p=argparse.ArgumentParser();p.add_argument('--root',type=Path,default=Path('.'))
-  p.add_argument('--source-only',action='store_true');a=p.parse_args()
+  p.add_argument('--source-only',action='store_true');p.add_argument('--integration',action='store_true');a=p.parse_args()
+  if a.integration:
+   from check_aur_int01 import verify as integration_verify
+   integration_verify(a.root,'p14');raise SystemExit(0)
   root=a.root.resolve()
   print('P14_P01_SOURCE_PASS', 'SOURCE_ONLY' if a.source_only else verify(root)) if not a.source_only else print('P14_P01_SOURCE_PASS_SOURCE_ONLY',source_checks(root))
  except (Refused,OSError,ValueError,KeyError,TypeError) as e:

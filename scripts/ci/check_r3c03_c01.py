@@ -69,11 +69,11 @@ dao = require('app/src/main/java/com/aurora/store/data/room/play/PlayDeliveryEvi
 if 'ExactVersionRefused(' in dao or 'R3bVerifiedSet(' in dao:
     raise SystemExit('R3C03_C01_REFUSED: C01 cannot manufacture verification or refusal')
 require('app/src/main/java/com/aurora/store/data/room/AuroraDatabase.kt', (
-    'version = 16', 'PlayDeliveryEvidence::class',
+    'version = 17', 'PlayDeliveryEvidence::class',
     'abstract fun playDeliveryEvidenceDao(): PlayDeliveryEvidenceDao',
 ))
 require('app/src/main/java/com/aurora/store/data/room/RoomModule.kt', (
-    'MIGRATION_15_16', 'providesPlayDeliveryEvidenceDao(',
+    'MIGRATION_15_16', 'MIGRATION_16_17', 'providesPlayDeliveryEvidenceDao(',
 ))
 require('app/src/main/java/com/aurora/store/data/room/MigrationHelper.kt', (
     'val MIGRATION_15_16 = object : Migration(15, 16)',

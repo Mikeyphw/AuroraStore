@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="details_dev_website">Site</string>
+    <string name="details_dev_website">Site da web</string>
     <string name="details_dev_profile">Perfil do desenvolvedor</string>
     <string name="details_dev_details">Contato do desenvolvedor</string>
     <string name="details_dev_address">Endereço</string>
@@ -44,7 +44,6 @@
     <string name="title_purchase_history">Histórico de compras</string>
     <string name="title_no_network">Sem rede</string>
     <string name="title_library">Biblioteca</string>
-    <string name="title_language">Idioma</string>
     <string name="title_installer">Instalador de apps</string>
     <string name="title_installed">Instalados</string>
     <string name="title_installation">Instalação</string>
@@ -273,7 +272,6 @@
     <string name="login_rate_limited">Você foi limitado</string>
     <string name="server_unreachable">Servidor inacessível</string>
     <string name="failed_generating_session">Falha ao gerar a sessão, código de erro: <xliff:g id="status_code">%1$d</xliff:g></string>
-    <string name="app_language">Idioma do app</string>
     <string name="check_connectivity">Conferir a conexão à internet</string>
     <string name="verifying_new_session">Verificando a sessão nova</string>
     <string name="app_links_title">Links do app</string>
@@ -642,4 +640,35 @@
         <item quantity="other">%1$d aplicativos precisam de %2$s, mas apenas %3$s está disponível.</item>
     </plurals>
     <string name="download_sort_date_downloaded">Data de download</string>
+    <string name="download_version_unavailable">A versão %1$d não está disponível para este dispositivo</string>
+    <string name="download_signing_key_rotated">Entre com uma conta Google para atualizar este app: a chave de assinatura mudou, e downloads anônimos não admitem isso</string>
+    <string name="installer_status_aborted">Instalação cancelada</string>
+    <string name="pref_updates_warn_permissions">Avisar sobre permissões novas em atualizações de apps</string>
+    <string name="pref_updates_warn_permissions_desc">Mostrar um aviso antes de atualizar quando a nova versão solicita novas permissões que não estavam na versão instalada</string>
+    <string name="permission_warning_title">Novas permissões solicitadas</string>
+    <string name="permission_warning_desc">Esta atualização solicita permissões que a versão instalada não tem:</string>
+    <plurals name="updates_skipped_new_permissions">
+        <item quantity="one">%1$d atualização que solicita novas permissões foi ignorada</item>
+        <item quantity="many">%1$d de atualizações que solicitam novas permissões foram ignoradas</item>
+        <item quantity="other">%1$d atualizações que solicitam novas permissões foram ignoradas</item>
+    </plurals>
+    <string name="permission_new">Nova</string>
+    <string name="details_play_listing">No Google Play</string>
+    <string name="details_top_chart">%1$s de %2$s</string>
+    <string name="action_continue">Continuar</string>
+    <string name="app_links_owned_title">Links do Play abrem em %1$s</string>
+    <string name="app_links_owned_desc">O Android não permite que a Aurora Store lide com links verificados por %1$s. Desative “Abrir links suportados” para ele antes e então permita a Aurora Store.</string>
+    <string name="app_links_owned_open">Abrir configurações</string>
+    <string name="review_developer_reply">Resposta do desenvolvedor</string>
+    <string name="permission_group_system">Sistema Android</string>
+    <string name="permission_group_other">Outros</string>
+    <string name="toast_beta_failed">Não foi possível atualizar a inscrição da beta</string>
+    <string name="toast_beta_left">Você saiu do programa de beta</string>
+    <string name="google_login_timeout">Google não respondeu a tempo. Por favor, entre novamente.</string>
+    <string name="toast_spoof_import_invalid">Configuração do dispositivo inválida, faltando ou campos malformatados</string>
+    <string name="toast_spoof_device_invalid">Simulação ativa do dispositivo é inválida, revertendo à padrão</string>
+    <string name="session_rejected">Google Play está rejeitando esta sessão. Se estiver usando uma VPN, tente outro servidor e então entre novamente.</string>
+    <string name="pref_ui_appearance">Aparência</string>
+    <string name="authentication_required_update_check">Verificar atualizações requer uma conta Google Play com sessão iniciada; sessões anônimas não conseguem fazer a verificação em massa ainda.</string>
+    <string name="permission_group_google">Google</string>
 </resources>

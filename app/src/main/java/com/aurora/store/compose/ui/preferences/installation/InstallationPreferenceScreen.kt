@@ -39,7 +39,6 @@ import com.aurora.store.compose.preview.ThemePreviewProvider
 import com.aurora.store.data.installer.AppInstaller
 import com.aurora.store.util.Preferences
 import com.aurora.store.util.Preferences.PREFERENCE_AUTO_DELETE
-import com.aurora.store.util.Preferences.PREFERENCE_DOWNLOAD_SYSTEM_LANGUAGES
 import com.aurora.store.util.save
 
 @Composable
@@ -75,9 +74,6 @@ private fun ScreenContent(
     val context = LocalContext.current
     var autoDelete by remember {
         mutableStateOf(Preferences.getBoolean(context, PREFERENCE_AUTO_DELETE, true))
-    }
-    var downloadSystemLanguages by remember {
-        mutableStateOf(Preferences.getBoolean(context, PREFERENCE_DOWNLOAD_SYSTEM_LANGUAGES))
     }
     var showClearOwnerDialog by remember { mutableStateOf(false) }
 
@@ -143,29 +139,6 @@ private fun ScreenContent(
                             onCheckedChange = { checked ->
                                 autoDelete = checked
                                 context.save(PREFERENCE_AUTO_DELETE, checked)
-                            }
-                        )
-                    }
-                )
-            }
-            item {
-                ListItem(
-                    modifier = Modifier.clickable {
-                        downloadSystemLanguages = !downloadSystemLanguages
-                        context.save(PREFERENCE_DOWNLOAD_SYSTEM_LANGUAGES, downloadSystemLanguages)
-                    },
-                    headlineContent = {
-                        Text(stringResource(R.string.pref_download_languages_title))
-                    },
-                    supportingContent = {
-                        Text(stringResource(R.string.pref_download_languages_summary))
-                    },
-                    trailingContent = {
-                        Switch(
-                            checked = downloadSystemLanguages,
-                            onCheckedChange = { checked ->
-                                downloadSystemLanguages = checked
-                                context.save(PREFERENCE_DOWNLOAD_SYSTEM_LANGUAGES, checked)
                             }
                         )
                     }

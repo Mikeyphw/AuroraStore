@@ -205,7 +205,7 @@ def artifact_provenance_mock():
   prior={x:getattr(physical,x) for x in ('gh_api','command','shutil')}
   facts={'head':source,'targeted':True}
   def fake_api(endpoint):
-   if endpoint=='actions/runs/'+run:return {'head_sha':source,'status':'completed','conclusion':'success','name':physical.RUN_WORKFLOW}
+   if endpoint=='actions/runs/'+run:return {'head_sha':source,'status':'completed','conclusion':'success','name':physical.RUN_WORKFLOW,'head_branch':'feature/aurora-consolidated-integration-20261125','run_attempt':1}
    if endpoint.startswith('git/ref/'):return {'object':{'sha':facts['head']}}
    if endpoint.startswith('actions/runs?'):
     return {'workflow_runs':[{'head_sha':source,'name':'Aurora — Targeted CI',

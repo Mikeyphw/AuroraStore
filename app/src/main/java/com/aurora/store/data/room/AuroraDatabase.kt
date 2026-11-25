@@ -16,8 +16,6 @@ import com.aurora.store.data.room.account.AppAccountBindingDao
 import com.aurora.store.data.room.download.Download
 import com.aurora.store.data.room.download.DownloadConverter
 import com.aurora.store.data.room.download.DownloadDao
-import com.aurora.store.data.room.exodus.TrackerDao
-import com.aurora.store.data.room.exodus.TrackerEntity
 import com.aurora.store.data.room.favourite.Favourite
 import com.aurora.store.data.room.favourite.FavouriteDao
 import com.aurora.store.data.room.notification.AppNotification
@@ -40,11 +38,10 @@ import com.aurora.store.data.room.update.UpdateDao
         LocalReview::class,
         Account::class,
         AppAccountBinding::class,
-        TrackerEntity::class,
         AppNotification::class,
         PlayDeliveryEvidence::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = true
 )
 @TypeConverters(DownloadConverter::class, AccountConverter::class)
@@ -57,6 +54,5 @@ abstract class AuroraDatabase : RoomDatabase() {
     abstract fun reviewDao(): ReviewDao
     abstract fun accountDao(): AccountDao
     abstract fun appAccountBindingDao(): AppAccountBindingDao
-    abstract fun trackerDao(): TrackerDao
     abstract fun notificationDao(): NotificationDao
 }

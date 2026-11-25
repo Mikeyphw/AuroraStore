@@ -69,7 +69,8 @@ SnackbarResult.ActionPerformed -> onNavigateTo(Destination.Splash())
 onRequestNavigateToSplash = ::onRequestNavigateToSplash
 ''',
       'device':'onRequestNavigateToSplash()',
-      'locale':'onRequestNavigateToSplash()',
+      'locale':'if (result == SnackbarResult.ActionPerformed) { viewModel.applyAppLanguage(); onNavigateTo(Destination.Splash()) }',
+      'language':'spoofProvider.setLanguages(updated)',
       'androidtest':'''@Before
 val editor = Preferences.getPrefs(context).edit()
 check(editor.commit())
@@ -83,7 +84,7 @@ check(editor.commit())
 python3 -B scripts/ci/test_r4_p09_session_source_contract.py
 python3 -B scripts/ci/r4_p09_session_source_contract.py --root .
 bash scripts/ci/r4_p05_emulator_acceptance.sh
-python3 -B scripts/ci/r4_p08_retained_decisions.py --repo .
+python3 -B scripts/ci/check_aur_int01.py --lane p05
 '''
     }
 

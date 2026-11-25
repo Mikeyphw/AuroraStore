@@ -4,6 +4,7 @@ name: Aurora R4 P15 — Signed Physical Acceptance APKs
 on:
   push:
     branches:
+      - feature/aurora-consolidated-integration-20261125
       - feature/aurora-r4-p15-physical-arm64-20261115
   workflow_dispatch:
 permissions:
@@ -28,7 +29,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           python3 -B scripts/ci/test_r4_p15_source_contract.py
-          python3 -B scripts/ci/r4_p15_source_contract.py --root .
+          python3 -B scripts/ci/r4_p15_source_contract.py --root . --integration
           git diff --check 1ab625ea916de533de4bbc9db8703aafc23f691b HEAD
   build:
     name: GitHub-only Android APKs and exact SHA/signing provenance

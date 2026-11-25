@@ -90,6 +90,14 @@ object MigrationHelper {
         }
     }
 
+    /** Both upstream and fork v16 converge; only obsolete tracker cache is discarded. */
+    val MIGRATION_16_17 = object : Migration(16, 17) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            MIGRATION_15_16.migrate(db)
+            db.execSQL("DROP TABLE IF EXISTS `exodus_tracker`")
+        }
+    }
+
     private const val TAG = "MigrationHelper"
 
     private fun migrateFrom1To2(database: SupportSQLiteDatabase) {
@@ -391,4 +399,6 @@ object MigrationHelper {
             database.endTransaction()
         }
     }
+
+
 }

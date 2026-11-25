@@ -3,6 +3,7 @@ name: Aurora R4 P14 P01 — Offline Nav3 + Deterministic Search Details
 on:
   push:
     branches:
+      - feature/aurora-consolidated-integration-20261125
       - feature/aurora-r4-p14-p01-offline-nav3-journeys-20261114
   workflow_dispatch:
 permissions:
@@ -28,7 +29,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           bash -n scripts/ci/r4_p14_p01_emulator_acceptance.sh
           python3 -B scripts/ci/test_r4_p14_p01_source_contract.py
-          python3 -B scripts/ci/r4_p14_p01_source_contract.py --root .
+          python3 -B scripts/ci/r4_p14_p01_source_contract.py --root . --integration
           python3 -B scripts/ci/test_r4_p13b_visual_signoff.py
           git diff --check 47c360e9cb553f73fb6858cd364ea19835bada6e HEAD
   api36:

@@ -5,6 +5,7 @@ name: Aurora R4 P05 — API36 Real Device UX and Expressive Screenshots
 on:
   push:
     branches:
+      - feature/aurora-consolidated-integration-20261125
       - feature/r4-p03-pr113-expressive-v4-20261113
   workflow_dispatch:
 
@@ -65,18 +66,9 @@ jobs:
           bash -n scripts/ci/r4_p05_emulator_acceptance.sh
           python3 -B scripts/ci/test_r4_p06_screenshot_audit.py
           python3 -B scripts/ci/test_r4_p06_apk_reuse.py
-          python3 -B scripts/ci/test_r4_p07_source_parity.py
-          python3 -B scripts/ci/r4_p07_source_parity.py --repo .
-          python3 -B scripts/ci/test_r4_p08_retained_decisions.py
-          python3 -B scripts/ci/r4_p08_retained_decisions.py --repo .
           python3 -B scripts/ci/test_r4_p09_session_source_contract.py
           python3 -B scripts/ci/r4_p09_session_source_contract.py --root .
-          python3 -B scripts/ci/test_r4_p10_readiness_gate.py
-          python3 -B scripts/ci/r4_p10_readiness_gate.py --repo .
-          python3 -B scripts/ci/test_r4_p11_pr_review_gate.py
-          python3 -B scripts/ci/r4_p11_pr_review_gate.py --root .
-          python3 -B scripts/ci/test_r4_p12_visual_contrast_gate.py
-          python3 -B scripts/ci/r4_p12_visual_contrast_gate.py --root .
+          python3 -B scripts/ci/check_aur_int01.py --lane p05
           python3 - <<'PYHF18'
           # Source-level regression guard: both provenance commands require the
           # read-only Actions token, never an empty/missing environment.

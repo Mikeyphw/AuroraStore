@@ -17,9 +17,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Real Room upgrade of a populated schema-v15 on-device SQLite database.
+ * Real Room upgrades of populated schema-v15 and both historical v16 layouts.
  * The DDL and identity hash are taken from the committed, Room-generated 15.json.
- * This tests on-device migration; it does not certify a generated v16 schema file.
+ * The current v17 schema must be exported independently by hosted Room KSP.
  */
 @RunWith(AndroidJUnit4::class)
 class RoomV15ToV16MigrationDeviceTest {
@@ -27,11 +27,36 @@ class RoomV15ToV16MigrationDeviceTest {
         get() = InstrumentationRegistry.getInstrumentation().targetContext
 
     @Test
-    fun populatedV15SurvivesRealRoomMigrationToV16() {
+    fun populatedV15SurvivesRealRoomMigrationToV17() = verifyUpgrade(15, false)
+
+    @Test
+    fun populatedForkV16PreservesExistingEvidence() = verifyUpgrade(16, true)
+
+    @Test
+    fun populatedUpstreamV16AddsEvidenceWithoutLosingRows() = verifyUpgrade(16, false)
+
+    private fun verifyUpgrade(version: Int, fork: Boolean) {
         context.deleteDatabase(DB_NAME)
         try {
             context.openOrCreateDatabase(DB_NAME, Context.MODE_PRIVATE, null).use { legacy ->
-                V15_TABLES.forEach { legacy.execSQL(it) }
+                V15_TABLES.forEach { ddl ->
+                    if (version != 16 || fork || !ddl.contains("`exodus_tracker`")) {
+                        legacy.execSQL(ddl)
+                    }
+                }
+                if (fork) {
+                    legacy.execSQL(FORK_EVIDENCE_TABLE)
+                    legacy.execSQL(
+                        "INSERT INTO `play_delivery_evidence` VALUES " +
+                            "('com.aurora.migration.fixture', 737, 9001, 'opaque-binding', " +
+                            "'fixture', 'URLS_RESOLVED_NOT_VERIFIED', NULL, NULL, 2)"
+                    )
+                }
+                val identity = when {
+                    version == 15 -> V15_IDENTITY_HASH
+                    fork -> FORK_V16_IDENTITY_HASH
+                    else -> UPSTREAM_V16_IDENTITY_HASH
+                }
                 legacy.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_app_account_binding_accountId` " +
                         "ON `app_account_binding` (`accountId`)"
@@ -42,7 +67,7 @@ class RoomV15ToV16MigrationDeviceTest {
                 )
                 legacy.execSQL(
                     "INSERT OR REPLACE INTO room_master_table (id,identity_hash) " +
-                        "VALUES(42, '$V15_IDENTITY_HASH')"
+                        "VALUES(42, '$identity')"
                 )
                 legacy.execSQL(
                     "INSERT INTO `download` VALUES " +
@@ -59,17 +84,17 @@ class RoomV15ToV16MigrationDeviceTest {
                     "INSERT INTO `app_account_binding` VALUES " +
                         "('com.aurora.migration.fixture', 'v15-account')"
                 )
-                legacy.version = 15
-                assertThat(legacy.version).isEqualTo(15)
+                legacy.version = version
+                assertThat(legacy.version).isEqualTo(version)
             }
             val migrated = Room.databaseBuilder(context, AuroraDatabase::class.java, DB_NAME)
-                .addMigrations(MigrationHelper.MIGRATION_15_16)
+                .addMigrations(MigrationHelper.MIGRATION_15_16, MigrationHelper.MIGRATION_16_17)
                 .addTypeConverter(DownloadConverter(Json { ignoreUnknownKeys = true }))
                 .addTypeConverter(AccountConverter())
                 .build()
             try {
                 val db = migrated.openHelper.writableDatabase
-                assertThat(db.version).isEqualTo(16)
+                assertThat(db.version).isEqualTo(17)
                 db.query(
                     "SELECT `versionCode`, `downloadedAt`, `displayName` FROM " +
                         "`download` WHERE `packageName`='com.aurora.migration.fixture'"
@@ -91,7 +116,18 @@ class RoomV15ToV16MigrationDeviceTest {
                 }
                 db.query("SELECT COUNT(*) FROM `play_delivery_evidence`").use { row ->
                     assertThat(row.moveToFirst()).isTrue()
-                    assertThat(row.getInt(0)).isEqualTo(0)
+                    assertThat(row.getInt(0)).isEqualTo(if (fork) 1 else 0)
+                }
+                if (fork) {
+                    db.query("SELECT versionCode, attemptGeneration, state FROM play_delivery_evidence").use { row ->
+                        assertThat(row.moveToFirst()).isTrue()
+                        assertThat(row.getLong(0)).isEqualTo(737L)
+                        assertThat(row.getLong(1)).isEqualTo(9001L)
+                        assertThat(row.getString(2)).isEqualTo("URLS_RESOLVED_NOT_VERIFIED")
+                    }
+                }
+                db.query("SELECT name FROM sqlite_master WHERE name='exodus_tracker'").use { row ->
+                    assertThat(row.moveToFirst()).isFalse()
                 }
             } finally {
                 migrated.close()
@@ -104,6 +140,10 @@ class RoomV15ToV16MigrationDeviceTest {
     companion object {
         private const val DB_NAME = "aurora_r3c03_migration_test.db"
         private const val V15_IDENTITY_HASH = "61507a0aeabcbbd5d6114872e5bd0462"
+
+        private const val FORK_V16_IDENTITY_HASH = "daa8dbc1dc7b57377b22b569846b7c85"
+        private const val UPSTREAM_V16_IDENTITY_HASH = "f65ba0d37b1f92e464f095e617ff09e1"
+        private const val FORK_EVIDENCE_TABLE = "CREATE TABLE IF NOT EXISTS `play_delivery_evidence` (`packageName` TEXT NOT NULL, `versionCode` INTEGER NOT NULL, `attemptGeneration` INTEGER NOT NULL, `accountBinding` TEXT NOT NULL, `variant` TEXT NOT NULL, `state` TEXT NOT NULL, `verifiedApkVersion` INTEGER, `unavailableVersion` INTEGER, `resolvedFileCount` INTEGER NOT NULL, PRIMARY KEY(`packageName`))"
 
         // Exact v15 CREATE TABLE definitions. Source CI checks these against 15.json.
         private val V15_TABLES = listOf(

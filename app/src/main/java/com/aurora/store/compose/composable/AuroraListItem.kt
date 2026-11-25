@@ -5,6 +5,7 @@
 
 package com.aurora.store.compose.composable
 
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +20,7 @@ import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewWrapper
+import androidx.compose.ui.unit.Dp
 import com.aurora.store.R
 import com.aurora.store.compose.preview.ThemePreviewProvider
 
@@ -33,6 +35,9 @@ fun AuroraListItem(
     supporting: String? = null,
     tertiary: String? = null,
     onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
+    selected: Boolean = false,
+    verticalPadding: Dp = dimensionResource(R.dimen.spacing_small),
     enabled: Boolean = true,
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
@@ -61,14 +66,22 @@ fun AuroraListItem(
         } else {
             null
         }
-    val itemModifier = modifier.fillMaxWidth()
-    val itemColors = ListItemDefaults.colors(containerColor = Color.Transparent)
+    val itemModifier = modifier.fillMaxWidth().then(
+        if (onLongClick != null) Modifier.combinedClickable(
+            enabled = enabled,
+            onClick = { onClick?.invoke() },
+            onLongClick = onLongClick
+        ) else Modifier
+    )
+    val itemColors = ListItemDefaults.colors(
+        containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
+    )
     val contentPadding = PaddingValues(
         horizontal = dimensionResource(R.dimen.spacing_large),
-        vertical = dimensionResource(R.dimen.spacing_small)
+        vertical = verticalPadding
     )
 
-    if (onClick != null) {
+    if (onClick != null && onLongClick == null) {
         ListItem(
             onClick = onClick,
             modifier = itemModifier,

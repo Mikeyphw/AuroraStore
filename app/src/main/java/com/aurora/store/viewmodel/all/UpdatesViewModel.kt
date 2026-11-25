@@ -132,7 +132,7 @@ class UpdatesViewModel @Inject constructor(
     suspend fun getNewTrackers(
         packageName: String,
         installedVersionCode: Long
-    ): List<ExodusTracker> = exodusRepository.getNewTrackers(packageName, installedVersionCode)
+    ): List<ExodusTracker> = exodusRepository.newTrackers(packageName, installedVersionCode)
 
     fun downloadAll(updates: List<Update>) {
         viewModelScope.launch {

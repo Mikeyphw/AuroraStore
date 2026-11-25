@@ -18,7 +18,8 @@ PATHS={
  'auth':'app/src/main/java/com/aurora/store/viewmodel/auth/AuthViewModel.kt',
  'spoof':'app/src/main/java/com/aurora/store/compose/ui/spoof/SpoofScreen.kt',
  'device':'app/src/main/java/com/aurora/store/compose/ui/spoof/DevicePage.kt',
- 'locale':'app/src/main/java/com/aurora/store/compose/ui/spoof/LocalePage.kt',
+ 'locale':'app/src/main/java/com/aurora/store/compose/ui/preferences/language/LanguagePreferenceScreen.kt',
+ 'language':'app/src/main/java/com/aurora/store/viewmodel/preferences/LanguageViewModel.kt',
  'androidtest':'app/src/androidTest/java/com/aurora/store/data/providers/R4OfflineAccountSessionDeviceTest.kt',
  'runner':'scripts/ci/r4_p05_emulator_acceptance.sh',
  'auditor':'scripts/ci/r4_p05_screenshot_audit.py',
@@ -88,7 +89,11 @@ def check(s:dict[str,str]):
       'SPOOF_RESTART_MUST_NOT_IMPLICITLY_LOGOUT')
  need('onRequestNavigateToSplash = ::onRequestNavigateToSplash' in spoof and
       'onRequestNavigateToSplash()' in s['device'] and
-      'onRequestNavigateToSplash()' in s['locale'],
+      'if (result == SnackbarResult.ActionPerformed)' in s['locale'] and
+      'viewModel.applyAppLanguage()' in s['locale'] and
+      'onNavigateTo(Destination.Splash())' in s['locale'] and
+      'viewModel.logout()' not in s['locale'] and
+      'spoofProvider.setLanguages(updated)' in s['language'],
       'SPOOF_DEVICE_LOCALE_RESTART_WIRING')
  device=s['androidtest'];runner=s['runner'];audit=s['auditor'];workflow=s['workflow']
  need(device.count('    @Test\n')==9 and
@@ -107,7 +112,7 @@ def check(s:dict[str,str]):
  for marker in ('python3 -B scripts/ci/test_r4_p09_session_source_contract.py',
                 'python3 -B scripts/ci/r4_p09_session_source_contract.py --root .',
                 'bash scripts/ci/r4_p05_emulator_acceptance.sh',
-                'python3 -B scripts/ci/r4_p08_retained_decisions.py --repo .'):
+                'python3 -B scripts/ci/check_aur_int01.py --lane p05'):
   need(workflow.count(marker)==1,'HOSTED_WORKFLOW_SOURCE_GATE_DRIFT_'+marker)
  need(re.search(r'^  actions: read\b',workflow,re.M) is not None and
       re.search(r'^  contents: read\b',workflow,re.M) is not None and

@@ -9,7 +9,7 @@ import re
 ROOT = Path(__file__).resolve().parents[2]
 migration = (ROOT / 'app/src/main/java/com/aurora/store/data/room/MigrationHelper.kt').read_text()
 start = migration.index('val MIGRATION_15_16 = object : Migration(15, 16)')
-end = migration.index('private const val TAG', start)
+end = migration.index('val MIGRATION_16_17', start)
 section = migration[start:end]
 segments = re.findall(r'^\s*"([^"\n]*)"\s*\+?\s*$', section, re.M)
 if len(segments) < 9:

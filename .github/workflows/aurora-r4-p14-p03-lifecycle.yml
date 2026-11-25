@@ -4,6 +4,7 @@ name: Aurora R4 P14 P03 — Hosted Download Update and Installer Decline
 on:
   push:
     branches:
+      - feature/aurora-consolidated-integration-20261125
       - feature/aurora-r4-p14-p03-hosted-lifecycle-20261115
   workflow_dispatch:
 permissions:
@@ -29,7 +30,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           bash -n scripts/ci/r4_p14_p03_emulator_acceptance.sh
           python3 -B scripts/ci/test_r4_p14_p03_source_contract.py
-          python3 -B scripts/ci/r4_p14_p03_source_contract.py --root .
+          python3 -B scripts/ci/r4_p14_p03_source_contract.py --root . --integration
           git diff --check 6e9418baaefadd4afcf4320b4a4b193546e66ec7 HEAD
   api36:
     name: 76 real Room, worker and Compose tests, 20 screenshots

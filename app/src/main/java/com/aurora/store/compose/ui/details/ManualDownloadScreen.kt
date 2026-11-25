@@ -70,7 +70,7 @@ import com.aurora.store.data.model.AppState
 import com.aurora.store.data.model.HistoricalAvailabilityPolicy
 import com.aurora.store.data.model.HistoricalAvailabilityPolicy.Decision
 import com.aurora.store.data.model.HistoricalVersionPolicy
-import com.aurora.store.data.model.Report
+import com.aurora.store.data.model.VersionEntry
 import com.aurora.store.util.PackageUtil
 import com.aurora.store.viewmodel.details.AppDetailsViewModel
 import kotlinx.coroutines.launch
@@ -85,7 +85,7 @@ fun ManualDownloadScreen(
     val context = LocalContext.current
     val app by viewModel.app.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val reports by viewModel.exodusReports.collectAsStateWithLifecycle()
+    val reports by viewModel.exodusVersions.collectAsStateWithLifecycle()
     val lookupInProgress by viewModel.versionLookupInProgress.collectAsStateWithLifecycle()
     val topAppBarTitle = if (windowAdaptiveInfo.isWindowCompact) {
         app?.displayName ?: stringResource(R.string.title_manual_download)
@@ -130,7 +130,7 @@ private fun ScreenContent(
     metadataReady: Boolean = true,
     installedVersionCode: Long = 0L,
     installedVersionProvider: () -> Long = { installedVersionCode },
-    reports: List<Report> = emptyList(),
+    reports: List<VersionEntry> = emptyList(),
     lookupInProgress: Boolean = false,
     onLookup: () -> Unit = {},
     onRequestInstall: (versionCode: Long) -> Unit = {},
@@ -154,7 +154,7 @@ private fun ScreenContent(
         // Neither Exodus reports nor latest-release metadata prove this historical APK exists.
         // Exact-version Play delivery and R3B verification occur only after a user request.
         val inHistory = reports.any { report ->
-            HistoricalVersionPolicy.parseVersionCode(report.versionCode) == requested
+            HistoricalVersionPolicy.parseVersionCode(report.versionCode.toString()) == requested
         }
         HistoricalAvailabilityPolicy.assess(
             HistoricalAvailabilityPolicy.Evidence(
@@ -231,7 +231,7 @@ private fun ScreenContent(
             installedVersionCode = installedVersionCode,
             currentListingVersionCode = currentVersionCode,
             onSelect = { report ->
-                HistoricalVersionPolicy.canonicalVersionCode(report.versionCode)?.let { code ->
+                HistoricalVersionPolicy.canonicalVersionCode(report.versionCode.toString())?.let { code ->
                     versionCode = TextFieldValue(text = code, selection = TextRange(code.length))
                     showVersionPicker = false
                 }
@@ -400,9 +400,9 @@ private fun ManualDownloadScreenPreview(@PreviewParameter(AppPreviewProvider::cl
         topAppBarTitle = app.displayName,
         currentVersionCode = app.versionCode,
         reports = listOf(
-            Report(version = "8.5.1", versionCode = "85100"),
-            Report(version = "8.4.0", versionCode = "84000"),
-            Report(version = "8.3.2", versionCode = "83200")
+            VersionEntry(version = "8.5.1", versionCode = 85100L),
+            VersionEntry(version = "8.4.0", versionCode = 84000L),
+            VersionEntry(version = "8.3.2", versionCode = 83200L)
         )
     )
 }

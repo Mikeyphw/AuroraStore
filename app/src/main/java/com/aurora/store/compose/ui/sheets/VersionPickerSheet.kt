@@ -41,7 +41,7 @@ import androidx.compose.ui.unit.dp
 import com.aurora.store.R
 import com.aurora.store.data.model.HistoricalAvailabilityPolicy
 import com.aurora.store.data.model.HistoricalVersionPolicy
-import com.aurora.store.data.model.Report
+import com.aurora.store.data.model.VersionEntry
 import com.aurora.store.data.model.formatExodusDate
 
 /**
@@ -52,17 +52,17 @@ import com.aurora.store.data.model.formatExodusDate
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VersionPickerSheet(
-    reports: List<Report>,
+    reports: List<VersionEntry>,
     loading: Boolean,
     installedVersionCode: Long = 0L,
     currentListingVersionCode: Long = 0L,
-    onSelect: (Report) -> Unit,
+    onSelect: (VersionEntry) -> Unit,
     onDismiss: () -> Unit
 ) {
     // Exodus is history metadata, not a guarantee that Play still serves an APK.
     val availableReports = remember(reports) {
         reports.mapNotNull { report ->
-            HistoricalVersionPolicy.parseVersionCode(report.versionCode)?.let { it to report }
+            HistoricalVersionPolicy.parseVersionCode(report.versionCode.toString())?.let { it to report }
         }.distinctBy { it.first }
             .sortedByDescending { it.first }
             .map { it.second }
@@ -171,12 +171,12 @@ private fun AvailabilityWarning(modifier: Modifier = Modifier) {
 
 @Composable
 private fun VersionRow(
-    report: Report,
+    report: VersionEntry,
     installedVersionCode: Long,
     currentListingVersionCode: Long,
     onClick: () -> Unit
 ) {
-    val version = HistoricalVersionPolicy.parseVersionCode(report.versionCode) ?: return
+    val version = HistoricalVersionPolicy.parseVersionCode(report.versionCode.toString()) ?: return
     val assessment = HistoricalAvailabilityPolicy.assess(
         HistoricalAvailabilityPolicy.Evidence(
             requestedVersion = version,
@@ -187,11 +187,11 @@ private fun VersionRow(
         )
     )
     val title = if (report.version.isBlank()) {
-        report.versionCode
+        report.versionCode.toString()
     } else {
         "${report.version} (${report.versionCode})"
     }
-    val date = report.updatedAt.ifBlank { report.creationDate }
+    val date = report.date
 
     Column(
         modifier = Modifier

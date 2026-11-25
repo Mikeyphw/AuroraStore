@@ -107,10 +107,16 @@ private fun ScreenContent(onNavigateTo: (Destination) -> Unit = {}) {
             searchTerms = "installer install apk delete"
         ),
         SettingEntry(
+            title = stringResource(R.string.title_languages),
+            icon = R.drawable.ic_language,
+            action = SettingAction.Navigate(Destination.LanguagePreference),
+            searchTerms = "language locale translation"
+        ),
+        SettingEntry(
             title = stringResource(R.string.pref_ui_title),
             icon = R.drawable.ic_ui,
             action = SettingAction.Navigate(Destination.UIPreference),
-            searchTerms = "language layout tabs for you apps games"
+            searchTerms = "layout tabs for you apps games"
         ),
         SettingEntry(
             title = stringResource(R.string.title_notifications),

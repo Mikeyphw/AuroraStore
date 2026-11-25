@@ -7,7 +7,6 @@
 package com.aurora.store.compose.ui.details
 
 import android.content.ActivityNotFoundException
-import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -78,12 +77,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.tooling.preview.PreviewWrapper
-import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavKey
-import com.aurora.Constants
 import com.aurora.extensions.appInfo
+import com.aurora.extensions.openPlayStore
 import com.aurora.extensions.requiresGMS
 import com.aurora.extensions.requiresObbDir
 import com.aurora.extensions.share
@@ -130,6 +128,7 @@ import com.aurora.store.compose.ui.sheets.InstallErrorSheet
 import com.aurora.store.data.installer.AppInstaller
 import com.aurora.store.data.model.AppState
 import com.aurora.store.data.model.ExodusTracker
+import com.aurora.store.compose.ui.details.composable.PlayListing
 import com.aurora.store.data.model.PermissionType
 import com.aurora.store.data.model.Report
 import com.aurora.store.data.model.Scores
@@ -196,7 +195,7 @@ fun AppDetailsScreen(
                 error = err.error,
                 extra = err.extra,
                 isAnonymous = viewModel.authProvider.isAnonymous,
-                onBuy = { openPlayStore(context, loadedApp.packageName) },
+                onBuy = { context.openPlayStore(loadedApp.packageName) },
                 onDismiss = viewModel::dismissInstallError
             )
         }
@@ -282,21 +281,6 @@ fun AppDetailsScreen(
                 )
             }
         }
-    }
-}
-
-/**
- * Opens the given app's Play Store listing, preferring the Play Store app when available and
- * falling back to whichever activity can handle the web listing (e.g. a browser).
- */
-private fun openPlayStore(context: Context, packageName: String) {
-    val uri = "${Constants.SHARE_URL}$packageName".toUri()
-    val intent = Intent(Intent.ACTION_VIEW).apply { data = uri }
-
-    if (intent.resolveActivity(context.packageManager) != null) {
-        context.startActivity(intent.apply { setPackage(Constants.PACKAGE_NAME_PLAY_STORE) })
-    } else {
-        context.startActivity(intent)
     }
 }
 
@@ -404,9 +388,17 @@ private fun ScreenContentApp(
     LaunchedEffect(showsScreenshot) { if (!showsScreenshot) isScreenshotOpen = false }
     val coroutineScope = rememberCoroutineScope()
 
+    var isTopChartLoading by remember { mutableStateOf(false) }
+
     fun onTopChartClick(chart: TopChart, title: String) {
+        if (isTopChartLoading) return
+        isTopChartLoading = true
         coroutineScope.launch {
-            val cluster = onFetchTopChart(chart, title)
+            val cluster = try {
+                onFetchTopChart(chart, title)
+            } finally {
+                isTopChartLoading = false
+            }
             if (cluster != null) onNavigateTo(Destination.StreamBrowse(cluster))
             else context.toast(R.string.no_apps_available)
         }
@@ -607,7 +599,7 @@ private fun ScreenContentApp(
                     ShortcutManagerUtil.requestPinShortcut(context, app.packageName)
                 }
 
-                MenuItem.PLAY_STORE -> openPlayStore(context, app.packageName)
+                MenuItem.PLAY_STORE -> context.openPlayStore(app.packageName)
             }
         }
     }
@@ -808,6 +800,19 @@ private fun ScreenContentApp(
 
                     if (app.changes.isNotBlank()) {
                         item(key = "changelog") { Changelog(changelog = app.changes) }
+                    }
+
+                    item(key = "play-listing") {
+                        PlayListing(
+                            app = app,
+                            categoryIconUrl = categoryIconUrl,
+                            isTopChartLoading = isTopChartLoading,
+                            onCategoryClick = { onNavigateTo(Destination.CategoryBrowse(it)) },
+                            onTopChartClick = ::onTopChartClick,
+                            onBrowse = { title, browseUrl ->
+                                onNavigateTo(Destination.ExpandedStreamBrowse(title, browseUrl))
+                            }
+                        )
                     }
 
                     if (app.screenshots.isNotEmpty()) {

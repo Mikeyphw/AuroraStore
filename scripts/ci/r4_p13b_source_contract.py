@@ -136,7 +136,11 @@ def check_nav(s):
   'onNodeWithContentDescription(context.getString(R.string.title_more))',
   'fun actualMainSearchButtonNavigatesToSearchAndReturns()',
   'fun actualMainMoreSettingsAndCustomizationRoute()',
-  'R4ScreenshotEvidence.capture(',*IMAGES[8:]):
+  'R4ScreenshotEvidence.capture(', 'primeVisualBaseline()',
+  'if (observed >= 12)', 'for (attempt in 1..12)',
+  'val rows = 160', 'val columns = 160',
+  'previousBodySignature = sample', 'P13B_REFUSED_STALE_BODY_FRAME',
+  'fetchSemanticsNodes().isEmpty()',*IMAGES[8:]):
   need(marker in s,'NAV3_MARKER_'+marker)
  need('import androidx.compose.ui.test.assertExists\n' not in s,
       'INVALID_COMPOSE_TEST_IMPORT')
@@ -233,7 +237,10 @@ def verify(root):
 if __name__=='__main__':
  try:
   p=argparse.ArgumentParser();p.add_argument('--root',default=Path('.'),type=Path)
-  args=p.parse_args()
+  p.add_argument('--integration',action='store_true');args=p.parse_args()
+  if args.integration:
+   from check_aur_int01 import verify
+   verify(args.root,'p13');raise SystemExit(0)
   print('P13B_CONSOLIDATED_NAV3_MULTISIZE_SIGNOFF_SOURCE_PASS',verify(args.root))
  except (Refused,OSError,ValueError,KeyError) as e:
   print(str(e))
