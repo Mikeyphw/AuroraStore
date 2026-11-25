@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """R3C07 P01 independent source/security gate. Runtime acceptance is API36-only."""
 from pathlib import Path
+import re
 ROOT=Path(__file__).resolve().parents[2]
 A=(ROOT/'app/src/main/java/com/aurora/store/data/artifact/ArtifactImportActivity.kt').read_text()
 R=(ROOT/'app/src/main/java/com/aurora/store/data/artifact/ArtifactReviewPresentation.kt').read_text()
@@ -80,6 +81,6 @@ require(T.count('assertThat(install(root(activity)).isEnabled).isFalse()') == 1,
 require('private fun install(views: List<View>): Button' in T and
         'it.text.toString() == "Request Android installation"' in T,
         'install helper must resolve the real install button')
-require('PackageInstaller' not in T and 'startActivity(Intent' not in T,
+require('PackageInstaller' not in T and not re.search(r'\bstartActivity\s*\(\s*Intent\b', T),
         'read-only UX tests must not install or browse')
 print('R3C07_P01_SOURCE_SECURITY_PASS: truthful review + disclosure + accessible states + 5 separately measured UI tests')

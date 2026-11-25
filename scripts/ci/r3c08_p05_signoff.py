@@ -50,6 +50,26 @@ def forbidden_elevations(doc,tag):
                   'release_qualified','physical_device_qualified'):
         need(doc.get(field) is not True,tag+' falsely asserted '+field)
 
+def validate_apk_origin(pair,sha,run):
+    source_bound(pair,sha,run,'APK pair')
+    forbidden_elevations(pair,'APK pair')
+    need(pair.get('role')=='APK_INPUT_PROVENANCE_ONLY', 'APK provenance role invalid')
+    mode=pair.get('mode')
+    if mode=='EXACT_TARGETED_ARTIFACT':
+        need(RUN.fullmatch(str(pair.get('targeted_run_id',''))) is not None and
+             RUN.fullmatch(str(pair.get('targeted_run_attempt',''))) is not None and
+             type(pair.get('artifact_id')) is int and pair['artifact_id']>0 and
+             isinstance(pair.get('manifest_sha256'),str) and
+             HEX64.fullmatch(pair['manifest_sha256']) is not None,
+             'targeted APK reuse provenance incomplete')
+    elif mode=='INDEPENDENT_HOSTED_BUILD':
+        need(all(field in pair and pair[field] is None for field in
+                 ('targeted_run_id','artifact_id','manifest_sha256')) and
+             pair.get('targeted_run_attempt') is None,
+             'independent APK build carries stale reuse provenance')
+    else:
+        raise Refused('unsupported APK origin mode')
+
 def read_bytes(root,name,limit=3_000_000):
     need('/' not in name and '\\' not in name and name not in ('.','..'), 'unsafe file identity')
     path=root/name
@@ -205,10 +225,7 @@ def assess(root,sha,run):
     pair_name='R3C07_HF03_APK_SOURCE_RECEIPT.json'
     pair,_=read_json(root,pair_name);source_bound(pair,sha,run,'targeted APK pair')
     forbidden_elevations(pair,'targeted APK pair')
-    need(pair.get('role')=='APK_INPUT_PROVENANCE_ONLY' and
-         pair.get('mode') in ('EXACT_TARGETED_ARTIFACT','HOSTED_LOCAL_BUILD') and
-         RUN.fullmatch(str(pair.get('targeted_run_id',''))) is not None,
-         'source-pinned APK pair or successful targeted-run source missing')
+    validate_apk_origin(pair,sha,run)
     apk=pair.get('apk_pair')
     need(isinstance(apk,dict) and set(apk)=={'app','androidTest'} and
          apk['app'].get('signer_sha256')==apk['androidTest'].get('signer_sha256') and
@@ -237,7 +254,8 @@ def assess(root,sha,run):
     return {'phase':'R3C08_P05_SECURITY_SIGNOFF',
             'overall':'READ_ONLY_QUALIFIED_MANUAL_PENDING',
             'source_sha':sha,'run_id':run,'android_api':36,
-            'targeted_run_id':str(pair['targeted_run_id']),
+            'apk_origin_mode':pair['mode'],
+            'targeted_run_id':pair['targeted_run_id'],
             'real_r3c08_readonly_device_tests':24,
             'independent_source_run_bound_evidence_sha256':proof,
             'isolated_test_provider_process_death_qualified':True,
@@ -274,6 +292,31 @@ def selftest():
         try:forbidden_elevations({**good,field:True},field)
         except Refused:continue
         raise AssertionError('false provenance accepted: '+field)
+    independent={**good,'role':'APK_INPUT_PROVENANCE_ONLY',
+                 'mode':'INDEPENDENT_HOSTED_BUILD','targeted_run_id':None,
+                 'artifact_id':None,'manifest_sha256':None}
+    reused={**independent,'mode':'EXACT_TARGETED_ARTIFACT',
+            'targeted_run_id':'456','targeted_run_attempt':'1',
+            'artifact_id':12,'manifest_sha256':'b'*64}
+    for pair in (independent,reused):validate_apk_origin(pair,source,run)
+    for pair in (
+        {**independent,'targeted_run_id':'456'},
+        {**independent,'artifact_id':12},
+        {**independent,'manifest_sha256':'b'*64},
+        {**independent,'mode':'HOSTED_LOCAL_BUILD'},
+        {**independent,'source_sha':'c'*40},
+        {**independent,'run_id':'124'},
+        {**independent,'release_qualified':True},
+        {**reused,'targeted_run_attempt':None},
+        {**reused,'artifact_id':True},
+        {**reused,'manifest_sha256':'bad'},
+        {**reused,'targeted_run_id':None},
+        {**reused,'installation_qualified':True},
+    ):
+        try:validate_apk_origin(pair,source,run)
+        except Refused:continue
+        raise AssertionError('invalid APK origin accepted: '+repr(pair))
+    print('APK_ORIGIN_MODES=2 positive, 12 negative PASS')
     need(not same({'x':1},{'x':True}),'typed JSON proof values collapse')
     try:json.loads('{"a":1,"a":2}',object_pairs_hook=duplicate_check)
     except Refused:pass

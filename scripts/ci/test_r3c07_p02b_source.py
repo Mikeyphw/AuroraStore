@@ -69,7 +69,7 @@ for required in (
     'node.isHeading',
     'node.isEnabled).isFalse()',
     'val accessibleLabel = node.text.toString()',
-    'assertThat(accessibleLabel.equals(action.text.toString(), ignoreCase = true)).isTrue()',
+    'assertThat(\n                        accessibleLabel.equals(action.text.toString(), ignoreCase = true)\n                    ).isTrue()',
     'ViewCompat.isAccessibilityHeading(it)',
     'accessibilityLiveRegion == View.ACCESSIBILITY_LIVE_REGION_POLITE',
     'ArtifactReviewPresentation.androidResult(state)',
@@ -99,7 +99,7 @@ require('local restore_failed=0' in HOST and
         'HF01: font cleanup must distinguish restored setting from original test failure')
 for case, old, new in (
     ('case-only text comparison removed',
-     'assertThat(accessibleLabel.equals(action.text.toString(), ignoreCase = true)).isTrue()',
+     'assertThat(\n                        accessibleLabel.equals(action.text.toString(), ignoreCase = true)\n                    ).isTrue()',
      'assertThat(node.text.toString()).contains("Request Android installation")'),
     ('restore success marker removed',
      'echo R3C07_P02B_FONT_RESTORE_VERIFIED_AFTER_FAILURE',
@@ -110,7 +110,7 @@ for case, old, new in (
     require(old in selected and mutated != selected,
             'HF01 mutation anchor changed: '+case)
     if case.startswith('case'):
-        require('assertThat(accessibleLabel.equals(action.text.toString(), ignoreCase = true)).isTrue()' not in mutated,
+        require('assertThat(\n                        accessibleLabel.equals(action.text.toString(), ignoreCase = true)\n                    ).isTrue()' not in mutated,
                 'HF01 unsafe case-sensitive accessibility mutation accepted')
     else:
         require(not host_ok(mutated), 'HF01 unsafe restore-result mutation accepted')

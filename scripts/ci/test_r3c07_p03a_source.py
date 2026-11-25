@@ -88,7 +88,7 @@ for label, dm, pm, tm, wm in negatives:
 ACT=(ROOT/'app/src/main/java/com/aurora/store/data/artifact/ArtifactImportActivity.kt').read_text()
 def ui_truth(s: str) -> bool:
     return all(fragment in s for fragment in (
-        'active != null -> "Provider choice alone does not authenticate this selected file.',
+        'active != null ->\n                "Provider choice alone does not authenticate this selected file.',
         '::selectButton.isInitialized && !selectButton.isEnabled ->',
         'refreshProviderPresentation()\n                        val facts = verifiedFacts(result)',
         'if (::status.isInitialized) showStatus(message)\n        refreshProviderPresentation()',
@@ -97,7 +97,7 @@ def ui_truth(s: str) -> bool:
     ))
 require(ui_truth(ACT), 'verified-file UI must replace pre-selection disclosure')
 ui_negatives=(
-    ('verified UI relabel disabled', 'active != null -> "Provider choice alone',
+    ('verified UI relabel disabled', 'active != null ->\n                "Provider choice alone',
      'active == null -> "Provider choice alone'),
     ('in-progress status omitted', '::selectButton.isInitialized && !selectButton.isEnabled ->',
      'false ->'),

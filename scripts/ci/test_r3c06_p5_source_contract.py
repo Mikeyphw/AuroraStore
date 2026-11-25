@@ -111,7 +111,7 @@ assert "r.get('foreground_activity_verified') is True" in _receipt_hf04
 # canRequestPackageInstalls() check. The same AndroidJUnitRunner test must
 # transmit an exact, uniquely attested ALLOWED status or remain unqualified.
 assert 'packageManager.canRequestPackageInstalls()' in _test_hf04
-assert 'reportStatus("r3c06_unknown_sources_effective"' in _test_hf04
+assert 'reportStatus(\n            "r3c06_unknown_sources_effective"' in _test_hf04
 assert 'require(canRequest)' in _test_hf04
 assert 'r3c06_unknown_sources_effective=ALLOWED' in _live_hf04
 assert 'emulator_unknown_sources_effective_verified' in _live_hf04

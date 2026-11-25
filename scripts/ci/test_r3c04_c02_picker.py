@@ -19,7 +19,7 @@ for token in ('ActivityResultContracts.OpenDocument()', 'picker.launch(arrayOf("
               'serial != requestSerial', 'closeWorker.execute'):
     assert token in activity, 'C04_02_HF07_REFUSED: missing activity boundary '+token
 assert activity.index('val name = selectedFilename(uri)') > activity.index('worker.execute {'),     'C04_02_HF07_REFUSED: provider metadata query moved back to UI thread'
-assert activity.index('invalidateCurrentImport("Choose a file') < activity.index('picker.launch('),     'C04_02_HF07_REFUSED: picker does not revoke old verified receipt before launch'
+assert activity.index('invalidateCurrentImport(\n                    "Choose a file') < activity.index('picker.launch('),     'C04_02_HF07_REFUSED: picker does not revoke old verified receipt before launch'
 for token in ('MAX_SOURCE_BYTES','MAX_APK_BYTES','MAX_TOTAL_APK_BYTES',
               'directory.deleteRecursively()', 'sourceCancellation?.attach(stream)',
               'sourceCancellation?.detach(stream)', 'checkActive(cancelled)',

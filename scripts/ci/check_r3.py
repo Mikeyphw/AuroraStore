@@ -33,7 +33,7 @@ manual = require("app/src/main/java/com/aurora/store/compose/ui/details/ManualDo
     'HistoricalVersionPolicy.mayConfirmDowngrade(',
     'metadataReady && !state.inProgress()',
     'remember(currentVersionCode)',
-    'canonicalVersionCode(report.versionCode.toString())',
+    'canonicalVersionCode(\n                    report.versionCode.toString()\n                )',
     'pendingDowngrade', 'r3_downgrade_warning', 'r3_downgrade_try',
     'fileList = emptyList()', 'dependentLibraries = emptyList()',
     'PackageUtil.getInstalledVersionCode(context, packageName)',

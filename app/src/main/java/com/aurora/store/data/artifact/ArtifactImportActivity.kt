@@ -10,8 +10,8 @@ import android.provider.OpenableColumns
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
-import android.widget.AdapterView
 import android.view.ViewGroup
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
@@ -25,11 +25,11 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import java.util.concurrent.Executors
-import java.io.InputStream
 
 /** Visible entry from Settings; import verification never mutates Play's Room/worker state. */
 class ArtifactImportActivity : AppCompatActivity() {
     private val worker = Executors.newSingleThreadExecutor()
+
     // Each picked document owns one cancellation/stream lease. Stale jobs cannot
     // reuse a cancellation token or publish a replacement receipt.
     private val closeWorker = Executors.newSingleThreadExecutor()
@@ -39,6 +39,7 @@ class ArtifactImportActivity : AppCompatActivity() {
             .onFailure { worker.execute { runCatching { stream.close() } } }
     }
     private var cancellation = newCancellation()
+
     // UI-thread request serial: a cancelled/older worker may never publish its result.
     private var requestSerial = 0L
     private var active: ArtifactApkVerifier.VerifiedImport? = null
@@ -67,14 +68,16 @@ class ArtifactImportActivity : AppCompatActivity() {
     private lateinit var historicalReferencesStatus: TextView
     private val historicalReferences = mutableListOf<ArtifactHistoricalVersionPolicy.Reference>()
     private var activePreflight: ArtifactHistoricalVersionPolicy.DevicePreflight? = null
+
     // A source claim is valid only for the exact successful browser launch and selection.
     // Never persist raw URLs or use a browser navigation as publisher authentication.
     private var lastBrowserLaunch: ArtifactHandoffClaimPolicy.BrowserLaunch? = null
     private val providers = ArtifactProviderDiscovery.Provider.entries
     private val options = providers.map { it.title }
     private val picker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) handlePickedFile(uri)
-        else {
+        if (uri != null) {
+            handlePickedFile(uri)
+        } else {
             // Dismissal revokes verified bytes, consent and the cancellation
             // lease. Keep the existing P03B manual retry affordance intact.
             invalidateCurrentImport("Document picker closed. No file selected or installed.")
@@ -108,14 +111,27 @@ class ArtifactImportActivity : AppCompatActivity() {
         )
         sources = Spinner(this).apply {
             contentDescription = "Import source or provider"
-            adapter = ArrayAdapter(this@ArtifactImportActivity, android.R.layout.simple_spinner_dropdown_item, options)
+            adapter =
+                ArrayAdapter(
+                    this@ArtifactImportActivity,
+                    android.R.layout.simple_spinner_dropdown_item,
+                    options
+                )
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                override fun onItemSelected(
+                    parent: AdapterView<*>?,
+                    view: View?,
+                    position: Int,
+                    id: Long
+                ) {
                     // Never carry a verified selection or browser claim across sources.
-                    if (lastProviderIndex != -1 && lastProviderIndex != position &&
+                    if (lastProviderIndex != -1 &&
+                        lastProviderIndex != position &&
                         ::status.isInitialized
                     ) {
-                        invalidateCurrentImport("Provider changed. Select a new file for verification.")
+                        invalidateCurrentImport(
+                            "Provider changed. Select a new file for verification."
+                        )
                     }
                     lastProviderIndex = position
                     lastBrowserLaunch = null
@@ -131,7 +147,8 @@ class ArtifactImportActivity : AppCompatActivity() {
         }
         column.addView(sources)
         sourceUrl = EditText(this).apply {
-            contentDescription = "Provider reference for browser navigation; not APK publisher proof"
+            contentDescription =
+                "Provider reference for browser navigation; not APK publisher proof"
             hint = "HTTPS page to open in browser (optional)"
             inputType = android.text.InputType.TYPE_CLASS_TEXT or
                 android.text.InputType.TYPE_TEXT_VARIATION_URI
@@ -140,12 +157,19 @@ class ArtifactImportActivity : AppCompatActivity() {
                 override fun afterTextChanged(s: Editable?) {
                     if (lastBrowserLaunch?.exactInput != s?.toString()) lastBrowserLaunch = null
                     // Editing a source after verification cannot silently relabel an import.
-                    if (active != null || (::selectButton.isInitialized && !selectButton.isEnabled)) {
+                    if (active != null ||
+                        (::selectButton.isInitialized && !selectButton.isEnabled)
+                    ) {
                         invalidateCurrentImport("Source changed. Verify the selected file again.")
                     }
                 }
 
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun beforeTextChanged(
+                    s: CharSequence?,
+                    start: Int,
+                    count: Int,
+                    after: Int
+                ) {}
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             })
         }
@@ -159,11 +183,18 @@ class ArtifactImportActivity : AppCompatActivity() {
                 override fun afterTextChanged(s: Editable?) {
                     // A different requested version invalidates previously verified
                     // consent or an in-flight copy; do not reuse a stale session.
-                    if (active != null || (::selectButton.isInitialized && !selectButton.isEnabled)) {
+                    if (active != null ||
+                        (::selectButton.isInitialized && !selectButton.isEnabled)
+                    ) {
                         invalidateCurrentImport("Version reference changed. Verify a new file.")
                     }
                 }
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun beforeTextChanged(
+                    s: CharSequence?,
+                    start: Int,
+                    count: Int,
+                    after: Int
+                ) {}
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             })
         }
@@ -178,26 +209,42 @@ class ArtifactImportActivity : AppCompatActivity() {
                 override fun afterTextChanged(s: Editable?) {
                     // A package change invalidates old manual references and signed consent.
                     historicalReferences.clear()
-                    if (active != null || (::selectButton.isInitialized && !selectButton.isEnabled)) {
-                        invalidateCurrentImport("Requested package changed. Select and verify a new file.")
+                    if (active != null ||
+                        (::selectButton.isInitialized && !selectButton.isEnabled)
+                    ) {
+                        invalidateCurrentImport(
+                            "Requested package changed. Select and verify a new file."
+                        )
                     }
                     refreshHistoricalReferences()
                 }
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun beforeTextChanged(
+                    s: CharSequence?,
+                    start: Int,
+                    count: Int,
+                    after: Int
+                ) {}
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             })
         }
         column.addView(requestedPackage)
-        historicalReferencesStatus = label("Historical versions: no manually discovered references yet.")
+        historicalReferencesStatus =
+            label("Historical versions: no manually discovered references yet.")
         historicalReferencesStatus.setTextIsSelectable(true)
-        column.addView(Button(this).apply {
-            text = "Record manual historical-version reference"
-            setOnClickListener { recordHistoricalReference() }
-        })
+        column.addView(
+            Button(this).apply {
+                text = "Record manual historical-version reference"
+                setOnClickListener { recordHistoricalReference() }
+            }
+        )
         refreshHistoricalReferences()
-        label("Historical-version reference only: this does not search providers or prove availability. " +
-            "Enter an exact version code; the signed APK selected with Android's picker must match. " +
-            "No automatic download or historical-version installation occurs.")
+        label(
+            "Historical-version reference only: this does not search providers or prove " +
+                "availability. " +
+                "Enter an exact version code; the signed APK selected with Android's picker " +
+                "must match. " +
+                "No automatic download or historical-version installation occurs."
+        )
         apkPureEnabled = CheckBox(this).apply {
             text = "Enable APKPure browser handoff (off by default)"
             isChecked = getSharedPreferences("artifact_source_preferences", MODE_PRIVATE)
@@ -210,7 +257,8 @@ class ArtifactImportActivity : AppCompatActivity() {
         }
         column.addView(apkPureEnabled)
         alternativeConsent = CheckBox(this).apply {
-            text = "I explicitly choose this alternative provider for this browser visit (no automatic fallback)"
+            text =
+                "I explicitly choose this alternative provider for this browser visit (no automatic fallback)"
             isChecked = false
             setOnCheckedChangeListener { _, checked ->
                 if (!checked) lastBrowserLaunch = null
@@ -218,20 +266,26 @@ class ArtifactImportActivity : AppCompatActivity() {
         }
         column.addView(alternativeConsent)
         fossAcknowledgement = CheckBox(this).apply {
-            text = "This is a FOSS app; I understand F-Droid signatures may differ from installed copies"
+            text =
+                "This is a FOSS app; I understand F-Droid signatures may differ from installed copies"
             isChecked = false
             setOnCheckedChangeListener { _, checked ->
                 if (!checked) lastBrowserLaunch = null
             }
         }
         column.addView(fossAcknowledgement)
-        providerStatus = label("Provider not selected. Availability is UNKNOWN until checked at the provider.").apply {
-            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
-        }
-        column.addView(Button(this).apply {
-            text = "Open chosen provider (manual browser handoff)"
-            setOnClickListener { openSourceInBrowser() }
-        })
+        providerStatus =
+            label(
+                "Provider not selected. Availability is UNKNOWN until checked at the provider."
+            ).apply {
+                accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+            }
+        column.addView(
+            Button(this).apply {
+                text = "Open chosen provider (manual browser handoff)"
+                setOnClickListener { openSourceInBrowser() }
+            }
+        )
         label(
             "Browser links are manual handoffs, not direct downloads or trusted publisher " +
                 "proof. F-Droid may use a different signing key. APKPure is off by default. " +
@@ -242,7 +296,10 @@ class ArtifactImportActivity : AppCompatActivity() {
         selectButton = Button(this).apply {
             text = "Choose downloaded file"
             setOnClickListener {
-                invalidateCurrentImport("Choose a file in Android's document picker.", preserveBrowserClaim = true)
+                invalidateCurrentImport(
+                    "Choose a file in Android's document picker.",
+                    preserveBrowserClaim = true
+                )
                 // The OS SAF picker owns document permission; do not use raw filesystem paths.
                 runCatching { picker.launch(arrayOf("*/*")) }.onFailure {
                     lastBrowserLaunch = null
@@ -262,15 +319,17 @@ class ArtifactImportActivity : AppCompatActivity() {
             }
         }
         column.addView(retryButton)
-        column.addView(Button(this).apply {
-            text = "Cancel current import"
-            setOnClickListener {
-                invalidateCurrentImport(
-                    "Import cancelled. An already committed Android session may continue."
-                )
-                offerManualRetry()
+        column.addView(
+            Button(this).apply {
+                text = "Cancel current import"
+                setOnClickListener {
+                    invalidateCurrentImport(
+                        "Import cancelled. An already committed Android session may continue."
+                    )
+                    offerManualRetry()
+                }
             }
-        })
+        )
         status = label("Select an APK or bundle to verify before installing.").apply {
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
@@ -282,23 +341,32 @@ class ArtifactImportActivity : AppCompatActivity() {
             setOnClickListener {
                 val expanding = technicalReceipt.visibility != View.VISIBLE
                 technicalReceipt.visibility = if (expanding) View.VISIBLE else View.GONE
-                text = if (expanding) "Hide technical verification details"
-                    else "Show technical verification details"
+                text = if (expanding) {
+                    "Hide technical verification details"
+                } else {
+                    "Show technical verification details"
+                }
             }
         }
         column.addView(receiptToggle)
-        technicalReceipt = label("Technical verification details unavailable until a file is verified.").apply {
-            visibility = View.GONE
-            setTextIsSelectable(true)
-        }
+        technicalReceipt =
+            label("Technical verification details unavailable until a file is verified.").apply {
+                visibility = View.GONE
+                setTextIsSelectable(true)
+            }
         heading("Android installation outcome")
         lastReceipt = label(ArtifactInstallSession.lastResult(this)).apply {
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
-        column.addView(Button(this).apply {
-            text = "Refresh Android install outcome"
-            setOnClickListener { lastReceipt.text = ArtifactInstallSession.lastResult(this@ArtifactImportActivity) }
-        })
+        column.addView(
+            Button(this).apply {
+                text = "Refresh Android install outcome"
+                setOnClickListener {
+                    lastReceipt.text =
+                        ArtifactInstallSession.lastResult(this@ArtifactImportActivity)
+                }
+            }
+        )
         heading("Installation permissions for this verified file")
         installConsent = CheckBox(this).apply {
             text = "I approve installation of the verified package and version shown above"
@@ -306,7 +374,8 @@ class ArtifactImportActivity : AppCompatActivity() {
             setOnCheckedChangeListener { _, _ -> updateConsentState() }
         }
         unknownPublisherConsent = CheckBox(this).apply {
-            text = "I accept installing a signed APK whose publisher identity is not independently verified"
+            text =
+                "I accept installing a signed APK whose publisher identity is not independently verified"
             visibility = View.GONE
             setOnCheckedChangeListener { _, _ -> updateConsentState() }
         }
@@ -321,7 +390,9 @@ class ArtifactImportActivity : AppCompatActivity() {
         column.addView(unknownPublisherConsent)
         column.addView(downgradeConsent)
         dataRiskAcknowledgement = CheckBox(this).apply {
-            text = "I understand that downgrading can make app data inaccessible or cause data loss. " +
+            text =
+                "I understand that downgrading can make app data inaccessible or cause data " +
+                "loss. " +
                 "AuroraStore has NOT verified a backup; I must check my own backups first."
             visibility = View.GONE
             setOnCheckedChangeListener { _, _ -> updateConsentState() }
@@ -337,10 +408,13 @@ class ArtifactImportActivity : AppCompatActivity() {
         // targetSdk 37 enforces edge-to-edge; keep review/consent outside system bars.
         val scroll = ScrollView(this).apply {
             isFillViewport = true
-            addView(column, ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ))
+            addView(
+                column,
+                ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            )
         }
         ViewCompat.setOnApplyWindowInsetsListener(scroll) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -382,12 +456,17 @@ class ArtifactImportActivity : AppCompatActivity() {
         val code = requestedVersion.text.toString()
         val claim = ArtifactHistoricalVersionPolicy.reference(pkg, code, claimSource)
         if (claim == null) {
-            showStatus("Enter a valid exact package ID and positive version code to record a reference.")
+            showStatus(
+                "Enter a valid exact package ID and positive version code to record a reference."
+            )
             return
         }
         if (historicalReferences.size >= 64 ||
-            historicalReferences.any { it.versionCode == claim.versionCode }) {
-            showStatus("Manual history list is full or contains a competing reference for this version.")
+            historicalReferences.any { it.versionCode == claim.versionCode }
+        ) {
+            showStatus(
+                "Manual history list is full or contains a competing reference for this version."
+            )
             return
         }
         val next = ArtifactHistoricalVersionPolicy.shortlist(pkg, historicalReferences + claim)
@@ -397,7 +476,9 @@ class ArtifactImportActivity : AppCompatActivity() {
         }
         historicalReferences.add(claim)
         refreshHistoricalReferences()
-        showStatus("Manual historical reference recorded (not provider-verified). No APK downloaded.")
+        showStatus(
+            "Manual historical reference recorded (not provider-verified). No APK downloaded."
+        )
     }
 
     private fun refreshHistoricalReferences() {
@@ -416,25 +497,42 @@ class ArtifactImportActivity : AppCompatActivity() {
         }
     }
 
-    private fun historicalPreflight(verified: ArtifactApkVerifier.VerifiedImport):
-        ArtifactHistoricalVersionPolicy.DevicePreflight {
+    private fun historicalPreflight(
+        verified: ArtifactApkVerifier.VerifiedImport
+    ): ArtifactHistoricalVersionPolicy.DevicePreflight {
         // Only private, independently verified APKs enter this code path.
         val baseIndex = verified.splitNames.indexOf(null)
         val base = verified.files.getOrNull(baseIndex)
         val archive = base?.let {
-            runCatching { packageManager.getPackageArchiveInfo(it.file.absolutePath, 0) }.getOrNull()
+            runCatching {
+                packageManager.getPackageArchiveInfo(it.file.absolutePath, 0)
+            }.getOrNull()
         }
-        val declaredMin = archive?.takeIf {
-            it.packageName == verified.attempt.packageName
-        }?.applicationInfo?.minSdkVersion
+        // ApplicationInfo.minSdkVersion is public from API 24 only.
+        // On API 23, unknown metadata remains UNKNOWN rather than guessed compatible.
+        val declaredMin = if (android.os.Build.VERSION.SDK_INT >=
+            android.os.Build.VERSION_CODES.N
+        ) {
+            archive?.takeIf {
+                it.packageName == verified.attempt.packageName
+            }?.applicationInfo?.minSdkVersion
+        } else {
+            null
+        }
         val signedSplitCheck = runCatching {
             ArtifactSplitCompatibilityPolicy.check(
-                verified.staged.format, verified.splitNames, android.os.Build.SUPPORTED_ABIS.toList())
+                verified.staged.format,
+                verified.splitNames,
+                android.os.Build.SUPPORTED_ABIS.toList()
+            )
         }.getOrNull()
         return ArtifactHistoricalVersionPolicy.preflight(
-            declaredMin, android.os.Build.VERSION.SDK_INT,
+            declaredMin,
+            android.os.Build.VERSION.SDK_INT,
             signedSplitCheck?.selectedAbiQualifier,
-            android.os.Build.SUPPORTED_ABIS.toList(), signedSplitCheck != null)
+            android.os.Build.SUPPORTED_ABIS.toList(),
+            signedSplitCheck != null
+        )
     }
 
     private fun selectedProvider(): ArtifactProviderDiscovery.Provider =
@@ -448,28 +546,36 @@ class ArtifactImportActivity : AppCompatActivity() {
         val choice = selectedProvider()
         sources.contentDescription = "Import source or provider: ${choice.title}"
         providerStatus.text = choice.explanation + "\n" + when {
-            active != null -> "Provider choice alone does not authenticate this selected file. " +
-                "The verified file receipt below is authoritative for bytes, signer and installed status."
+            active != null ->
+                "Provider choice alone does not authenticate this selected file. " +
+                    "The verified file receipt below is authoritative for bytes, signer and installed status."
             ::selectButton.isInitialized && !selectButton.isEnabled ->
                 "Document selected; verification in progress. Installation NOT approved."
             else -> ArtifactProviderDiscovery.status(choice)
         }
         sourceUrl.hint = when (choice) {
-            ArtifactProviderDiscovery.Provider.GOOGLE_PLAY -> "Exact Android package ID (e.g. org.example.app)"
-            ArtifactProviderDiscovery.Provider.LOCAL_DOCUMENT -> "No provider URL needed for local documents"
+            ArtifactProviderDiscovery.Provider.GOOGLE_PLAY ->
+                "Exact Android package ID (e.g. org.example.app)"
+            ArtifactProviderDiscovery.Provider.LOCAL_DOCUMENT ->
+                "No provider URL needed for local documents"
             else -> "Allowed HTTPS provider page (not a direct APK URL)"
         }
         alternativeConsent.visibility = if (choice.isAlternative) View.VISIBLE else View.GONE
         fossAcknowledgement.visibility = if (choice == ArtifactProviderDiscovery.Provider.FDROID) {
             View.VISIBLE
-        } else View.GONE
+        } else {
+            View.GONE
+        }
         apkPureEnabled.visibility = if (choice == ArtifactProviderDiscovery.Provider.APKPURE) {
             View.VISIBLE
-        } else View.GONE
+        } else {
+            View.GONE
+        }
     }
 
-    private fun verifiedFacts(verified: ArtifactApkVerifier.VerifiedImport):
-        ArtifactReviewPresentation.VerifiedFacts {
+    private fun verifiedFacts(
+        verified: ArtifactApkVerifier.VerifiedImport
+    ): ArtifactReviewPresentation.VerifiedFacts {
         val receipt = ArtifactIndependentEvidence.fromVerifiedImport(verified)
         return ArtifactReviewPresentation.VerifiedFacts(
             receipt.provenance,
@@ -503,13 +609,17 @@ class ArtifactImportActivity : AppCompatActivity() {
         if (::review.isInitialized) review.text = "No verified files."
         if (::technicalReceipt.isInitialized) {
             technicalReceipt.visibility = View.GONE
-            technicalReceipt.text = "Technical verification details unavailable until a file is verified."
+            technicalReceipt.text =
+                "Technical verification details unavailable until a file is verified."
         }
         if (::receiptToggle.isInitialized) {
             receiptToggle.visibility = View.GONE
             receiptToggle.text = "Show technical verification details"
         }
-        if (::consentHint.isInitialized) consentHint.text = "Consent options appear after verification."
+        if (::consentHint.isInitialized) {
+            consentHint.text =
+                "Consent options appear after verification."
+        }
         if (::retryButton.isInitialized) retryButton.visibility = View.GONE
         if (::status.isInitialized) showStatus(message)
         refreshProviderPresentation()
@@ -524,13 +634,25 @@ class ArtifactImportActivity : AppCompatActivity() {
         installConsent.visibility = View.VISIBLE
         unknownPublisherConsent.visibility = if (
             ArtifactReviewPresentation.consentNeedsUnknownPublisher(facts)
-        ) View.VISIBLE else View.GONE
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
         downgradeConsent.visibility = if (
             ArtifactReviewPresentation.consentNeedsDowngrade(facts)
-        ) View.VISIBLE else View.GONE
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
         dataRiskAcknowledgement.visibility = if (
             ArtifactReviewPresentation.consentNeedsDataRisk(facts)
-        ) View.VISIBLE else View.GONE
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
         updateConsentState()
     }
 
@@ -561,20 +683,33 @@ class ArtifactImportActivity : AppCompatActivity() {
         }
         val blockers = decisionFor(verified)
         val versionMatches = ArtifactImportJourney.versionMatches(
-            requestedVersion.text.toString(), verified.attempt.versionCode)
+            requestedVersion.text.toString(),
+            verified.attempt.versionCode
+        )
         val packageMatches = ArtifactHistoricalVersionPolicy.matchesVerifiedPackage(
-            requestedPackage.text.toString(), verified.attempt.packageName)
+            requestedPackage.text.toString(),
+            verified.attempt.packageName
+        )
         val preflight = activePreflight
-        installButton.isEnabled = blockers.isEmpty() && versionMatches && packageMatches &&
+        installButton.isEnabled = blockers.isEmpty() &&
+            versionMatches &&
+            packageMatches &&
             preflight != null &&
             preflight.compatibility != ArtifactHistoricalVersionPolicy.Compatibility.INCOMPATIBLE
         consentHint.text = if (!packageMatches) {
             "Selected APK package does not match the manually requested package. Installation blocked."
-        } else if (preflight == null || preflight.compatibility == ArtifactHistoricalVersionPolicy.Compatibility.INCOMPATIBLE) {
+        } else if (preflight == null ||
+            preflight.compatibility == ArtifactHistoricalVersionPolicy.Compatibility.INCOMPATIBLE
+        ) {
             ArtifactHistoricalVersionPolicy.displayPreflight(preflight)
         } else if (!versionMatches) {
-            ArtifactImportJourney.versionMessage(requestedVersion.text.toString(), verified.attempt.versionCode)
-        } else ArtifactReviewPresentation.blockerDescription(blockers)
+            ArtifactImportJourney.versionMessage(
+                requestedVersion.text.toString(),
+                verified.attempt.versionCode
+            )
+        } else {
+            ArtifactReviewPresentation.blockerDescription(blockers)
+        }
     }
 
     private fun openSourceInBrowser() {
@@ -583,8 +718,10 @@ class ArtifactImportActivity : AppCompatActivity() {
         val provider = selectedProvider()
         val enteredUrl = sourceUrl.text.toString()
         val plan = ArtifactProviderDiscovery.decide(
-            provider, enteredUrl,
-            alternativeConsent.isChecked, apkPureEnabled.isChecked,
+            provider,
+            enteredUrl,
+            alternativeConsent.isChecked,
+            apkPureEnabled.isChecked,
             fossAcknowledgement.isChecked
         )
         when (plan) {
@@ -594,27 +731,37 @@ class ArtifactImportActivity : AppCompatActivity() {
                     selectButton.performClick()
                     return
                 }
-                val page = plan.url ?: return showStatus("No verified provider URL; nothing opened.")
+                val page =
+                    plan.url ?: return showStatus("No verified provider URL; nothing opened.")
                 runCatching {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(page.toASCIIString())).apply {
-                        addCategory(Intent.CATEGORY_BROWSABLE)
-                    })
+                    startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse(page.toASCIIString())).apply {
+                            addCategory(Intent.CATEGORY_BROWSABLE)
+                        }
+                    )
                     if (plan.route == ArtifactProviderDiscovery.Route.EXTERNAL_PROVIDER_PAGE) {
                         // This is only a time-bounded navigation claim; no file's actual
                         // origin, developer identity or signing key has been established.
                         val handoff = ArtifactSourceHandoff.parse(
-                            enteredUrl, selectedSource(), apkPureEnabled.isChecked
+                            enteredUrl,
+                            selectedSource(),
+                            apkPureEnabled.isChecked
                         ) ?: error("Provider page no longer passes HTTPS validation")
-                        lastBrowserLaunch = ArtifactHandoffClaimPolicy.afterSuccessfulLaunch(enteredUrl, handoff)
+                        lastBrowserLaunch =
+                            ArtifactHandoffClaimPolicy.afterSuccessfulLaunch(enteredUrl, handoff)
                     }
-                    showStatus(if (plan.route == ArtifactProviderDiscovery.Route.PLAY_LISTING) {
-                        "Google Play listing opened. Version availability and Play delivery are not established here."
-                    } else {
-                        "Provider page opened in browser. Download manually, then use Android's picker; publisher is unverified."
-                    })
+                    showStatus(
+                        if (plan.route == ArtifactProviderDiscovery.Route.PLAY_LISTING) {
+                            "Google Play listing opened. Version availability and Play delivery are not established here."
+                        } else {
+                            "Provider page opened in browser. Download manually, then use Android's picker; publisher is unverified."
+                        }
+                    )
                 }.onFailure {
                     lastBrowserLaunch = null
-                    showStatus("Provider browser is unavailable. No file was downloaded or installed.")
+                    showStatus(
+                        "Provider browser is unavailable. No file was downloaded or installed."
+                    )
                 }
             }
         }
@@ -622,7 +769,13 @@ class ArtifactImportActivity : AppCompatActivity() {
 
     /** SAF metadata is untrusted and its provider may stall; never query on the UI thread. */
     private fun selectedFilename(uri: Uri): String {
-        val cursor = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+        val cursor = contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null
+        )
         val name = cursor?.use { result ->
             if (result.moveToFirst()) result.getString(0) else null
         }
@@ -661,7 +814,9 @@ class ArtifactImportActivity : AppCompatActivity() {
                 val name = selectedFilename(uri)
                 if (ticket.isCancelled()) throw IllegalStateException("Import cancelled")
                 val provenance = ArtifactHandoffClaimPolicy.selection(
-                    selected = source, enteredUrl = enteredUrl, apkPureOptIn = optIn,
+                    selected = source,
+                    enteredUrl = enteredUrl,
+                    apkPureOptIn = optIn,
                     launched = launched,
                     untrustedFilename = ArtifactPickerPolicy.safeDisplayLabel(name),
                     alternativeConsent = alternativeApproved,
@@ -681,7 +836,11 @@ class ArtifactImportActivity : AppCompatActivity() {
                 // never on the UI thread. It is derived from the verified staged bytes.
                 val preflight = historicalPreflight(result)
                 runOnUiThread {
-                    if (serial != requestSerial || ticket.isCancelled() || isFinishing || isDestroyed) {
+                    if (serial != requestSerial ||
+                        ticket.isCancelled() ||
+                        isFinishing ||
+                        isDestroyed
+                    ) {
                         result.discard()
                     } else {
                         active?.discard()
@@ -699,7 +858,9 @@ class ArtifactImportActivity : AppCompatActivity() {
                         // A successful verification removes stale retry prompts; manual
                         // selection and source-specific provenance remain visible.
                         retryButton.visibility = View.GONE
-                        showStatus("APK signature checks passed. Review the receipt and required approvals; NOT installed.")
+                        showStatus(
+                            "APK signature checks passed. Review the receipt and required approvals; NOT installed."
+                        )
                     }
                 }
             } catch (error: Exception) {
@@ -707,8 +868,10 @@ class ArtifactImportActivity : AppCompatActivity() {
                 runOnUiThread {
                     if (serial == requestSerial && !isDestroyed && !ticket.isCancelled()) {
                         selectButton.isEnabled = true
-                        clearReview("Import refused. The selected file could not be verified. " +
-                            ArtifactImportJourney.failureMessage(error))
+                        clearReview(
+                            "Import refused. The selected file could not be verified. " +
+                                ArtifactImportJourney.failureMessage(error)
+                        )
                         offerManualRetry()
                     }
                 }
@@ -725,23 +888,37 @@ class ArtifactImportActivity : AppCompatActivity() {
         val decision = decisionFor(receipt)
         // A disabled button alone is never an authorization boundary.
         if (!ArtifactHistoricalVersionPolicy.matchesVerifiedPackage(
-                requestedPackage.text.toString(), receipt.attempt.packageName) ||
+                requestedPackage.text.toString(),
+                receipt.attempt.packageName
+            ) ||
             activePreflight == null ||
             activePreflight?.compatibility ==
-                ArtifactHistoricalVersionPolicy.Compatibility.INCOMPATIBLE) {
-            showStatus("Requested package mismatch or known device incompatibility; installation blocked.")
+            ArtifactHistoricalVersionPolicy.Compatibility.INCOMPATIBLE
+        ) {
+            showStatus(
+                "Requested package mismatch or known device incompatibility; installation blocked."
+            )
             return
         }
         // Button disablement is presentation, not authorization. Guard the
         // actual install entry point against a mismatched version reference.
         if (!ArtifactImportJourney.versionMatches(
-                requestedVersion.text.toString(), receipt.attempt.versionCode)) {
-            showStatus(ArtifactImportJourney.versionMessage(
-                requestedVersion.text.toString(), receipt.attempt.versionCode))
+                requestedVersion.text.toString(),
+                receipt.attempt.versionCode
+            )
+        ) {
+            showStatus(
+                ArtifactImportJourney.versionMessage(
+                    requestedVersion.text.toString(),
+                    receipt.attempt.versionCode
+                )
+            )
             return
         }
         if (decision.isNotEmpty()) {
-            showStatus("Installation blocked: ${ArtifactReviewPresentation.blockerDescription(decision)}")
+            showStatus(
+                "Installation blocked: ${ArtifactReviewPresentation.blockerDescription(decision)}"
+            )
             return
         }
         installButton.isEnabled = false
@@ -751,15 +928,27 @@ class ArtifactImportActivity : AppCompatActivity() {
         showStatus("Sending verified APK bytes to Android PackageInstaller")
         worker.execute {
             runCatching {
-                ArtifactInstallSession.install(this, receipt, approved, unknown, downgrade, dataRisk) { ticket.isCancelled() }
+                ArtifactInstallSession.install(
+                    this,
+                    receipt,
+                    approved,
+                    unknown,
+                    downgrade,
+                    dataRisk
+                ) {
+                    ticket.isCancelled()
+                }
             }.onSuccess { session ->
                 runOnUiThread {
                     if (serial == requestSerial) {
                         active = null
                         if (!isDestroyed) {
                             selectButton.isEnabled = true
-                            clearReview("Android install request submitted; final outcome NOT confirmed (session $session).")
-                            lastReceipt.text = ArtifactInstallSession.lastResult(this@ArtifactImportActivity)
+                            clearReview(
+                                "Android install request submitted; final outcome NOT confirmed (session $session)."
+                            )
+                            lastReceipt.text =
+                                ArtifactInstallSession.lastResult(this@ArtifactImportActivity)
                         }
                     }
                 }
@@ -770,7 +959,9 @@ class ArtifactImportActivity : AppCompatActivity() {
                         active = null
                         if (!isDestroyed) {
                             selectButton.isEnabled = true
-                            clearReview("Android install request was refused before confirmation. No installation success is claimed; verify the file again.")
+                            clearReview(
+                                "Android install request was refused before confirmation. No installation success is claimed; verify the file again."
+                            )
                         }
                     }
                 }

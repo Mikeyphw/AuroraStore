@@ -53,9 +53,9 @@ def safe_source(workflow:str,runner:str,host:str,p04:str,device:str)->bool:
         "'fixture_package':upstream.PACKAGE" in p04,
         '--logs "$RUNNER_TEMP/aurora-r3c03-c02"' in workflow,
         device.count('@Test fun ')==2,
-        'getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)' in device,
+        'getUiAutomation(\n            UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES\n        )' in device,
         'AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED' in device,
-        'manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)' in device,
+        'manager.getEnabledAccessibilityServiceList(\n            AccessibilityServiceInfo.FEEDBACK_ALL_MASK\n        )' in device,
         'automation.injectInputEvent(event, true)' in device,
         'assertThat(focused[0]).isNotEqualTo(focused[1])' in device,
     ))

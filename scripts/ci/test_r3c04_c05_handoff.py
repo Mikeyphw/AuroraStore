@@ -32,7 +32,7 @@ for marker in ('lastBrowserLaunch = null',
                'ArtifactHandoffClaimPolicy.selection(',
                'ArtifactPickerPolicy.safeDisplayLabel(name)',
                'ActivityResultContracts.OpenDocument()',
-               'startActivity(Intent(Intent.ACTION_VIEW',
+               'startActivity(\n                        Intent(Intent.ACTION_VIEW',
                'apkpure_opt_in", false', 'ArtifactInstallSession.install('):
     check(marker in ui, 'missing UI handoff or picker/installer guard: ' + marker)
 check('provenanceHost' not in ui, 'old unbound host survived')

@@ -63,7 +63,7 @@ def downgrade(s):return all(x in s for x in (
     'installedVersionCode != null && installedVersionCode <= 0L',
     'candidateVersionCode < installedVersionCode -> Relation.DOWNGRADE',
     'installedSignerMatches != true,',
-    'kind == Relation.DOWNGRADE, kind == Relation.DOWNGRADE',
+    'kind == Relation.DOWNGRADE,\n            kind == Relation.DOWNGRADE',
     'separateDataRiskAcknowledgementRequired: Boolean = false',
     'AuroraStore has NOT verified any backup',
     'Back up important app data',
@@ -122,7 +122,7 @@ need('Historical-version reference only' in ui and
      'ArtifactReviewPresentation.consentNeedsDataRisk(facts)' in ui and
      'userAcknowledgedDataLossRisk = dataRiskAcknowledgement.isChecked' in ui and
      'val dataRisk = dataRiskAcknowledgement.isChecked' in ui and
-     'approved, unknown, downgrade, dataRisk)' in ui,
+     'approved,\n                    unknown,\n                    downgrade,\n                    dataRisk\n                )' in ui,
      'visible review, stale invalidation or independent installed signer gate missing')
 need('approvedDataLossRisk: Boolean = false' in session and
      'userAcknowledgedDataLossRisk = approvedDataLossRisk' in session and
@@ -182,7 +182,7 @@ negatives=[
  ('historical-no-cross-package',h,'entries.any { it.packageName != packageName }','false',historical),
  ('historical-no-match',h,'signedVersion <= 0L || signedVersion != version','signedVersion <= 0L',historical),
  ('downgrade-assumes-data-safety',d,'val dataPreservationGuaranteed: Boolean = false','val dataPreservationGuaranteed: Boolean = true',downgrade),
- ('downgrade-accept-unknown-signer',d,'kind, installedSignerMatches != true,','kind, false,',downgrade),
+ ('downgrade-accept-unknown-signer',d,'kind,\n            installedSignerMatches != true,','kind, false,',downgrade),
  ('downgrade-disables-risk',d,'Back up important app data','Nothing to back up',downgrade),
  ('downgrade-permit-root',d,'val privilegedBypassAllowed: Boolean = false','val privilegedBypassAllowed: Boolean = true',downgrade),
  ('downgrade-missing-installed-state',d,'installedVersionCode == null && installedSignerMatches != null','false',downgrade),
@@ -213,7 +213,7 @@ def p02_ui_guard(x):return x.count('dataRiskAcknowledgement.isChecked = false')=
 
     'ArtifactReviewPresentation.consentNeedsDataRisk(facts)',
     'userAcknowledgedDataLossRisk = dataRiskAcknowledgement.isChecked',
-    'approved, unknown, downgrade, dataRisk)'))
+    'approved,\n                    unknown,\n                    downgrade,\n                    dataRisk\n                )'))
 wiring_negatives=[
  ('risk-authorizer-omitted',decision,'!review.userAcknowledgedDataLossRisk','false',p02_decision_guard),
  ('risk-blocker-removed',decision,'Blocker.DOWNGRADE_DATA_LOSS_RISK_ACK_REQUIRED','Blocker.DOWNGRADE_CONSENT_REQUIRED',p02_decision_guard),

@@ -75,8 +75,7 @@ def check_test(s):
                           'import androidx.compose.ui.test.assertDoesNotExist\n'):
   need(forbidden_import not in s, 'INVALID_COMPOSE_TEST_IMPORT')
  # DetailsPortalCard requires the onClick lambda: no default exists.
- need(s.count('icon = painterResource(R.drawable.ic_apps),\n'
-              '                                    onClick = {})')==1,
+ need(s.count('icon = painterResource(R.drawable.ic_apps),\n                                    onClick = {}\n                                )')==1,
       'DETAILS_PORTAL_REQUIRED_ONCLICK')
  need(s.count('onPrimaryAction = { actions++ }')==1,'CALLBACK_ISOLATION')
  # HF03: A single-cluster StreamCarousel renders flat app cards without its

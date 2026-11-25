@@ -40,7 +40,7 @@ need('fun family(source: ArtifactSource)' in origin and
      'return ArtifactOriginAssurance.UNVERIFIED_SOURCE_CLAIM' in origin,
      'browser source selection must remain claim-only')
 need('private constructor(' in origin and
-     'fun fromVerifiedImport(imported: ArtifactApkVerifier.VerifiedImport)' in origin and
+     'fun fromVerifiedImport(\n            imported: ArtifactApkVerifier.VerifiedImport\n        )' in origin and
      'require(imported.signerSha256.isNotEmpty()' in origin and
      'apks.map { it.sha256 }' in origin and
      'attempt.attemptGeneration' in origin and

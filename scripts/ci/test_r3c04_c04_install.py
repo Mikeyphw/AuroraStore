@@ -30,7 +30,7 @@ for key in ('approvedInstall: Boolean','userApprovedInstall = approvedInstall',
             'if (cancelled()) throw ApkVerificationException("Import cancelled before commit")'):
  require(key in install,'C04 session missing '+key)
 require('userApprovedInstall = true' not in install,'hard-coded consent bypass')
-require('ArtifactInstallSession.install(this, receipt, approved, unknown, downgrade, dataRisk)' in activity and
+require('ArtifactInstallSession.install(\n                    this,\n                    receipt,\n                    approved,\n                    unknown,\n                    downgrade,\n                    dataRisk\n                )' in activity and
         'val dataRisk = dataRiskAcknowledgement.isChecked' in activity and
         'userAcknowledgedDataLossRisk = dataRiskAcknowledgement.isChecked' in activity and
         'approvedDataLossRisk: Boolean = false' in install and

@@ -3,6 +3,7 @@
 """R3C07 P02A source contract; true API36 evidence must come from R1D."""
 from pathlib import Path
 from xml.etree import ElementTree
+import re
 import subprocess
 import sys
 
@@ -23,7 +24,7 @@ def require(condition: bool, what: str) -> None:
 for needle in (
     'contentDescription = "Import source or provider"',
     'sources.contentDescription = "Import source or provider: ${choice.title}"',
-    'contentDescription = "Provider reference for browser navigation; not APK publisher proof"',
+    'contentDescription =\n                "Provider reference for browser navigation; not APK publisher proof"',
     'accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE',
     'ArtifactApkVerifier.verify(this, staged, provenance)',
     'ArtifactReviewPresentation.summary(facts)',
@@ -106,8 +107,10 @@ for needle in (
 ):
     require(needle in TEST, 'real UI acceptance assertion missing '+needle)
 for unsafe in ('PackageInstaller', 'install(ui).performClick()', 'adb shell pm install',
-               'startActivity(Intent', 'writeSecureSetting'):
+               'writeSecureSetting'):
     require(unsafe not in TEST, 'P02A must be non-installing/non-browsing '+unsafe)
+require(not re.search(r'\bstartActivity\s*\(\s*Intent\b', TEST),
+        'P02A must not launch an Intent')
 require(RUNNER.count('R3C07_P02A_CLASS=') == 1,
         'P02A device instrumentation graph ambiguous')
 require(RUNNER.count('R3C07_P02A_API36_UX_RECEIPT.json') == 1,

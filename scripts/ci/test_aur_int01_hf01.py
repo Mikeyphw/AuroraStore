@@ -75,7 +75,7 @@ class Hotfix(unittest.TestCase):
         self.exercise([], [], host=False, expected=2, attempts=0)
 
     def test_workflow_wiring(self):
-        for workflow in ('aurora-r1d-emulator.yml', 'aurora-r4-p13b-integrated.yml'):
+        for workflow in ('aurora-r1d-emulator.yml', 'aurora-r4-p13b-integrated.yml', 'aurora-r4-p15-apks.yml'):
             text = (ROOT / '.github/workflows' / workflow).read_text()
             self.assertEqual(text.count('bash scripts/ci/aurora-hosted-gradle-retry.sh'), 1)
         self.assertIn('python3 -B scripts/ci/test_aur_int01_hf01.py', (ROOT / '.github/workflows/aurora-targeted.yml').read_text())

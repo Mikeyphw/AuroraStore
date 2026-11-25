@@ -37,7 +37,7 @@ for needle in ('ArtifactProviderDiscovery.decide(', 'alternativeConsent.isChecke
                'ArtifactHandoffClaimPolicy.selection(',
                'nowMonotonicMs = pickedAtMonotonicMs', 'Browser links are manual handoffs',
                'ActivityResultContracts.OpenDocument()', 'unknownPublisherConsent',
-               'downgradeConsent', 'startActivity(Intent(Intent.ACTION_VIEW',
+               'downgradeConsent', 'startActivity(\n                        Intent(Intent.ACTION_VIEW',
                'lastBrowserLaunch = null'):
     need(needle in activity, 'missing actual UI/chooser integration '+needle)
 for needle in ('MAX_CLAIM_AGE_MS', 'openedAtMonotonicMs', 'alternativeConsent',

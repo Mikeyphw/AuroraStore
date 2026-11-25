@@ -94,3 +94,18 @@ head. The new local source tests check import declarations, executable P14
 markers, provider formatting and bounded retry behavior; they do not qualify
 Android compilation, ktlint, Room KSP export, emulator or physical execution.
 Do not create another consolidation PR or replay the original integration.
+### INT01-HF02 — complete Foundation/R1D/P15 source repair
+
+HF01 head `880f4d1ab754573e1d15249cc65b29c9f89a1373` passed six of nine
+hosted workflows. Foundation reported app-source formatting, API 23 lint and
+two inconsistent consent fixtures. R1D failed signoff because its independent
+hosted APK build was treated as requiring a Targeted artifact. P15 failed
+transient AGP resolution. Preserve minSdk 23 and treat unavailable minimum-SDK
+metadata as unknown; preserve both downgrade consent requirements. Accept only
+producer-compatible APK provenance modes, with explicit stale-reuse rejection
+and exact source/run/receipt bindings. Apply the existing bounded AGP-only retry
+to P15. Format application Kotlin and Kotlin-script sources with ktlint 1.5.0
+(the pinned Gradle plugin default); keep root-script ktlint 1.8.0 unchanged and
+preserve all lint rules and substantive source-contract checks. Requalify all
+nine hosted workflows on the new exact PR #7 head; no hosted result or device
+acceptance is inherited. No change to signing, merge or release authorization.

@@ -79,7 +79,7 @@ def test_guard(s):
                 'EXPLICIT_INSTALL_CONSENT_REQUIRED','DOWNGRADE_CONSENT_REQUIRED',
                 'UNANCHORED_PUBLISHER_CONSENT_REQUIRED',
                 'not proof', 'rollback',
-                'method.invoke(a, Uri.parse(',
+                'method.invoke(\n                    a,\n                    Uri.parse(',
                 'p02_remoteProviderDeathRefusesImportAndRestartsInNewProcess',
                 'acquireUnstableContentProviderClient(crash)',
                 'unstable.openFile(crash, "r")',
@@ -157,8 +157,8 @@ check('if (crashGranted) request("revoke_crash")' in test and
       'target.contentResolver.openInputStream(signed)' in test and
       'waitFor' not in test, # use awaitLabel and bounded retries; avoid blocking activity thread
       'real provider death/recovery and cleanup not exercised')
-check('method.invoke(activity, Uri.parse(' not in test and
-      'method.invoke(a, Uri.parse(' in test,
+check(not re.search(r'\bmethod\.invoke\s*\(\s*activity\s*,\s*Uri\.parse\s*\(', test) and
+      'method.invoke(\n                    a,\n                    Uri.parse(' in test,
       'P02 test has a stale/undefined ActivityScenario callback receiver')
 check('R3C08_PROVIDER_(START|KILL)' in receipt and
       'isolated_provider_verified_restart_cycles' in receipt and 'len(cycles)>=1' in receipt,

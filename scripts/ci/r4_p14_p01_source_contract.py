@@ -51,7 +51,7 @@ def check_test(s):
   'P14HermeticCatalogGateway.detailsCount',
   'P14HermeticCatalogGateway.reviewCount',
   'aurora-details-screenshots','aurora-details-reviews',
-  'onNodeWithContentDescription(context.getString(R.string.title_download_manager))',
+  'onNodeWithContentDescription(\n                context.getString(R.string.title_download_manager)\n            )',
   'onNodeWithContentDescription(context.getString(R.string.action_back))',
   '"Import and verify APKs"','SemanticsProperties.Selected',
   'hasClickAction()', 'R4ScreenshotEvidence.capture(',
