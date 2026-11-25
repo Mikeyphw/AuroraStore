@@ -50,3 +50,22 @@ It enforces nonblank/unique images, theme differentiation, and the new dark Upda
 contrast guard; the earlier P09 52/25 receipt is strictly historical. These are
 production component visual fixtures, **not full network-backed navigation** or
 upstream screenshot parity approval. Manual comparison with PR #113 remains open.
+
+## After CI-only historical gate requalification (November 18, 2026)
+
+The original P11 review and P12 contrast/visual-source inventory are frozen at
+P11 SHA `9632c29bc19248bb905d1aaa257469118576312d` and the last unchanged
+pre-P05 repair SHA `3ea10b6f4b0fed5a8913e4edef3536cfc93fc52f`.
+The previously absolute `P11..HEAD` and `P12..HEAD` changed-file assertions
+incorrectly rejected later **CI-only** source repairs. Both guards now verify
+historical review scope at the pinned checkpoint, require that checkpoint as
+an ancestor, and independently reject any newer path beyond the explicit
+seven-file CI-source/test/documentation allowlist. No new app production,
+Android instrumentation, signing, provenance or permissions change is accepted
+by these guards; new CI-only changes require explicit source review.
+
+The restored-fork targeted APK discovery still has to pass exact SHA, branch,
+workflow path, three green jobs, binary hashes and cryptographic APK signing.
+Historical P09/P12 emulator evidence is not treated as proof for the new HEAD.
+The live hosted API36 run, manual upstream fidelity, physical ARM64, accounts,
+installer and release acceptance all remain separate, unqualified gates.

@@ -79,8 +79,16 @@ def main():
     ):
         assert old in wf,old
         must_refuse(lambda old=old,new=new:m.check_workflow(wf.replace(old,new,1)),marker);cases+=1
-    assert cases==31,cases
-    print('R4_P12_HF25_HF01_31_ADVERSARIAL_SOURCE_AND_RELEASE_REFUSALS_PASS')
+    allowed=set(m.CI_ONLY_ALLOWED)
+    m.check_ci_only_extensions(allowed)
+    for changed in (allowed - {'scripts/ci/r4_p06_apk_reuse.py'},
+                    allowed | {'app/src/main/java/Unreviewed.kt'},
+                    allowed | {'.github/workflows/new.yml'},
+                    allowed | {'scripts/ci/unreviewed.py'}):
+        must_refuse(lambda changed=changed:m.check_ci_only_extensions(changed),
+                    'POST_P12_UNQUALIFIED_CI_ONLY_CHANGE_SET');cases+=1
+    assert cases==35,cases
+    print('R4_P12_35_ADVERSARIAL_SOURCE_AND_CI_SCOPE_REFUSALS_PASS')
     print('R4_P12_FRESH_HOSTED_CONTRAST_PIXEL_CHECK_REQUIRED')
 
 if __name__=='__main__':main()

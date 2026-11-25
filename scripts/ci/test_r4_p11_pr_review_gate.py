@@ -100,6 +100,16 @@ def main():
         refused(lambda changed=changed:m.check_post_p10(changed), 'P11_FILES_NOT_STAGED' if not changed else 'POST_P10_ALLOWLIST_DRIFT')
         cases+=1
 
+    # CI-only extension must exactly match the reviewed source and test inventory.
+    m.check_ci_only_extensions(set(__import__('r4_p12_visual_contrast_gate').CI_ONLY_ALLOWED))
+    allowed=set(__import__('r4_p12_visual_contrast_gate').CI_ONLY_ALLOWED)
+    for changed in (allowed - {'scripts/ci/r4_p06_apk_reuse.py'},
+                    allowed | {'app/src/main/java/Unreviewed.kt'},
+                    allowed | {'.github/workflows/unreviewed.yml'}):
+        refused(lambda changed=changed:m.check_ci_only_extensions(changed),
+                'POST_P12_UNQUALIFIED_CI_ONLY_CHANGE_SET')
+        cases+=1
+
     # Construct minimal workflow text: the exact current full workflow is verified by CI.
     # Pure contract rejects critical CI bypasses in the *actual* workflow content.
     wf=(ROOT/m.WORKFLOW).read_text(encoding='utf-8')

@@ -45,7 +45,39 @@ class Pair:
     def sha(data):return hashlib.sha256(data).hexdigest()
 
 
+def test_workflow_run_discovery_after_refork():
+    seen=[]
+    def fake_api(path):
+        seen.append(path)
+        return {'total_count':0,'workflow_runs':[]}
+    api=m.repository_wide_run_discovery(fake_api)
+    original=(f'repos/{m.REPO}/actions/workflows/aurora-targeted.yml/runs?'
+              f'event=pull_request&head_sha={SHA}&per_page=100')
+    api(original)
+    assert seen == [f'repos/{m.REPO}/actions/runs?'
+                    f'event=pull_request&head_sha={SHA}&per_page=100']
+    jobs=f'repos/{m.REPO}/actions/runs/123/jobs?per_page=100'
+    api(jobs)
+    assert seen[-1] == jobs  # Preserve original strict per-run job attestation.
+    artifacts=f'repos/{m.REPO}/actions/runs/123/artifacts?per_page=100'
+    api(artifacts)
+    assert seen[-1] == artifacts  # Do not redirect provenance evidence.
+    other=f'repos/{m.REPO}/actions/workflows/other.yml/runs?event=pull_request'
+    api(other)
+    assert seen[-1] == other  # No broadening to other workflow identities.
+    def denied(path):
+        raise m.Refused('HTTP_403_OR_404')
+    try:
+        m.repository_wide_run_discovery(denied)(original)
+    except m.Refused as exc:
+        assert 'HTTP_403_OR_404' in str(exc)
+    else:
+        raise AssertionError('API_ERROR_MUST_NOT_FALL_BACK_TO_UNSIGNED_BUILD')
+    print('R4_P05_RESTORED_FORK_ACTIONS_DISCOVERY_NEGATIVES_PASS')
+
+
 def main():
+    test_workflow_run_discovery_after_refork()
     negatives=0
     for key,value,marker in [
         ('GITHUB_SHA','0'*40,'GITHUB_SHA_DRIFT'),
