@@ -57,7 +57,7 @@ assert 'r3c06_os_result' in install and 'r3c06_os_result' in script, \
     'P3 HF05 real OS status marker not bound'
 assert 'r3c06_fixture_sha256' in script and 'stage_fixture(' in script and \
        'cleanup_fixture(' in script, 'R3C06_P5_HF04_REFUSED host fixture transport missing'
-assert "'run-as'" not in script, 'R3C06_P5_HF04_REFUSED run-as cache transport still present' 
+assert "'run-as'" not in script, 'R3C06_P5_HF04_REFUSED run-as cache transport still present'
 assert 'system_consent_ui_verified' in script and "'android_callback_verified':True" in script
 assert 'R3C06_BUNDLETOOL' in oracle and "'PARTIAL'" in oracle
 assert "'--bundletool-sha256'" in oracle and 'apksigner' in oracle
