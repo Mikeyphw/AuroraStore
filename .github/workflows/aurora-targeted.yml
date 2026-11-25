@@ -71,6 +71,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$HEAD_SHA"
           python3 -B scripts/ci/test_r3c07_hf03_optimization.py
           python3 -B scripts/ci/test_aur_int01_room.py
+          python3 -B scripts/ci/test_aur_int01_campaign.py
           python3 -B scripts/ci/test_r3c07_p03a_source.py
           python3 -B scripts/ci/test_r3c07_p03b_source.py
           python3 -B scripts/ci/test_r3c08_p01_source.py
@@ -122,7 +123,20 @@ jobs:
           set -euo pipefail
           # Generated schema changes may be code-facing, even if no Kotlin file changed.
           git diff --exit-code -- app/schemas/
+          schema=app/schemas/com.aurora.store.data.room.AuroraDatabase/17.json
+          test -s "$schema"
+          python3 -B scripts/ci/test_aur_int01_room.py --generated "$schema"
+          unexpected=$(git ls-files --others --exclude-standard -- app/schemas/ | grep -vxF "$schema" || true)
+          test -z "$unexpected"
+      - name: Upload independently generated Room v17 schema
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: aurora-room-v17-${{ needs.scope.outputs.head_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: app/schemas/com.aurora.store.data.room.AuroraDatabase/17.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Verify, sign-check and seal exact-SHA targeted Android APK pair
+        if: github.event_name == 'pull_request'
         env:
           HEAD_SHA: ${{ needs.scope.outputs.head_sha }}
         shell: bash
@@ -132,6 +146,7 @@ jobs:
           python3 -B scripts/ci/r3c07_hf03_apk_pair.py publish \
             --root . --sha "$HEAD_SHA" --out "$RUNNER_TEMP/aurora-r3c07-targeted-apks"
       - name: Upload immutable source/run-bound targeted APK pair for R1D reuse
+        if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
         with:
           name: aurora-targeted-apks-${{ needs.scope.outputs.head_sha }}-${{ github.run_id }}-${{ github.run_attempt }}

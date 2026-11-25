@@ -2,6 +2,8 @@
 name: Aurora R2D — API 36 Real APK Install and Restart
 
 on:
+  push:
+    branches: [feature/aurora-consolidated-integration-20261125]
   workflow_dispatch:
 
 permissions:

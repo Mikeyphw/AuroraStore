@@ -45,7 +45,7 @@ jobs:
           assert git('rev-list','--parents','-n','1',MERGE).split()==[MERGE,BASE,AUTHOR]
           subprocess.run(['git','merge-base','--is-ancestor',MERGE,'HEAD'],check=True)
           for p in ('scripts/ci/r3c07_hf03_apk_pair.py','scripts/ci/test_r3c07_hf03_optimization.py'):
-              assert git('rev-parse',f'HEAD:{p}')==git('rev-parse',f'{BASE}:{p}'),p
+              assert git('rev-parse',f'{MERGE}:{p}')==git('rev-parse',f'{BASE}:{p}'),p
           txt=pathlib.Path('gradle/libs.versions.toml').read_text()
           assert re.search(r'^gplayapi\s*=\s*"4\.0\.0"\s*$',txt,re.M)
           assert re.search(r'^composeMaterial\s*=\s*"1\.5\.0-alpha23"\s*$',txt,re.M)
@@ -65,6 +65,7 @@ jobs:
           test "$(git ls-files -u | wc -l)" -eq 0
           bash -n scripts/ci/r4_p05_emulator_acceptance.sh
           python3 -B scripts/ci/test_r4_p06_screenshot_audit.py
+          python3 -B scripts/ci/test_r3c07_hf03_optimization.py
           python3 -B scripts/ci/test_r4_p06_apk_reuse.py
           python3 -B scripts/ci/test_r4_p09_session_source_contract.py
           python3 -B scripts/ci/r4_p09_session_source_contract.py --root .

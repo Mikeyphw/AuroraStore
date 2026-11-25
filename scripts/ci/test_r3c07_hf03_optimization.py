@@ -430,6 +430,25 @@ elif 'xmltree' in sys.argv:
                        {'repository':{'full_name':'other/repository'}}]:
             self.assertFalse(ci.qualifies_run({**good,**change},self.sha))
 
+    def test_consolidated_branch_discovery_is_source_bound(self):
+        good={'id':12345,'path':ci.WORKFLOW,'head_sha':self.sha,
+              'head_branch':ci.INTEGRATION_BRANCH,'event':'pull_request',
+              'status':'completed','conclusion':'success','repository':{'full_name':ci.REPO}}
+        jobs=[{'name':name,'head_sha':self.sha,'conclusion':'success','status':'completed'}
+              for name in sorted(ci.TEST_JOBS)]
+        calls=[]
+        def fake_api(path):
+            calls.append(path)
+            if '/jobs?' in path:return {'total_count':3,'jobs':jobs}
+            return {'total_count':1,'workflow_runs':[good]}
+        with mock.patch.object(ci,'api',side_effect=fake_api):
+            self.assertEqual(ci.selected_run(self.sha,branch=ci.INTEGRATION_BRANCH)['id'],12345)
+            self.assertIn('/actions/runs?event=pull_request&head_sha=',calls[0])
+            self.assertIsNone(ci.selected_run(self.sha,branch=ci.BRANCH))
+            with self.assertRaises(ci.Refused):ci.selected_run(self.sha,branch='unapproved')
+            good['head_sha']='f'*40
+            self.assertIsNone(ci.selected_run(self.sha,branch=ci.INTEGRATION_BRANCH))
+
     def test_selected_run_rejects_skipped_or_wrong_source_jobs(self):
         runmeta={'id':12345,'path':ci.WORKFLOW,'head_sha':self.sha,
                  'head_branch':ci.BRANCH,'event':'pull_request','status':'completed',
@@ -448,12 +467,23 @@ elif 'xmltree' in sys.argv:
             jobs[2]['head_sha']='0'*40
             self.assertIsNone(ci.selected_run(self.sha))
 
+    def test_integration_r1d_requires_fresh_ksp_when_schema_missing(self):
+        for rel in ci.ROLE_PATHS.values():
+            for p in (self.root/rel).glob('*.apk'): p.unlink()
+        with mock.patch.dict(os.environ,{'GITHUB_EVENT_NAME':'push',
+              'GITHUB_REF':'refs/heads/'+ci.INTEGRATION_BRANCH},clear=False), \
+             mock.patch.object(ci,'selected_run') as select:
+            output=self.root/'gh-output'
+            ci.consume(self.root,self.root/'tmp',self.sha,output)
+            self.assertEqual(output.read_text(),'reused=false\n')
+            select.assert_not_called()
+
     def test_old_uninstrumented_run_falls_back_to_build(self):
         for role,rel in ci.ROLE_PATHS.items():
             for p in (self.root/rel).glob('*.apk'): p.unlink()
         with mock.patch.object(ci,'selected_run',return_value=None):
             output=self.root/'$GITHUB_OUTPUT'
-            with mock.patch.dict(os.environ,{'GITHUB_EVENT_NAME':'workflow_dispatch'},clear=False):
+            with mock.patch.dict(os.environ,{'GITHUB_EVENT_NAME':'workflow_dispatch','GITHUB_REF':'refs/heads/'+ci.BRANCH},clear=False):
                 ci.consume(self.root,self.root/'tmp',self.sha,output)
             self.assertEqual(output.read_text(),'reused=false\n')
 
@@ -465,7 +495,7 @@ elif 'xmltree' in sys.argv:
             for p in (self.root/rel).glob('*.apk'):p.unlink()
         runmeta={'id':12345,'run_attempt':1}
         artifact={'id':555,'name':f'aurora-targeted-apks-{self.sha}-12345-1'}
-        with mock.patch.dict(os.environ,{'GITHUB_EVENT_NAME':'workflow_dispatch',
+        with mock.patch.dict(os.environ,{'GITHUB_EVENT_NAME':'workflow_dispatch','GITHUB_REF':'refs/heads/'+ci.BRANCH,
                                          'GITHUB_RUN_ID':'98765'},clear=False), \
              mock.patch.object(ci,'selected_run',return_value=runmeta), \
              mock.patch.object(ci,'matching_artifact',return_value=artifact), \
@@ -490,7 +520,7 @@ elif 'xmltree' in sys.argv:
         records['androidTest.apk']+=b'silent tamper'
         for role,rel in ci.ROLE_PATHS.items():
             for p in (self.root/rel).glob('*.apk'):p.unlink()
-        with mock.patch.dict(os.environ,{'GITHUB_EVENT_NAME':'workflow_dispatch'},clear=False), \
+        with mock.patch.dict(os.environ,{'GITHUB_EVENT_NAME':'workflow_dispatch','GITHUB_REF':'refs/heads/'+ci.BRANCH},clear=False), \
              mock.patch.object(ci,'selected_run',return_value={'id':12345,'run_attempt':1}), \
              mock.patch.object(ci,'matching_artifact',return_value={'id':555}), \
              mock.patch.object(ci,'download_artifact',return_value=records):

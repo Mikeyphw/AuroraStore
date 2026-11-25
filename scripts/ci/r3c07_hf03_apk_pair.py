@@ -34,6 +34,9 @@ from r3c06_bundletool_matrix import (
 
 REPO = 'Mikeyphw/AuroraStore'
 BRANCH = 'feature/r3c04-c02-c08-import-handoff-archives-20261109'
+INTEGRATION_BRANCH = 'feature/aurora-consolidated-integration-20261125'
+EXPRESSIVE_BRANCH = 'feature/r4-p03-pr113-expressive-v4-20261113'
+HOSTED_BRANCHES = frozenset({BRANCH, INTEGRATION_BRANCH, EXPRESSIVE_BRANCH, 'master'})
 WORKFLOW = '.github/workflows/aurora-targeted.yml'
 TEST_JOBS = frozenset({
     'Source-change classification',
@@ -185,20 +188,24 @@ def api(path: str) -> dict:
     return result
 
 
-def qualifies_run(runmeta: dict, expected: str) -> bool:
-    return (runmeta.get('head_sha')==expected and runmeta.get('head_branch')==BRANCH
+def qualifies_run(runmeta: dict, expected: str, *, branch: str = BRANCH) -> bool:
+    return (runmeta.get('head_sha')==expected and branch in HOSTED_BRANCHES and runmeta.get('head_branch')==branch
             and runmeta.get('event')=='pull_request' and runmeta.get('status')=='completed'
             and runmeta.get('conclusion')=='success' and runmeta.get('path')==WORKFLOW
             and runmeta.get('repository',{}).get('full_name')==REPO)
 
 
-def selected_run(expected: str) -> dict|None:
+def selected_run(expected: str, *, branch: str = BRANCH) -> dict|None:
     # Pull-request-targeted jobs must be completed and green on the *source* SHA.
     # Workflow dispatch on a floating branch is never sufficient evidence.
-    query=f'repos/{REPO}/actions/workflows/aurora-targeted.yml/runs?event=pull_request&head_sha={expected}&per_page=100'
+    ensure(branch in HOSTED_BRANCHES, 'unapproved hosted source branch')
+    # Repository-wide listing is necessary when the recreated default branch
+    # has not yet registered the workflow file. Exact workflow path, branch,
+    # event, SHA and all job identities are still mandatory below.
+    query=f'repos/{REPO}/actions/runs?event=pull_request&head_sha={expected}&per_page=100'
     raw=api(query)
     ensure(raw.get('total_count',0)<=100,'unpaged targeted run listing')
-    runs=[r for r in raw.get('workflow_runs',[]) if qualifies_run(r,expected)]
+    runs=[r for r in raw.get('workflow_runs',[]) if qualifies_run(r,expected,branch=branch)]
     runs.sort(key=lambda r:r['id'],reverse=True)
     for runmeta in runs:
         rid=runmeta['id']
@@ -276,9 +283,22 @@ def verify_doc(doc: dict, expected: str, rid: int, records: dict[str,bytes], att
 
 def consume(root: Path, tmp: Path, expected: str, github_output: Path):
     exact_head(root,expected)
-    ensure(os.getenv('GITHUB_EVENT_NAME')=='workflow_dispatch', 'consume requires hosted R1D dispatch')
+    ref=os.getenv('GITHUB_REF','')
+    branch=ref.removeprefix('refs/heads/')
+    ensure(ref=='refs/heads/'+branch and branch in HOSTED_BRANCHES, 'unapproved hosted source ref')
+    event=os.getenv('GITHUB_EVENT_NAME')
+    ensure(event=='workflow_dispatch' or (event=='push' and branch==INTEGRATION_BRANCH),
+           'consume requires hosted R1D dispatch or integration push')
     ensure(not any(any((root/v).rglob('*.apk')) for v in ROLE_PATHS.values()),'existing APK outputs would make reuse ambiguous')
-    chosen=selected_run(expected)
+    # v17 is independently emitted by hosted KSP. The historical APK pair
+    # does not include that schema; reuse would skip KSP and make the actual
+    # R1D Room migration evidence impossible until v17 is checked in.
+    schema17=root/'app/schemas/com.aurora.store.data.room.AuroraDatabase/17.json'
+    if branch==INTEGRATION_BRANCH and not schema17.is_file():
+        github_output.write_text('reused=false\n',encoding='utf-8')
+        print('AUR_INT01_R1D_INDEPENDENT_BUILD_REQUIRED_FOR_KSP_SCHEMA17',flush=True)
+        return
+    chosen=selected_run(expected,branch=branch)
     artifact=matching_artifact(chosen,expected) if chosen else None
     if not artifact:
         github_output.write_text('reused=false\n',encoding='utf-8')

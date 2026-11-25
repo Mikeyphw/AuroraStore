@@ -29,7 +29,8 @@ class Pair:
         self.run=run;self.artifact=artifact;self.bad_file=bad_file;self.bad_signer=bad_signer
         self.selected=0
     def exact_head(self,root,sha):return sha
-    def selected_run(self,sha):
+    def selected_run(self,sha,*,branch):
+        self.branch=branch
         self.selected+=1
         return {'id':100,'run_attempt':1} if self.run else None
     def matching_artifact(self,run,sha):return {'id':5} if self.artifact else None
@@ -45,39 +46,17 @@ class Pair:
     def sha(data):return hashlib.sha256(data).hexdigest()
 
 
-def test_workflow_run_discovery_after_refork():
-    seen=[]
-    def fake_api(path):
-        seen.append(path)
-        return {'total_count':0,'workflow_runs':[]}
-    api=m.repository_wide_run_discovery(fake_api)
-    original=(f'repos/{m.REPO}/actions/workflows/aurora-targeted.yml/runs?'
-              f'event=pull_request&head_sha={SHA}&per_page=100')
-    api(original)
-    assert seen == [f'repos/{m.REPO}/actions/runs?'
-                    f'event=pull_request&head_sha={SHA}&per_page=100']
-    jobs=f'repos/{m.REPO}/actions/runs/123/jobs?per_page=100'
-    api(jobs)
-    assert seen[-1] == jobs  # Preserve original strict per-run job attestation.
-    artifacts=f'repos/{m.REPO}/actions/runs/123/artifacts?per_page=100'
-    api(artifacts)
-    assert seen[-1] == artifacts  # Do not redirect provenance evidence.
-    other=f'repos/{m.REPO}/actions/workflows/other.yml/runs?event=pull_request'
-    api(other)
-    assert seen[-1] == other  # No broadening to other workflow identities.
-    def denied(path):
-        raise m.Refused('HTTP_403_OR_404')
-    try:
-        m.repository_wide_run_discovery(denied)(original)
-    except m.Refused as exc:
-        assert 'HTTP_403_OR_404' in str(exc)
-    else:
-        raise AssertionError('API_ERROR_MUST_NOT_FALL_BACK_TO_UNSIGNED_BUILD')
-    print('R4_P05_RESTORED_FORK_ACTIONS_DISCOVERY_NEGATIVES_PASS')
-
+def test_integration_branch():
+    env={**ENV,'GITHUB_REF':'refs/heads/'+m.INTEGRATION_BRANCH}
+    assert m.validate_context(SHA,env)==m.INTEGRATION_BRANCH
+    with tempfile.TemporaryDirectory(prefix='r4-int-branch-') as d:
+        root=Path(d);out=root/'out';p=Pair(run=False)
+        assert not m.probe(root,SHA,root/'tmp',out,0,p,lambda n:None,env)
+        assert p.branch==m.INTEGRATION_BRANCH
+    print('R4_INTEGRATION_BRANCH_PROVENANCE_ROUTE_PASS')
 
 def main():
-    test_workflow_run_discovery_after_refork()
+    test_integration_branch()
     negatives=0
     for key,value,marker in [
         ('GITHUB_SHA','0'*40,'GITHUB_SHA_DRIFT'),

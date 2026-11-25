@@ -52,3 +52,32 @@ only after acceptance. Preserve the recorded baseline for traceability.
 - Android minimum SDK: 23
 - Build flavor: `vanilla`
 - Initial CI artifact: `app/build/outputs/apk/vanilla/debug/app-vanilla-debug.apk`
+
+## AUR-INT01 — consolidated source and acceptance campaign
+
+The restored six draft PRs (#1–#6) are preserved. Integrate on
+`feature/aurora-consolidated-integration-20261125`, based on fork master
+`12840634f1a812c613eda49dff5abeeb6e02cc25`. The seven input heads are locked
+in `scripts/ci/check_aur_int01.py`. A merge-based history, not an artificial
+linear overlay, preserves all six PR ancestors and both repaired CI heads.
+
+| ID | Scope | Gate |
+|---|---|---|
+| INT01-A | Source/history identity | Exact seven inputs and Git object integrity |
+| INT01-B | Consolidate fork heads | All six heads ancestors |
+| INT01-C | Current master and v17 Room/API integration | Local regression; generated schema and real Room tests hosted |
+| INT01-D | P13 fresh-frame and CI provenance repairs | Current source contracts plus exact historical replay |
+| INT01-E | Native Devtool committed-source delivery | Source-bound session, normal push, single replacement draft PR |
+| INT01-F | Full hosted acceptance | Targeted PR CI plus Foundation, R1D, R2D and five R4 push lanes on exact integrated SHA |
+| INT01-G | Independent acceptance | Separately authorized R3D disposable gates, P15 ARM64/real installer prompt, P16 independent review |
+
+`config/delivery-required-ci.json` pins the actual Targeted PR workflow identity.
+It qualifies **only** the PR CI lane; other exact-source push workflows are
+separate, mandatory campaign acceptance gates. No CI24 workflow is declared
+in this Aurora repository. Do not substitute Devtool's own CI24 for Aurora
+Android evidence. Do not auto-close original PRs or merge the replacement.
+Generated Room v17 must be uploaded, reviewed and committed from hosted KSP
+before final release qualification. No generated schema hash is fabricated.
+R5 advanced update filtering and R6 release qualification remain subsequent
+milestones. Historical R0–R4 receipts remain evidence at their original SHAs,
+not acceptance of this integrated source.

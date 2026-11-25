@@ -3,8 +3,8 @@
 """R4 exact-source targeted APK reuse, never a substitute for emulator tests.
 
 Reuses R3D's already-qualified immutable run, manifest, APK digest and APK-signature
-verifiers. The R3D implementation is not modified: only its branch selector is
-parameterized to point at the known R4 draft PR in this isolated process.
+verifiers. The shared verifier accepts an explicit, allowlisted source branch; the R4
+consumer additionally requires its own Expressive or integration branch.
 """
 from __future__ import annotations
 import argparse
@@ -19,6 +19,7 @@ import time
 REPO = 'Mikeyphw/AuroraStore'
 BRANCH = 'feature/r4-p03-pr113-expressive-v4-20261113'
 R3D_BRANCH = 'feature/r3c04-c02-c08-import-handoff-archives-20261109'
+INTEGRATION_BRANCH = 'feature/aurora-consolidated-integration-20261125'
 WORKFLOW = '.github/workflows/aurora-targeted.yml'
 SOURCE_SHA = re.compile(r'^[0-9a-f]{40}$')
 
@@ -27,30 +28,17 @@ class Refused(RuntimeError): pass
 def need(condition, why):
     if not condition: raise Refused('R4_P06_HF17_REFUSED_' + why)
 
-def validate_context(sha: str, env=None) -> None:
+def validate_context(sha: str, env=None) -> str:
     env = os.environ if env is None else env
     need(SOURCE_SHA.fullmatch(sha) is not None, 'INVALID_SHA')
     need(env.get('GITHUB_SHA') == sha, 'GITHUB_SHA_DRIFT')
     need(env.get('GITHUB_REPOSITORY') == REPO, 'WRONG_REPOSITORY')
-    need(env.get('GITHUB_REF') == 'refs/heads/' + BRANCH, 'WRONG_BRANCH')
+    ref = env.get('GITHUB_REF', '')
+    branch = ref.removeprefix('refs/heads/')
+    need(ref == 'refs/heads/' + branch and branch in (BRANCH, INTEGRATION_BRANCH), 'WRONG_BRANCH')
     need(env.get('GITHUB_EVENT_NAME') in ('push', 'workflow_dispatch'), 'WRONG_EVENT')
     need(bool(env.get('GH_TOKEN') or env.get('GITHUB_TOKEN')), 'TOKEN_REQUIRED')
-
-def repository_wide_run_discovery(api):
-    """Discover workflow runs when a restored fork has no default-branch YAML.
-
-    The R3D selector still enforces branch, workflow path, exact SHA, all three
-    green job identities, and real signed APK artifact validation. Only the
-    Actions *listing endpoint* changes; API failure remains fatal.
-    """
-    workflow = f'repos/{REPO}/actions/workflows/aurora-targeted.yml/runs?'
-    repository = f'repos/{REPO}/actions/runs?'
-    def query(path):
-        if path.startswith(workflow):
-            return api(repository + path[len(workflow):])
-        return api(path)
-    return query
-
+    return branch
 
 def require_trusted_pair():
     # Not a copy of R3D signing verification: import the canonical source pinned
@@ -66,13 +54,12 @@ def require_trusted_pair():
         'Targeted Android compilation (no emulator or release)',
     }), 'R3D_THREE_JOB_CONTRACT_DRIFT')
     need(set(pair.NAMES) == {'app', 'androidTest'}, 'R3D_ROLE_CONTRACT_DRIFT')
-    pair.BRANCH = BRANCH  # R4 selector, strictly scoped to this subprocess
-    pair.api = repository_wide_run_discovery(pair.api)
+    need({BRANCH, INTEGRATION_BRANCH} <= pair.HOSTED_BRANCHES, 'R4_BRANCH_CONTRACT_DRIFT')
     return pair
 
 def probe(root: Path, sha: str, tmp: Path, github_output: Path, wait_seconds: int = 240,
           pair=None, sleep=time.sleep, env=None):
-    validate_context(sha, env)
+    branch = validate_context(sha, env)
     pair = require_trusted_pair() if pair is None else pair
     need(pair.exact_head(root, sha) == sha, 'CHECKOUT_SHA_DRIFT')
     need(not tmp.exists(), 'TEMP_OUTPUT_EXISTS')
@@ -83,11 +70,11 @@ def probe(root: Path, sha: str, tmp: Path, github_output: Path, wait_seconds: in
     need(0 <= wait_seconds <= 300, 'INVALID_WAIT_RANGE')
     # A clean runner often starts ahead of the PR's parallel Targeted CI.
     # Wait only for a source-matched, fully green three-job targeted run.
-    chosen = pair.selected_run(sha)
+    chosen = pair.selected_run(sha, branch=branch)
     for _ in range((wait_seconds + 14) // 15):
         if chosen is not None: break
         sleep(15)
-        chosen = pair.selected_run(sha)
+        chosen = pair.selected_run(sha, branch=branch)
     if chosen is None:
         github_output.write_text('reused=false\n', encoding='utf-8')
         print('R4_P06_HF17_NO_ELIGIBLE_TARGETED_ARTIFACT_INDEPENDENT_HOSTED_BUILD_REQUIRED',flush=True)

@@ -2,6 +2,8 @@
 name: Aurora R1D — API 36 Emulator Download Recovery
 
 on:
+  push:
+    branches: [feature/aurora-consolidated-integration-20261125]
   workflow_dispatch:
     inputs:
       r3c06_live_install:
