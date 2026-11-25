@@ -72,8 +72,28 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           chmod +x gradlew
-          ./gradlew --no-daemon --max-workers=2 --stacktrace \
-            :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest
+          # Fail closed: retry only a known transient AGP plugin repository lookup.
+          # Compilation, Kotlin, resource, manifest and unrelated failures stop now.
+          build_ok=false
+          for attempt in 1 2 3; do
+            log="$RUNNER_TEMP/aurora-r4-p14-p03/gradle-attempt-${attempt}.log"
+            if ./gradlew --no-daemon --max-workers=2 --stacktrace \
+                :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest 2>&1 | tee "$log"; then
+              build_ok=true
+              break
+            fi
+            if ! grep -Fq "Plugin [id: 'com.android.application', version: '9.4.1', apply: false] was not found" "$log"; then
+              echo P14P03_NON_TRANSIENT_GRADLE_FAILURE >&2
+              exit 1
+            fi
+            if [[ "$attempt" == 3 ]]; then
+              echo P14P03_AGP_UNAVAILABLE_AFTER_BOUNDED_RETRIES >&2
+              exit 1
+            fi
+            echo "P14P03_AGP_RESOLUTION_RETRY attempt=$attempt" >&2
+            sleep "$((attempt * 10))"
+          done
+          [[ "$build_ok" == true ]] || exit 1
       - name: Require disposable KVM-backed emulator
         shell: bash
         run: |

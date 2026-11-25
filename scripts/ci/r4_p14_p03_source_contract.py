@@ -130,7 +130,12 @@ def check_workflow(s):
   'r4_p14_p03_emulator_acceptance.sh',
   'r4_p14_p03_source_contract.py',
   'test_r4_p14_p03_source_contract.py',
-  'if: always()', 'actions/upload-artifact@'):
+  'if: always()', 'actions/upload-artifact@',
+  'P14P03_AGP_RESOLUTION_RETRY',
+  'P14P03_NON_TRANSIENT_GRADLE_FAILURE',
+  'P14P03_AGP_UNAVAILABLE_AFTER_BOUNDED_RETRIES',
+  'if ! grep -Fq "Plugin [id:',
+  '[[ "$build_ok" == true ]] || exit 1'):
   need(marker in s,'WORKFLOW_MARKER_'+marker)
  need(not re.search(r'^\s*(?:contents|actions|pull-requests): write\b',s,re.M),
       'WORKFLOW_WRITE_ACCESS')
