@@ -15,7 +15,6 @@ import com.aurora.store.data.model.Installer
 import com.aurora.store.data.model.InstallerInfo
 import com.aurora.store.data.room.download.Download
 import com.aurora.store.util.PackageUtil.isSharedLibraryInstalled
-import com.aurora.store.util.PathUtil
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.util.zip.ZipEntry
@@ -47,6 +46,7 @@ class AMInstaller @Inject constructor(
         if (isAlreadyQueued(download.packageName)) {
             Log.i(TAG, "${download.packageName} already queued")
         } else {
+            super.install(download)
             Log.i(TAG, "Received AM install request for ${download.packageName}")
             val fileList = mutableListOf<File>()
 
@@ -63,7 +63,7 @@ class AMInstaller @Inject constructor(
                 }
             }
 
-            val zipFile = PathUtil.getZipFile(context, download.packageName, download.versionCode)
+            val zipFile = verifiedBundleOutput()
             fileList.add(zip(getFiles(download.packageName, download.versionCode), zipFile))
 
             install(fileList)

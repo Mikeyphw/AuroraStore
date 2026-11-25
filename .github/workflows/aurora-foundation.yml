@@ -1,0 +1,285 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: Aurora — Foundation CI
+
+on:
+  push:
+    branches: [feature/aurora-consolidated-integration-20261125]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurora-foundation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-contract:
+    name: Source and bundle contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify source baseline
+        run: python3 scripts/ci/check_foundation.py
+      - name: Validate R1A download cancellation invariants
+        run: python3 scripts/ci/check_r1a.py
+      - name: Validate R1B download attempt and transfer invariants
+        run: python3 scripts/ci/check_r1b.py
+      - name: Validate R1C stall recovery invariants
+        run: python3 scripts/ci/check_r1c.py
+      - name: Validate R1G final qualification contract
+        run: python3 -B scripts/ci/check_r1g.py
+      - name: Validate R2A installation recovery contract
+        run: python3 -B scripts/ci/check_r2a.py
+      - name: Validate R2B installer callback ordering contract
+        run: python3 -B scripts/ci/check_r2b.py
+      - name: Test R2B Room generation CAS with SQLite
+        run: python3 -B scripts/ci/test_r2b_sql_cas.py
+      - name: Validate R2C privileged and microG installer contract
+        run: python3 -B scripts/ci/check_r2c.py
+      - name: Validate R2D emulator real installation contract
+        run: python3 -B scripts/ci/check_r2d.py
+      - name: Test R2D fixture and emulator host fail-closed contracts
+        run: python3 -B scripts/ci/test_r2d_host_contract.py
+      - name: Validate R3 historical versions, exact delivery, and downgrade consent
+        run: python3 -B scripts/ci/check_r3.py
+      - name: Negative regression tests for R3A downgrade consent guard
+        run: python3 -B scripts/ci/test_r3a_downgrade_contract.py
+      - name: Validate R3B APK identity and installer snapshot contracts
+        run: python3 -B scripts/ci/check_r3b.py
+      - name: Validate R3C exact-version availability evidence policy
+        run: python3 -B scripts/ci/check_r3c.py
+      - name: Validate R3C-02 picker and manual selection integration
+        run: python3 -B scripts/ci/check_r3c02.py
+      - name: Validate R3C-03 exact-version evidence reducer source contract
+        run: python3 -B scripts/ci/check_r3c03.py
+      - name: Negative regressions for R3C-03 fail-closed proof transitions
+        run: python3 -B scripts/ci/test_r3c03_contract.py
+      - name: Validate R3C-03 C01 worker, Room, and error contracts
+        run: python3 -B scripts/ci/check_r3c03_c01.py
+      - name: Test R3C-03 C01 Room evidence CAS with SQLite
+        run: python3 -B scripts/ci/test_r3c03_c01_sql.py
+      - name: Verify both v16 migration paths to v17
+        run: python3 -B scripts/ci/test_aur_int01_room.py
+      - name: Check consolidated campaign routing
+        run: python3 -B scripts/ci/test_aur_int01_campaign.py
+      - name: Negative regressions for C01 account, Play outcomes and Room CAS
+        run: python3 -B scripts/ci/test_r3c03_c01_security.py
+      - name: Validate C02 real R3B evidence and installer callback boundaries
+        run: python3 -B scripts/ci/check_r3c03_c02.py
+      - name: Reject unsafe C02 source transitions
+        run: python3 -B scripts/ci/test_r3c03_c02_security.py
+
+  kotlin-format:
+    name: Kotlin formatting — every app source set
+    needs: source-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Configure Android SDK
+        uses: android-actions/setup-android@v4
+      - name: Install Android API 37.0
+        run: |
+          sdkmanager --install 'platforms;android-37.0'
+          test -f "${ANDROID_SDK_ROOT}/platforms/android-37.0/android.jar"
+      - name: Configure Gradle cache and validate wrapper
+        uses: gradle/actions/setup-gradle@v4
+      - name: Check all app Kotlin and Kotlin-script source sets
+        run: ./gradlew --no-daemon --max-workers=2 --stacktrace :app:ktlintCheck
+      - name: Upload app ktlint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-ktlint-${{ github.run_id }}-${{ github.run_attempt }}
+          path: app/build/reports/ktlint/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  root-gradle-format:
+    name: Kotlin formatting — root Gradle scripts
+    needs: source-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Configure JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Check both root Kotlin scripts with SHA-256-pinned ktlint 1.8.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Two official download endpoints; identical pinned bytes required in either case.
+          # A 504 is an infrastructure failure, never a reason to skip root ktlint.
+          if ! curl --fail --location --silent --show-error --retry 5 \
+            --retry-delay 4 --retry-all-errors \
+            https://github.com/ktlint/ktlint/releases/download/1.8.0/ktlint \
+            -o "$RUNNER_TEMP/ktlint"; then
+            curl --fail --location --silent --show-error --retry 5 \
+              --retry-delay 4 --retry-all-errors \
+              -H 'Accept: application/octet-stream' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              https://api.github.com/repos/ktlint/ktlint/releases/assets/316074525 \
+              -o "$RUNNER_TEMP/ktlint"
+          fi
+          printf '%s  %s\n' 'a3fd620207d5c40da6ca789b95e7f823c54e854b7fade7f613e91096a3706d75' "$RUNNER_TEMP/ktlint" | sha256sum --check -
+          java -jar "$RUNNER_TEMP/ktlint" build.gradle.kts settings.gradle.kts
+
+  android-lint:
+    name: Android Lint — vanillaDebug
+    needs: source-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Configure Android SDK
+        uses: android-actions/setup-android@v4
+      - name: Install Android API 37.0
+        run: |
+          sdkmanager --install 'platforms;android-37.0'
+          test -f "${ANDROID_SDK_ROOT}/platforms/android-37.0/android.jar"
+      - name: Configure Gradle cache and validate wrapper
+        uses: gradle/actions/setup-gradle@v4
+      - name: Run Android Lint independently of ktlint and JVM tests
+        run: ./gradlew --no-daemon --max-workers=2 --stacktrace :app:lintVanillaDebug
+      - name: Upload Android Lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-android-lint-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            app/build/reports/lint-results-*
+            app/build/intermediates/lint_intermediate_text_report/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  android:
+    name: Android vanilla debug compilation and JVM tests
+    needs: source-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Configure Android SDK
+        uses: android-actions/setup-android@v4
+      - name: Install Android API 37.0
+        run: |
+          sdkmanager --install 'platforms;android-37.0'
+          test -f "${ANDROID_SDK_ROOT}/platforms/android-37.0/android.jar"
+      - name: Configure Gradle cache and validate wrapper
+        uses: gradle/actions/setup-gradle@v4
+      - name: Compile vanilla debug and run complete JVM test suite
+        run: ./gradlew --no-daemon --max-workers=2 --stacktrace :app:assembleVanillaDebug :app:testVanillaDebugUnitTest
+      - name: Upload debug APK and JVM test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-vanilla-debug-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            app/build/outputs/apk/vanilla/debug/*.apk
+            app/build/reports/tests/**
+            app/build/test-results/**
+          if-no-files-found: warn
+          retention-days: 14
+  unsigned-release:
+    name: Compile unsigned vanilla release candidate (not certified)
+    # Run unsigned compilation in parallel; the full gate still requires
+    # success of all six original mandatory jobs before signing its tag.
+    needs: source-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+      - name: Require unsigned, source-bound candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -f signing.properties
+          test ! -f app/signing.properties
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          sdkmanager --install 'platforms;android-37.0'
+          test -f "$ANDROID_SDK_ROOT/platforms/android-37.0/android.jar"
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
+      - name: Compile unsigned vanillaRelease on hosted runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon --max-workers=2 :app:assembleVanillaRelease
+      - name: Hash unsigned APK with explicit release blockers
+        shell: bash
+        run: |
+          python3 - <<'PYR1G_RELEASE'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path('app/build/outputs/apk/vanilla/release')
+          apks = list(root.glob('*.apk'))
+          if len(apks) != 1 or apks[0].stat().st_size <= 0:
+              raise SystemExit('R1G_RELEASE_REFUSED: expected one nonempty unsigned APK')
+          apk = apks[0]
+          receipt = {
+              "overall": "COMPILED_UNSIGNED_ONLY",
+              "source_sha": os.environ['GITHUB_SHA'],
+              "run_id": os.environ['GITHUB_RUN_ID'],
+              "filename": apk.name,
+              "size_bytes": apk.stat().st_size,
+              "sha256": hashlib.sha256(apk.read_bytes()).hexdigest(),
+              "release_signed": False,
+              "release_qualified": False,
+              "physical_device_qualified": False,
+              "actual_google_play_delivery_qualified": False,
+          }
+          (root / 'R1G_UNSIGNED_RELEASE_RECEIPT.json').write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + '\n'
+          )
+          print('R1G_UNSIGNED_RELEASE_COMPILED: signing/publishing remain blocked')
+          PYR1G_RELEASE
+      - name: Upload unsigned candidate and manifest (not a release)
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: aurora-r1g-unsigned-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            app/build/outputs/apk/vanilla/release/*.apk
+            app/build/outputs/apk/vanilla/release/R1G_UNSIGNED_RELEASE_RECEIPT.json
+          if-no-files-found: warn
+          retention-days: 14

@@ -24,13 +24,17 @@ import com.aurora.gplayapi.model.StreamBundle
 import com.aurora.gplayapi.web.WebPlayClient
 import com.aurora.store.AuroraApp
 import com.aurora.store.data.PageResult
+import com.aurora.store.data.catalog.CatalogJourneyGateway
 import com.aurora.store.data.event.AuthEvent
 import com.aurora.store.data.model.SearchFilter
 import com.aurora.store.data.paging.GenericPagingSource.Companion.manualPager
 import com.aurora.store.data.providers.AuthProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,11 +49,13 @@ import kotlinx.coroutines.launch
 class SearchViewModel @Inject constructor(
     val authProvider: AuthProvider,
     private val webPlayClient: WebPlayClient,
-    private val playClient: PlayClient
+    private val playClient: PlayClient,
+    private val catalogJourneyGateway: CatalogJourneyGateway
 ) : ViewModel() {
 
     private val _suggestions = MutableStateFlow<List<SearchSuggestion>>(emptyList())
     val suggestions = _suggestions.asStateFlow()
+    private var suggestionsJob: Job? = null
 
     private val searchFilter = MutableStateFlow(SearchFilter())
     private val _apps = MutableStateFlow<PagingData<App>>(PagingData.empty())
@@ -71,6 +77,12 @@ class SearchViewModel @Inject constructor(
     }
 
     fun search(query: String) {
+        // An instrumentation-only Hilt override provides deterministic offline results.
+        // The release binding returns null and retains the original Play-backed path.
+        catalogJourneyGateway.searchResults(query)?.let { offline ->
+            _apps.value = PagingData.from(offline)
+            return
+        }
         var cursor: BundleCursor? = null
 
         fun StreamBundle.flatApps(): List<App> =
@@ -115,10 +127,30 @@ class SearchViewModel @Inject constructor(
     }
 
     fun fetchSuggestions(query: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _suggestions.value = webPlayClient.search.suggestions(query)
-                .filter { it.title.isNotBlank() }
-                .take(5)
+        val normalized = query.trim()
+        suggestionsJob?.cancel()
+        catalogJourneyGateway.suggestions(normalized)?.let { offline ->
+            _suggestions.value = offline
+            return
+        }
+        if (normalized.isBlank()) {
+            _suggestions.value = emptyList()
+            return
+        }
+        suggestionsJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val latest = webPlayClient.search.suggestions(normalized)
+                    .filter { it.title.isNotBlank() }
+                    .take(5)
+                ensureActive() // stale response must not replace newer input
+                _suggestions.value = latest
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (exception: PlayException.Unauthorized) {
+                AuroraApp.events.send(AuthEvent.SessionExpired())
+            } catch (exception: Exception) {
+                Log.w(TAG, "Suggestions failed for current query", exception)
+            }
         }
     }
 

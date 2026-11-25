@@ -8,11 +8,13 @@ package com.aurora.store.compose.composable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -25,6 +27,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewWrapper
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.aurora.gplayapi.model.App
 import com.aurora.gplayapi.model.StreamBundle
@@ -33,6 +36,7 @@ import com.aurora.store.R
 import com.aurora.store.compose.composable.app.AppListItem
 import com.aurora.store.compose.composable.app.LargeAppListItem
 import com.aurora.store.compose.preview.ThemePreviewProvider
+import com.aurora.store.data.room.download.Download
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 private const val LOAD_MORE_THRESHOLD = 2
@@ -41,10 +45,16 @@ private const val LOAD_MORE_THRESHOLD = 2
 fun StreamCarousel(
     modifier: Modifier = Modifier,
     streamBundle: StreamBundle?,
+    bottomContentPadding: Dp = 0.dp,
+    showHomeActions: Boolean = false,
+    downloadsByPackage: Map<String, Download> = emptyMap(),
+    cancellingPackageNames: Set<String> = emptySet(),
+    updatablePackageNames: Set<String> = emptySet(),
     filterSingleAppClusters: Boolean = true,
     lazyListState: LazyListState = rememberLazyListState(),
     onHeaderClick: (StreamCluster) -> Unit = {},
     onAppClick: (App) -> Unit = {},
+    onAppAction: (App) -> Unit = {},
     onClusterScrolled: (StreamCluster) -> Unit = {},
     onScrolledToEnd: () -> Unit = {}
 ) {
@@ -60,24 +70,29 @@ fun StreamCarousel(
     }
 
     if (streamBundle == null) {
+        val shimmerBrush = rememberShimmerBrush()
         LazyColumn(
             modifier = modifier.fillMaxSize(),
             state = lazyListState,
+            contentPadding = PaddingValues(bottom = bottomContentPadding),
             verticalArrangement = Arrangement.spacedBy(dimensionResource(R.dimen.spacing_medium))
         ) {
-            items(5) { ShimmerCarouselSection() }
+            items(5) { ShimmerCarouselSection(shimmerBrush) }
         }
         return
     }
 
-    val clusters = streamBundle.clusters
-        .distinctBy { it.id }
-        .map { cluster -> cluster.copy(apps = cluster.apps.distinctBy { it.packageName }) }
-        .filter { cluster ->
-            cluster.apps.isNotEmpty() &&
-                cluster.title.isNotBlank() &&
-                (!filterSingleAppClusters || cluster.apps.size > 1)
-        }
+    val clusters = remember(streamBundle, filterSingleAppClusters) {
+        streamBundle.clusters
+            .map { cluster ->
+                cluster.copy(apps = cluster.apps.distinctBy { it.packageName })
+            }
+            .filter { cluster ->
+                cluster.apps.isNotEmpty() &&
+                    cluster.title.isNotBlank() &&
+                    (!filterSingleAppClusters || cluster.apps.size > 1)
+            }
+    }
 
     if (clusters.isEmpty()) {
         Placeholder(
@@ -91,15 +106,30 @@ fun StreamCarousel(
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         state = lazyListState,
+        contentPadding = PaddingValues(bottom = bottomContentPadding),
         verticalArrangement = Arrangement.spacedBy(
-            if (clusters.size == 1) 0.dp else dimensionResource(R.dimen.spacing_xsmall)
+            if (clusters.size == 1) {
+                ListItemDefaults.SegmentedGap
+            } else {
+                dimensionResource(R.dimen.spacing_xsmall)
+            }
         )
     ) {
         if (clusters.size == 1) {
             val apps = clusters.first().apps
             items(count = apps.size, key = { apps[it].id }) { index ->
                 LargeAppListItem(
+                    modifier = Modifier.padding(
+                        horizontal = dimensionResource(R.dimen.spacing_large)
+                    ),
                     app = apps[index],
+                    itemIndex = index,
+                    itemCount = apps.size,
+                    showHomeAction = showHomeActions,
+                    download = downloadsByPackage[apps[index].packageName],
+                    isUpdatable = apps[index].packageName in updatablePackageNames,
+                    isCancellationPending = apps[index].packageName in cancellingPackageNames,
+                    onActionClick = { onAppAction(apps[index]) },
                     onClick = { onAppClick(apps[index]) }
                 )
             }
@@ -118,7 +148,12 @@ fun StreamCarousel(
                 item(key = "row_${cluster.id}") {
                     ClusterRow(
                         cluster = cluster,
+                        showHomeActions = showHomeActions,
+                        downloadsByPackage = downloadsByPackage,
+                        cancellingPackageNames = cancellingPackageNames,
+                        updatablePackageNames = updatablePackageNames,
                         onAppClick = onAppClick,
+                        onAppAction = onAppAction,
                         onClusterScrolled = onClusterScrolled
                     )
                 }
@@ -134,9 +169,17 @@ fun StreamCarousel(
 @Composable
 internal fun ClusterRow(
     cluster: StreamCluster,
+    showHomeActions: Boolean = false,
+    downloadsByPackage: Map<String, Download> = emptyMap(),
+    cancellingPackageNames: Set<String> = emptySet(),
+    updatablePackageNames: Set<String> = emptySet(),
     onAppClick: (App) -> Unit = {},
-    onClusterScrolled: (StreamCluster) -> Unit = {}
+    onAppAction: (App) -> Unit = {},
+    onClusterScrolled: (StreamCluster) -> Unit = {},
+    horizontalContentPadding: Dp? = null
 ) {
+    val rowHorizontalContentPadding = horizontalContentPadding
+        ?: dimensionResource(R.dimen.spacing_large)
     val rowState = rememberLazyListState()
     val reachedEnd by remember {
         derivedStateOf {
@@ -152,7 +195,7 @@ internal fun ClusterRow(
 
     LazyRow(
         state = rowState,
-        contentPadding = PaddingValues(horizontal = dimensionResource(R.dimen.spacing_small)),
+        contentPadding = PaddingValues(horizontal = rowHorizontalContentPadding),
         horizontalArrangement = Arrangement.spacedBy(dimensionResource(R.dimen.spacing_small))
     ) {
         itemsIndexed(
@@ -161,6 +204,11 @@ internal fun ClusterRow(
         ) { _, app ->
             AppListItem(
                 app = app,
+                showHomeAction = showHomeActions,
+                download = downloadsByPackage[app.packageName],
+                isUpdatable = app.packageName in updatablePackageNames,
+                isCancellationPending = app.packageName in cancellingPackageNames,
+                onActionClick = { onAppAction(app) },
                 onClick = { onAppClick(app) }
             )
         }

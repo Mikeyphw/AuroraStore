@@ -11,7 +11,10 @@ import android.content.Context
 import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Build
+import android.os.SystemClock
 import android.os.storage.StorageManager
+import android.util.Base64
 import android.util.Log
 import androidx.core.content.getSystemService
 import androidx.core.graphics.scale
@@ -36,19 +39,26 @@ import com.aurora.gplayapi.model.PatchFormat
 import com.aurora.gplayapi.net.HttpEngine
 import com.aurora.gplayapi.session.PlaySessions
 import com.aurora.store.AuroraApp
+import com.aurora.store.BuildConfig
 import com.aurora.store.R
 import com.aurora.store.data.AccountRepository
 import com.aurora.store.data.event.InstallerEvent
 import com.aurora.store.data.helper.DownloadHelper
 import com.aurora.store.data.installer.AppInstaller
+import com.aurora.store.data.installer.verification.ApkVerificationException
+import com.aurora.store.data.installer.verification.R3bVerifiedProof
 import com.aurora.store.data.model.Algorithm
 import com.aurora.store.data.model.DownloadInfo
 import com.aurora.store.data.model.DownloadStatus
-import com.aurora.store.data.model.DownloadStatus.Companion.installerStates
+import com.aurora.store.data.model.PlayAccountFingerprint
+import com.aurora.store.data.model.PlayDeliveryFailureClassifier
+import com.aurora.store.data.model.PlayExactVersionOutcomePolicy
 import com.aurora.store.data.providers.AuthProvider
 import com.aurora.store.data.providers.GoogleAccountTokenProvider
 import com.aurora.store.data.room.download.Download
 import com.aurora.store.data.room.download.DownloadDao
+import com.aurora.store.data.room.play.PlayDeliveryEvidenceDao
+import com.aurora.store.data.room.play.PlayVerifiedEvidenceStore
 import com.aurora.store.module.NoAuth
 import com.aurora.store.util.BsPatch
 import com.aurora.store.util.CertUtil
@@ -71,11 +81,21 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.security.DigestInputStream
 import java.security.MessageDigest
+import java.security.SecureRandom
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.properties.Delegates
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
+import okhttp3.Call
 import okhttp3.Headers.Companion.toHeaders
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -92,6 +112,8 @@ class DownloadWorker @AssistedInject constructor(
     private val authProvider: AuthProvider,
     tokenProvider: GoogleAccountTokenProvider,
     private val downloadDao: DownloadDao,
+    private val playDeliveryEvidenceDao: PlayDeliveryEvidenceDao,
+    private val verifiedPlayEvidenceStore: PlayVerifiedEvidenceStore,
     private val appInstaller: AppInstaller,
     private val okHttpClient: OkHttpClient,
     private val httpEngine: HttpEngine,
@@ -108,10 +130,123 @@ class DownloadWorker @AssistedInject constructor(
         // Upper bound on automatic WorkManager retries for transient (network) failures
         // before the download is marked as failed and left for the user to retry.
         private const val MAX_DOWNLOAD_RETRIES = 5
+        private const val STALL_POLL_INTERVAL_MS = 15_000L
+        private val transferLocks = mutableMapOf<String, Mutex>()
+        private val evidenceIdentityLock = Any()
     }
 
     private lateinit var download: Download
     private lateinit var deliveryClient: PlayClient
+    private var playEvidenceKey: PlayExactVersionOutcomePolicy.RequestKey? = null
+    private var selectedPlayAccount: String? = null
+    private var mainPlayUrlEvidenceKey: PlayExactVersionOutcomePolicy.RequestKey? = null
+
+    /** Never persist Aurora's account IDs, which may equal the user's e-mail address. */
+    private fun privateAccountTag(id: String): String {
+        val prefs = context.getSharedPreferences("play_evidence_identity", Context.MODE_PRIVATE)
+        val key = synchronized(evidenceIdentityLock) {
+            val saved = prefs.getString("key", null)
+            if (saved != null) {
+                Base64.decode(saved, Base64.NO_WRAP)
+            } else {
+                val generated = ByteArray(32)
+                SecureRandom().nextBytes(generated)
+                val encoded = Base64.encodeToString(generated, Base64.NO_WRAP)
+                check(prefs.edit().putString("key", encoded).commit())
+                generated
+            }
+        }
+        return PlayAccountFingerprint.hmacHex(key, id)
+    }
+
+    /** Only real Play resolution outcomes are stored, never fixture/download URLs. */
+    private suspend fun storePlayOutcome(outcome: String, fileCount: Int = 0) {
+        val selectedKey = playEvidenceKey ?: return
+        // The account selection alone does not identify the actual network session:
+        // unbound apps may resolve anonymously and then fall back to an account.
+        // Capture the lane after resolveFiles() has selected the delivery client.
+        val route = when {
+            !this::deliveryClient.isInitialized -> "session-unavailable"
+            deliveryClient === noAuthPlayClient -> "anonymous"
+            else -> "authenticated"
+        }
+        val key = selectedKey.copy(variant = "${selectedKey.variant};lane:$route")
+        try {
+            val accepted = playDeliveryEvidenceDao.accept(
+                packageName = key.packageName,
+                versionCode = key.versionCode,
+                attemptGeneration = key.attemptGeneration,
+                accountBinding = requireNotNull(key.accountBinding),
+                selectedAccount = selectedPlayAccount ?: return,
+                variant = requireNotNull(key.variant),
+                outcome = outcome,
+                fileCount = fileCount
+            )
+            if (!accepted) {
+                Log.w(TAG, "Refusing stale or account-mismatched Play evidence")
+            } else if (outcome == "URLS_RESOLVED") {
+                // Shared library resolution may change deliveryClient before verification.
+                mainPlayUrlEvidenceKey = key
+            }
+        } catch (exception: Exception) {
+            // Evidence tracking must fail closed without aborting an otherwise valid download.
+            Log.w(TAG, "Play evidence unavailable; leaving availability unknown", exception)
+        }
+    }
+
+    /** The C01 URL proof must already exist for any C02 stage to be accepted. */
+    private fun currentC02EvidenceKey(): PlayExactVersionOutcomePolicy.RequestKey? {
+        if (r1eFixtureActive || isStopped) return null
+        // Only a Room-accepted real Play URL response can seed C02 evidence.
+        return mainPlayUrlEvidenceKey
+    }
+
+    private suspend fun recordC02Bytes() {
+        val key = currentC02EvidenceKey() ?: return
+        val selected = selectedPlayAccount ?: return
+        try {
+            if (!verifiedPlayEvidenceStore.bytesReceived(key, selected, download.fileList.size)) {
+                Log.i(TAG, "C02 bytes not recorded: no matching URL proof or active attempt")
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.w(TAG, "C02 bytes evidence unavailable; not claiming verification", error)
+        }
+    }
+
+    private suspend fun recordC02Verified(proof: R3bVerifiedProof) {
+        val key = currentC02EvidenceKey() ?: return
+        val selected = selectedPlayAccount ?: return
+        try {
+            if (!verifiedPlayEvidenceStore.verified(key, selected, proof)) {
+                Log.i(TAG, "C02 R3B verification not recorded for absent or stale Play URL proof")
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.w(TAG, "C02 verified evidence unavailable; not claiming APK verification", error)
+        }
+    }
+
+    private suspend fun recordC02SdkIncompatible(proof: R3bVerifiedProof) {
+        val key = currentC02EvidenceKey() ?: return
+        val selected = selectedPlayAccount ?: return
+        try {
+            if (!verifiedPlayEvidenceStore.verifiedSdkIncompatible(key, selected, proof)) {
+                Log.i(TAG, "C02 verified manifest SDK restriction was not persisted")
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.w(TAG, "C02 verified SDK evidence unavailable", error)
+        }
+    }
+
+    private val activeHttpCall = AtomicReference<Call?>()
+    private val stalledTransfer = AtomicBoolean(false)
+    private val stallWatchdog = TransferStallWatchdog(SystemClock::elapsedRealtime)
+    private var r1eFixtureActive = false
 
     private val notificationManager = context.getSystemService<NotificationManager>()!!
 
@@ -136,6 +271,9 @@ class DownloadWorker @AssistedInject constructor(
 
     inner class NoNetworkException : Exception(context.getString(R.string.title_no_network))
     inner class NothingToDownloadException : Exception(context.getString(R.string.purchase_no_file))
+    inner class VerifiedSdkIncompatibleException : Exception(
+        context.getString(R.string.r3c03_c02_verified_sdk_incompatible)
+    )
     inner class DownloadFailedException : Exception(context.getString(R.string.download_failed))
     inner class DownloadCancelledException :
         Exception(context.getString(R.string.download_canceled))
@@ -144,6 +282,10 @@ class DownloadWorker @AssistedInject constructor(
         Exception(context.getString(R.string.verification_failed))
 
     inner class ExpiredUrlException : Exception(context.getString(R.string.download_failed))
+    inner class InvalidResumeRangeException : IOException(
+        "Server returned an invalid resume range; restarting the file"
+    )
+    inner class DownloadStalledException : IOException("Transfer stalled without receiving bytes")
 
     inner class PatchTooLargeException : Exception("Patch exceeds its declared maximum size")
 
@@ -152,34 +294,117 @@ class DownloadWorker @AssistedInject constructor(
     inner class InsufficientStorageException :
         Exception(context.getString(R.string.download_failed_storage))
 
-    override suspend fun doWork(): Result {
-        super.doWork()
-
-        // Fetch required data for download
-        try {
-            download = downloadDao.getDownload(inputData.getString(DownloadHelper.PACKAGE_NAME)!!)
-            deliveryClient = playClientFor(download.packageName)
-        } catch (exception: Exception) {
-            return onFailure(exception)
+    override suspend fun doWork(): Result = coroutineScope {
+        // CoroutineWorker.onStopped() is final; a child watcher cancels the HTTP call.
+        val cancelNetwork = launch(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                awaitCancellation()
+            } finally {
+                activeHttpCall.getAndSet(null)?.cancel()
+            }
         }
+        // A socket may stay open without transferring data; detect byte-level stalls
+        // without penalizing slow connections that continue to make progress.
+        val monitorStalls = launch(Dispatchers.Default) {
+            while (true) {
+                delay(STALL_POLL_INTERVAL_MS)
+                if (stallWatchdog.isStalled()) {
+                    if (stalledTransfer.compareAndSet(false, true)) {
+                        Log.w(TAG, "Download transfer stopped making progress")
+                        activeHttpCall.getAndSet(null)?.cancel()
+                    }
+                    break
+                }
+            }
+        }
+        try {
+            performDownload()
+        } finally {
+            monitorStalls.cancel()
+            cancelNetwork.cancel()
+            activeHttpCall.getAndSet(null)?.cancel()
+        }
+    }
 
-        // Workers only ever start from a QUEUED row, so anything past it was committed by an
-        // earlier run that never got to report success — as happens on a self-update, where
-        // install() kills this process. Re-installing here would just kill the app again.
-        if (download.status in installerStates) {
-            Log.i(TAG, "${download.packageName} is already ${download.status}, nothing to do")
+    private suspend fun performDownload(): Result {
+        // A new attempt must not touch the same APK temp file until an older worker
+        // has actually finished, even when WorkManager reports the old job cancelled.
+        val packageName = inputData.getString(DownloadHelper.PACKAGE_NAME)
+            ?: return Result.failure()
+        val lock = synchronized(transferLocks) {
+            transferLocks.getOrPut(packageName) { Mutex() }
+        }
+        lock.lock()
+        return try {
+            downloadUnderLock()
+        } finally {
+            lock.unlock()
+        }
+    }
+
+    private suspend fun downloadUnderLock(): Result {
+        // Resolve the persisted generation BEFORE refreshing auth or contacting Play.
+        // An obsolete worker must be a truly offline no-op.
+        // A cancelled or replaced request may still have a scheduled worker. Never let
+        // that worker operate on a newer download row or a missing row.
+        val packageName = inputData.getString(DownloadHelper.PACKAGE_NAME)
+            ?: return Result.failure()
+        val expectedVersion = inputData.getLong(DownloadHelper.VERSION_CODE, -1L)
+        val expectedAttempt = inputData.getLong(DownloadHelper.ATTEMPT_KEY, -1L)
+        val current = runCatching { downloadDao.getDownload(packageName) }.getOrNull()
+            ?: return Result.success()
+        if (current.versionCode != expectedVersion ||
+            current.downloadedAt != expectedAttempt ||
+            current.status !in DownloadStatus.processing + DownloadStatus.QUEUED
+        ) {
+            Log.i(TAG, "Skipping stale or terminal worker for $packageName")
             return Result.success()
+        }
+        download = current
+        if (BuildConfig.DEBUG && R1EOfflineGate.enabled(inputData)) {
+            return downloadOfflineFixture()
+        }
+        super.doWork()
+        // This identity is checked again inside the Room transaction at every write.
+        // It never contains a Play token, e-mail address, APK URL, or signing secret.
+        if (download.downloadedAt > 0L) {
+            try {
+                val selected = playDeliveryEvidenceDao.selectedAccountIdentity(packageName)
+                selectedPlayAccount = selected
+                val deviceVariant = "offer:${download.offerType};sdk:${Build.VERSION.SDK_INT};" +
+                    "abis:${Build.SUPPORTED_ABIS.joinToString(",")};" +
+                    "density:${context.resources.displayMetrics.densityDpi}"
+                playEvidenceKey = PlayExactVersionOutcomePolicy.RequestKey(
+                    packageName = download.packageName,
+                    versionCode = download.versionCode,
+                    attemptGeneration = download.downloadedAt,
+                    accountBinding = privateAccountTag(selected),
+                    variant = deviceVariant
+                )
+            } catch (exception: Exception) {
+                // A broken evidence store cannot turn a real download into an unavailable claim.
+                Log.w(TAG, "Play evidence identity unavailable", exception)
+            }
+        }
+        try {
+            deliveryClient = playClientFor(packageName)
+        } catch (exception: Exception) {
+            PlayDeliveryFailureClassifier.classify(exception)?.let { failure ->
+                storePlayOutcome(failure.name)
+            }
+            return onFailure(exception)
         }
 
         // The icon only decorates the progress notification. Fetching it is best-effort: a
         // failure (unreachable/pinned host, non-HTTP url, undecodable image) must never abort
         // the download itself.
         try {
-            val response = get(download.iconURL).body
-            val bitmap = BitmapFactory.decodeStream(
-                withContext(Dispatchers.IO) { response.byteStream() }
-            )
-            icon = bitmap?.scale(96, 96)
+            get(download.iconURL).use { response ->
+                val bitmap = BitmapFactory.decodeStream(
+                    withContext(Dispatchers.IO) { response.body.byteStream() }
+                )
+                icon = bitmap?.scale(96, 96)
+            }
         } catch (exception: Exception) {
             Log.w(TAG, "Failed to fetch icon for ${download.packageName}", exception)
         }
@@ -190,12 +415,24 @@ class DownloadWorker @AssistedInject constructor(
         // Resolve download URLs if the file list is empty. Surface any gplayapi error
         // (e.g. AppNotPurchased, AppNotSupported, AppRemoved) as the failure cause so
         // the user sees the real reason instead of a generic "files not available".
-        notifyStatus(DownloadStatus.PURCHASING)
+        if (!notifyStatus(DownloadStatus.PURCHASING)) return Result.success()
         try {
             download.fileList = download.fileList.ifEmpty {
-                resolveFiles(download.packageName, download.versionCode, download.offerType)
+                val resolved = resolveFiles(
+                    download.packageName,
+                    download.versionCode,
+                    download.offerType
+                )
+                if (resolved.isNotEmpty()) {
+                    // A URL is *not* R3B-verified APK content or installability proof.
+                    storePlayOutcome("URLS_RESOLVED", resolved.size)
+                }
+                resolved
             }
         } catch (exception: Exception) {
+            PlayDeliveryFailureClassifier.classify(exception)?.let { failure ->
+                storePlayOutcome(failure.name)
+            }
             return onFailure(exception)
         }
 
@@ -263,8 +500,18 @@ class DownloadWorker @AssistedInject constructor(
         totalBytes = files.sumOf { if (it in patchSources) patchEstimate(it) else it.size }
 
         // Update database with all latest purchases
-        downloadDao.updateFiles(download.packageName, download.fileList)
-        downloadDao.updateSharedLibs(download.packageName, download.sharedLibs)
+        downloadDao.updateWorkerFiles(
+            download.packageName,
+            download.versionCode,
+            download.downloadedAt,
+            download.fileList
+        )
+        downloadDao.updateWorkerSharedLibs(
+            download.packageName,
+            download.versionCode,
+            download.downloadedAt,
+            download.sharedLibs
+        )
 
         // Fail fast (and let the system free its cache) if there isn't room for the download,
         // instead of dying mid-write with a partial file. Only the not-yet-downloaded bytes
@@ -323,7 +570,9 @@ class DownloadWorker @AssistedInject constructor(
 
         // Verify downloaded files (skipping any already verified during the download pass)
         try {
-            notifyStatus(DownloadStatus.VERIFYING)
+            if (!notifyStatus(DownloadStatus.VERIFYING)) return Result.success()
+            // Every transfer completed; this is byte evidence, not a verified APK claim.
+            recordC02Bytes()
             files.forEach { file ->
                 val path = PathUtil.getLocalFile(context, file, download).absolutePath
                 if (path !in verifiedFiles) require(verifyFile(file))
@@ -335,18 +584,80 @@ class DownloadWorker @AssistedInject constructor(
                 Log.i(TAG, "Play frosting of ${download.packageName} @ ${file.name}: $result")
                 require(result != FrostingVerifier.Result.INVALID)
             }
+            val proof = withContext(Dispatchers.IO) {
+                R3bVerifiedProof.verify(context, download) { isStopped }
+            }
+            if (isStopped) return Result.success()
+            // A private proof can be created only after the complete R3B verifier passes.
+            recordC02Verified(proof)
+            if (proof.verifiedMinSdk != null && proof.verifiedMinSdk > Build.VERSION.SDK_INT) {
+                recordC02SdkIncompatible(proof)
+                return onFailure(VerifiedSdkIncompatibleException())
+            }
+        } catch (exception: CancellationException) {
+            throw exception
         } catch (exception: Exception) {
             Log.e(TAG, "Failed to verify ${download.packageName}", exception)
             // Drop the corrupt files so the next attempt re-downloads them clean instead
             // of resuming from a poisoned offset.
             runCatching { files.forEach { deleteFile(it) } }
-            return onFailure(VerificationFailedException())
+            return onFailure(
+                if (exception is ApkVerificationException) {
+                    exception
+                } else {
+                    VerificationFailedException()
+                }
+            )
         }
 
         Log.i(TAG, "Finished downloading & verifying ${download.packageName}")
-        notifyStatus(DownloadStatus.COMPLETED)
+        if (!notifyStatus(DownloadStatus.COMPLETED)) return Result.success()
 
         return onSuccess()
+    }
+
+    /**
+     * Debug builds only: execute this worker's REAL transfer/retry/Room path against a
+     * strictly validated local test server. No Play calls and no package installation.
+     */
+    private suspend fun downloadOfflineFixture(): Result {
+        if (!R1EOfflineGate.allowed(download.packageName, inputData)) {
+            return Result.failure()
+        }
+        r1eFixtureActive = true
+        val url = requireNotNull(inputData.getString(R1EOfflineGate.URL))
+        val expectedSize = inputData.getLong(R1EOfflineGate.SIZE, -1L)
+        val expectedDigest = requireNotNull(inputData.getString(R1EOfflineGate.SHA256))
+        val file = R1EOfflineGate.file(context, download.packageName, download.downloadedAt)
+        totalBytes = expectedSize
+        download.totalFiles = 1
+        try {
+            if (!notifyStatus(DownloadStatus.DOWNLOADING)) return Result.success()
+            transfer(url, file, expectedSize)
+            if (!notifyStatus(DownloadStatus.VERIFYING)) return Result.success()
+            val digest = withContext(Dispatchers.IO) {
+                val md = MessageDigest.getInstance("SHA-256")
+                file.inputStream().use { input ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        md.update(buffer, 0, count)
+                    }
+                }
+                md.digest().joinToString("") { byte ->
+                    "%02x".format(byte.toInt() and 0xff)
+                }
+            }
+            if (file.length() != expectedSize || digest != expectedDigest) {
+                file.delete()
+                return onFailure(VerificationFailedException())
+            }
+            if (!notifyStatus(DownloadStatus.COMPLETED)) return Result.success()
+            return Result.success()
+        } catch (exception: Exception) {
+            return onFailure(exception)
+        }
     }
 
     private suspend fun onSuccess(): Result {
@@ -355,12 +666,20 @@ class DownloadWorker @AssistedInject constructor(
                 // Update the ongoing foreground notification to reflect the install phase,
                 // so the user sees a clean "Downloading -> Installing" progression instead of
                 // a stale download bar lingering at 100%.
-                notifyStatus(DownloadStatus.INSTALLING, isProgress = true)
+                if (!notifyStatus(DownloadStatus.INSTALLING, isProgress = true)) {
+                    return@withContext Result.success()
+                }
                 appInstaller.getPreferredInstaller(notifyOnFallback = true).install(download)
                 Result.success()
             } catch (exception: Exception) {
                 Log.e(TAG, "Failed to install ${download.packageName}", exception)
-                onFailure(exception)
+                if (exception is ApkVerificationException) {
+                    // InstallerBase already emitted the one attempt-bound failure event;
+                    // don't post a second failure from the worker for the same rejection.
+                    Result.success()
+                } else {
+                    onFailure(exception)
+                }
             }
         }
     }
@@ -376,7 +695,11 @@ class DownloadWorker @AssistedInject constructor(
         val cancelReasons = listOf(STOP_REASON_USER, STOP_REASON_CANCELLED_BY_APP)
         if (isSAndAbove && stopReason in cancelReasons) return true
         return runCatching {
-            downloadDao.getDownload(download.packageName).status == DownloadStatus.CANCELLED
+            downloadDao.getDownload(download.packageName).let {
+                it.versionCode == download.versionCode &&
+                    it.downloadedAt == download.downloadedAt &&
+                    it.status == DownloadStatus.CANCELLED
+            }
         }.getOrDefault(false)
     }
 
@@ -386,12 +709,20 @@ class DownloadWorker @AssistedInject constructor(
      */
     private fun isRetryable(throwable: Throwable?): Boolean = when (throwable) {
         null -> false
+
+        is PlayException.RateLimited,
+        is PlayException.ServerError,
         is NoNetworkException,
         is SocketException,
         is SocketTimeoutException,
         is UnknownHostException,
         // Expired URLs were re-purchased by clearing the file list; retrying re-fetches them.
-        is ExpiredUrlException -> true
+        is ExpiredUrlException,
+        is InvalidResumeRangeException,
+        is DownloadStalledException -> true
+
+        // A truncated HTTP response may surface as ProtocolException rather than SocketException.
+        is IOException -> true
 
         else -> isRetryable(throwable.cause)
     }
@@ -429,32 +760,30 @@ class DownloadWorker @AssistedInject constructor(
                     else -> {
                         val userMessage = when (exception) {
                             is PlayException.AppNotSupported -> context.getString(
-                                R.string.download_version_unavailable,
-                                download.versionCode
+                                R.string.r3c03_delivery_not_proven_unavailable
                             )
 
-                            // Delivery is the only call this worker makes, and both session
-                            // types carry Capability.DOWNLOAD, so the only way it can demand an
-                            // account is the signing-key rotation the anonymous endpoint cannot
-                            // express. The library's own message says so, in English only.
+                            // Require an account without guessing the server-side cause.
                             is PlayException.RequiresAccount -> context.getString(
-                                R.string.download_signing_key_rotated
+                                R.string.r3c03_delivery_requires_account
                             )
 
                             else -> exception.message?.takeIf { it.isNotBlank() }
                                 ?: context.getString(R.string.download_failed)
                         }
-                        notifyStatus(
+                        val recorded = notifyStatus(
                             status = DownloadStatus.FAILED,
                             message = userMessage
                         )
-                        AuroraApp.events.send(
-                            InstallerEvent.Failed(
-                                packageName = download.packageName,
-                                error = userMessage,
-                                extra = exception.stackTraceToString()
+                        if (recorded) {
+                            AuroraApp.events.send(
+                                InstallerEvent.Failed(
+                                    packageName = download.packageName,
+                                    error = userMessage,
+                                    extra = exception.stackTraceToString()
+                                )
                             )
-                        )
+                        }
                     }
                 }
             }
@@ -566,6 +895,7 @@ class DownloadWorker @AssistedInject constructor(
                     deliveryClient = playClient
                     resolveWith(playClient)
                 }
+
                 else -> throw exception
             }
         }
@@ -690,8 +1020,22 @@ class DownloadWorker @AssistedInject constructor(
      * resolution and file transfer are separate concerns using separate tools on purpose.
      */
     private fun get(url: String, headers: Map<String, String> = emptyMap()): Response {
+        if (isStopped) throw DownloadCancelledException()
         val request = Request(url = url.toHttpUrl(), headers = headers.toHeaders())
-        return okHttpClient.newCall(request).execute()
+        val call = okHttpClient.newCall(request)
+        activeHttpCall.set(call)
+        // Close the race where cancellation lands between the first guard and set().
+        if (isStopped) {
+            activeHttpCall.compareAndSet(call, null)
+            call.cancel()
+            throw DownloadCancelledException()
+        }
+        return try {
+            call.execute()
+        } catch (exception: IOException) {
+            activeHttpCall.compareAndSet(call, null)
+            throw exception
+        }
     }
 
     /**
@@ -817,6 +1161,7 @@ class DownloadWorker @AssistedInject constructor(
         onLength: (Long) -> Unit = {}
     ) {
         withContext(Dispatchers.IO) {
+            stallWatchdog.begin()
             try {
                 // Download as a temporary file to avoid installing corrupted files
                 val tmpFile = File(file.absolutePath + ".tmp")
@@ -835,16 +1180,37 @@ class DownloadWorker @AssistedInject constructor(
                     // Play download URLs are short-lived; a 403/410 means ours expired while
                     // the download sat queued. Drop the stale file lists so the retry
                     // re-purchases fresh URLs instead of hammering the dead one.
+                    if (ResumeRangePolicy.requiresRestart(code, existingBytes)) {
+                        tmpFile.delete()
+                        throw InvalidResumeRangeException()
+                    }
                     if (code == HTTP_FORBIDDEN || code == HTTP_GONE) {
                         Log.w(TAG, "Download URL for ${download.packageName} expired (code=$code)")
-                        downloadDao.updateFiles(download.packageName, emptyList())
-                        downloadDao.updateSharedLibs(
+                        downloadDao.updateWorkerFiles(
                             download.packageName,
+                            download.versionCode,
+                            download.downloadedAt,
+                            emptyList()
+                        )
+                        downloadDao.updateWorkerSharedLibs(
+                            download.packageName,
+                            download.versionCode,
+                            download.downloadedAt,
                             download.sharedLibs.map { it.copy(fileList = emptyList()) }
                         )
                         throw ExpiredUrlException()
                     }
                     throw DownloadFailedException()
+                }
+
+                // A 206 response with no prior bytes must still start at zero.
+                if (response.code == HTTP_PARTIAL &&
+                    existingBytes == 0L &&
+                    !ResumeRangePolicy.matches(response.header("Content-Range"), 0L)
+                ) {
+                    response.close()
+                    tmpFile.delete()
+                    throw InvalidResumeRangeException()
                 }
 
                 // Only resume when the server actually honored the Range request (206). If
@@ -853,6 +1219,19 @@ class DownloadWorker @AssistedInject constructor(
                 // silently corrupt the file.
                 val resuming = existingBytes > 0 && response.code == HTTP_PARTIAL
                 if (resuming) {
+                    val range = response.header("Content-Range")
+                    val returnedStart = range?.substringAfter("bytes ")
+                        ?.substringBefore("-")?.toLongOrNull()
+                    if (returnedStart != existingBytes) {
+                        response.close()
+                        tmpFile.delete()
+                        throw InvalidResumeRangeException()
+                    }
+                    if (!ResumeRangePolicy.matches(range, existingBytes)) {
+                        response.close()
+                        tmpFile.delete()
+                        throw InvalidResumeRangeException()
+                    }
                     downloadedBytes += existingBytes
                 } else if (existingBytes > 0) {
                     Log.w(
@@ -871,6 +1250,8 @@ class DownloadWorker @AssistedInject constructor(
                             // Abort promptly mid-file when stopped, instead of only checking
                             // between files (a single split can be hundreds of MB).
                             if (isStopped) throw CancellationException("Download stopped")
+                            if (stalledTransfer.get()) throw DownloadStalledException()
+                            stallWatchdog.onBytes(info.bytesCopied)
                             written += info.bytesCopied
                             if (maxSize > 0 && written > maxSize) {
                                 throw PatchTooLargeException()
@@ -880,10 +1261,12 @@ class DownloadWorker @AssistedInject constructor(
                     }
                 }
 
+                if (stalledTransfer.get()) throw DownloadStalledException()
                 if (!tmpFile.renameTo(file)) {
                     throw Exception("Failed to remove .tmp extension from $tmpFile")
                 }
             } catch (exception: Exception) {
+                if (stalledTransfer.get() && !isStopped) throw DownloadStalledException()
                 when (exception) {
                     is SocketException,
                     is SocketTimeoutException,
@@ -897,6 +1280,8 @@ class DownloadWorker @AssistedInject constructor(
 
                     else -> throw exception
                 }
+            } finally {
+                stallWatchdog.finish()
             }
         }
     }
@@ -931,8 +1316,10 @@ class DownloadWorker @AssistedInject constructor(
                     this.timeRemaining = (bytesRemaining / speed) * 1000
                 }
 
-                downloadDao.updateProgress(
+                downloadDao.updateWorkerProgress(
                     download.packageName,
+                    download.versionCode,
+                    download.downloadedAt,
                     download.progress,
                     download.speed,
                     download.timeRemaining
@@ -966,10 +1353,22 @@ class DownloadWorker @AssistedInject constructor(
         status: DownloadStatus,
         isProgress: Boolean = false,
         message: String? = null
-    ) {
-        // Update status in database
+    ): Boolean {
+        // A user cancellation or a newer version always wins over old callbacks.
+        if (isStopped && status != DownloadStatus.CANCELLED) return false
+        val updated = downloadDao.updateWorkerStatus(
+            download.packageName,
+            download.versionCode,
+            download.downloadedAt,
+            status
+        )
+        if (updated == 0) {
+            Log.i(TAG, "Ignoring obsolete status $status for ${download.packageName}")
+            return false
+        }
         download.status = status
-        downloadDao.updateStatus(download.packageName, status)
+        // Do not post user-visible notifications from the isolated debug fixture.
+        if (r1eFixtureActive) return true
 
         when (status) {
             // Internal phases the user doesn't need a separate notification for: the ongoing
@@ -980,13 +1379,20 @@ class DownloadWorker @AssistedInject constructor(
             DownloadStatus.VERIFYING,
             DownloadStatus.CANCELLED -> {
                 notificationManager.cancel(download.packageName.hashCode())
-                return
+                return true
             }
 
             DownloadStatus.COMPLETED -> {
                 // Mark progress as 100 manually to avoid race conditions
                 download.progress = 100
-                downloadDao.updateProgress(download.packageName, 100, 0, 0)
+                downloadDao.updateWorkerProgress(
+                    download.packageName,
+                    download.versionCode,
+                    download.downloadedAt,
+                    100,
+                    0,
+                    0
+                )
 
                 // Silently-installable apps install automatically and get a single
                 // "installed" notification afterwards, so a separate "download complete"
@@ -999,7 +1405,7 @@ class DownloadWorker @AssistedInject constructor(
                 )
                 if (!needsUserAction) {
                     notificationManager.cancel(download.packageName.hashCode())
-                    return
+                    return true
                 }
             }
 
@@ -1008,7 +1414,7 @@ class DownloadWorker @AssistedInject constructor(
 
         // Skip detailed progress refreshes when the user has hidden progress; the minimal
         // foreground notification posted via getForegroundInfo keeps the download alive.
-        if (isProgress && !showProgress) return
+        if (isProgress && !showProgress) return true
 
         val notification = NotificationUtil.getDownloadNotification(
             context,
@@ -1026,6 +1432,7 @@ class DownloadWorker @AssistedInject constructor(
         if (status == DownloadStatus.FAILED) {
             NotificationUtil.refreshGroupSummaries(context)
         }
+        return true
     }
 
     /**

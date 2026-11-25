@@ -27,7 +27,6 @@ import com.aurora.store.data.installer.base.IInstaller
 import com.aurora.store.data.model.Installer
 import com.aurora.store.data.model.InstallerInfo
 import com.aurora.store.util.PackageUtil
-import com.aurora.store.util.PackageUtil.hasMicroGCompanion
 import com.aurora.store.util.Preferences
 import com.aurora.store.util.Preferences.PREFERENCE_INSTALLER_ID
 import com.aurora.store.util.Preferences.PREFERENCE_PLAY_ATTRIBUTED_INSTALLS
@@ -59,6 +58,10 @@ class AppInstaller @Inject constructor(
             "com.aurora.store.data.installer.AppInstaller.EXTRA_PACKAGE_NAME"
         const val EXTRA_VERSION_CODE =
             "com.aurora.store.data.installer.AppInstaller.EXTRA_VERSION_CODE"
+        const val EXTRA_ATTEMPT_KEY =
+            "com.aurora.store.data.installer.AppInstaller.EXTRA_ATTEMPT_KEY"
+        const val EXTRA_PARENT_PACKAGE_NAME =
+            "com.aurora.store.data.installer.AppInstaller.EXTRA_PARENT_PACKAGE_NAME"
         const val EXTRA_DISPLAY_NAME =
             "com.aurora.store.data.installer.AppInstaller.EXTRA_DISPLAY_NAME"
 
@@ -97,7 +100,7 @@ class AppInstaller @Inject constructor(
             } else {
                 null
             },
-            if (hasMicroGCompanion(context)) MicroGInstaller.installerInfo else null
+            if (MicroGInstaller.isAvailable(context)) MicroGInstaller.installerInfo else null
         )
 
         /**
@@ -311,7 +314,7 @@ class AppInstaller @Inject constructor(
                 defaultInstaller
             }
 
-            Installer.MICROG -> if (hasMicroGCompanion(context)) {
+            Installer.MICROG -> if (MicroGInstaller.isAvailable(context)) {
                 microGInstaller
             } else {
                 defaultInstaller

@@ -5,19 +5,17 @@
 
 package com.aurora.store.compose.composable
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.tooling.preview.Preview
@@ -27,12 +25,8 @@ import com.aurora.store.R
 import com.aurora.store.compose.preview.ThemePreviewProvider
 
 /**
- * Single shared layout for every list-row in the app. A leading slot (icon, image…), a
- * stacked headline + supporting + tertiary text column, and a trailing slot (checkbox,
- * button, chip…). [headlineStyle] toggles between data-row (bodyMedium) and settings-row
- * (bodyLarge) typography while keeping every other dimension consistent.
- *
- * Every text slot wraps rather than truncating; nothing here is worth hiding.
+ * Shared Material 3 list row used by app, download, account, and settings lists.
+ * Keeping the leading, text, and trailing slots here gives these screens one spacing system.
  */
 @Composable
 fun AuroraListItem(
@@ -43,60 +37,85 @@ fun AuroraListItem(
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     selected: Boolean = false,
-    verticalPadding: Dp = dimensionResource(R.dimen.spacing_xsmall),
+    verticalPadding: Dp = dimensionResource(R.dimen.spacing_small),
     enabled: Boolean = true,
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     headlineStyle: TextStyle = MaterialTheme.typography.bodyLarge
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(
-                when {
-                    onLongClick != null -> Modifier.combinedClickable(
-                        enabled = enabled,
-                        onClick = { onClick?.invoke() },
-                        onLongClick = onLongClick
-                    )
-
-                    onClick != null -> Modifier.clickable(enabled = enabled, onClick = onClick)
-                    else -> Modifier
+    val supportingContent: (@Composable () -> Unit)? =
+        if (!supporting.isNullOrBlank() || !tertiary.isNullOrBlank()) {
+            {
+                Column {
+                    if (!supporting.isNullOrBlank()) {
+                        Text(
+                            text = supporting,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (!tertiary.isNullOrBlank()) {
+                        Text(
+                            text = tertiary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-            )
-            .then(
-                if (selected) {
-                    Modifier.background(MaterialTheme.colorScheme.secondaryContainer)
-                } else {
-                    Modifier
-                }
-            )
-            .padding(
-                horizontal = dimensionResource(R.dimen.spacing_medium),
-                vertical = verticalPadding
-            ),
-        horizontalArrangement = Arrangement.spacedBy(dimensionResource(R.dimen.spacing_small)),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (leading != null) leading()
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = headline, style = headlineStyle)
-            if (!supporting.isNullOrBlank()) {
-                Text(
-                    text = supporting,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
-            if (!tertiary.isNullOrBlank()) {
-                Text(
-                    text = tertiary,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+        } else {
+            null
         }
-        if (trailing != null) trailing()
+    val itemModifier = modifier.fillMaxWidth().then(
+        if (onLongClick != null) {
+            Modifier.combinedClickable(
+                enabled = enabled,
+                onClick = { onClick?.invoke() },
+                onLongClick = onLongClick
+            )
+        } else {
+            Modifier
+        }
+    )
+    val itemColors = ListItemDefaults.colors(
+        containerColor = if (selected) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            Color.Transparent
+        }
+    )
+    val contentPadding = PaddingValues(
+        horizontal = dimensionResource(R.dimen.spacing_large),
+        vertical = verticalPadding
+    )
+
+    if (onClick != null && onLongClick == null) {
+        ListItem(
+            onClick = onClick,
+            modifier = itemModifier,
+            enabled = enabled,
+            shapes = auroraListItemShapes(),
+            supportingContent = supportingContent,
+            leadingContent = leading,
+            trailingContent = trailing,
+            colors = itemColors,
+            contentPadding = contentPadding
+        ) {
+            Text(text = headline, style = headlineStyle)
+        }
+    } else {
+        ListItem(
+            modifier = itemModifier,
+            enabled = enabled,
+            shapes = auroraListItemShapes(),
+            supportingContent = supportingContent,
+            leadingContent = leading,
+            trailingContent = trailing,
+            colors = itemColors,
+            contentPadding = contentPadding
+        ) {
+            Text(text = headline, style = headlineStyle)
+        }
     }
 }
 

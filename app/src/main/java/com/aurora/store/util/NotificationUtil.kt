@@ -179,6 +179,7 @@ object NotificationUtil {
 
         val cancelIntent = Intent(context, DownloadCancelReceiver::class.java).apply {
             putExtra(DownloadHelper.PACKAGE_NAME, download.packageName)
+            putExtra(DownloadHelper.ATTEMPT_KEY, download.downloadedAt)
         }
 
         val pendingCancelIntent = PendingIntentCompat.getBroadcast(

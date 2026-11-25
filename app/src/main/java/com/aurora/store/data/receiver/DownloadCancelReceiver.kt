@@ -24,12 +24,19 @@ class DownloadCancelReceiver : BroadcastReceiver() {
     lateinit var downloadHelper: DownloadHelper
 
     override fun onReceive(context: Context, intent: Intent?) {
-        val packageName: String = intent?.getStringExtra("PACKAGE_NAME") ?: ""
+        val packageName: String = intent?.getStringExtra(DownloadHelper.PACKAGE_NAME) ?: ""
+        val expectedAttempt = intent?.getLongExtra(DownloadHelper.ATTEMPT_KEY, -1L)
+            ?.takeIf { it >= 0L }
 
         if (packageName.isNotBlank()) {
             Log.d(TAG, "Received cancel download request for $packageName")
+            val result = goAsync()
             AuroraApp.scope.launch(Dispatchers.IO) {
-                downloadHelper.cancelDownload(packageName)
+                try {
+                    downloadHelper.cancelDownload(packageName, expectedAttempt)
+                } finally {
+                    result.finish()
+                }
             }
         }
     }

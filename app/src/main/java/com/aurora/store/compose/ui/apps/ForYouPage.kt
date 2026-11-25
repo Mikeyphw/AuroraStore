@@ -11,11 +11,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.aurora.gplayapi.model.App
 import com.aurora.gplayapi.model.StreamCluster
 import com.aurora.store.HomeStash
 import com.aurora.store.compose.composable.StreamCarousel
 import com.aurora.store.data.model.ViewState
+import com.aurora.store.data.room.download.Download
 import com.aurora.store.viewmodel.homestream.StreamViewModel
 
 @Composable
@@ -25,7 +28,12 @@ internal fun ForYouContent(
     onAppClick: (App) -> Unit,
     onHeaderClick: (StreamCluster) -> Unit,
     onClusterScrolled: (StreamCluster) -> Unit,
-    onScrolledToEnd: () -> Unit
+    onScrolledToEnd: () -> Unit,
+    downloadsByPackage: Map<String, Download> = emptyMap(),
+    cancellingPackageNames: Set<String> = emptySet(),
+    updatablePackageNames: Set<String> = emptySet(),
+    onAppAction: (App) -> Unit = {},
+    bottomContentPadding: Dp = 0.dp
 ) {
     val category = category(pageType)
     val state by viewModel.liveData.observeAsState()
@@ -39,8 +47,14 @@ internal fun ForYouContent(
     StreamCarousel(
         modifier = Modifier.fillMaxSize(),
         streamBundle = streamBundle?.get(category),
+        bottomContentPadding = bottomContentPadding,
+        showHomeActions = true,
+        downloadsByPackage = downloadsByPackage,
+        cancellingPackageNames = cancellingPackageNames,
+        updatablePackageNames = updatablePackageNames,
         onHeaderClick = onHeaderClick,
         onAppClick = onAppClick,
+        onAppAction = onAppAction,
         onClusterScrolled = onClusterScrolled,
         onScrolledToEnd = onScrolledToEnd
     )

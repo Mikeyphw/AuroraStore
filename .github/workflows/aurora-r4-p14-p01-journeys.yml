@@ -1,0 +1,105 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: Aurora R4 P14 P01 — Offline Nav3 + Deterministic Search Details
+on:
+  push:
+    branches:
+      - feature/aurora-consolidated-integration-20261125
+      - feature/aurora-r4-p14-p01-offline-nav3-journeys-20261114
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: aurora-p14-p01-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source:
+    name: Source pins, P13 limited approval and negative checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Audit additive P14 scope, P13 human approval and fail-closed contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          bash -n scripts/ci/r4_p14_p01_emulator_acceptance.sh
+          python3 -B scripts/ci/test_r4_p14_p01_source_contract.py
+          python3 -B scripts/ci/r4_p14_p01_source_contract.py --root . --integration
+          python3 -B scripts/ci/test_r4_p13b_visual_signoff.py
+          git diff --check 47c360e9cb553f73fb6858cd364ea19835bada6e HEAD
+  api36:
+    name: 16 real Nav3/Search/Details tests and 40 screenshots across two sizes
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 95
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Initialize fail-closed device receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/aurora-r4-p14-p01"
+          printf '%s\n' '{"result":"NOT_RUN","release_qualified":false,"full_upstream_visual_signoff":false}' > "$RUNNER_TEMP/aurora-r4-p14-p01/receipt.json"
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+      - name: Install GitHub Android SDK and API36 system image
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install 'platforms;android-37.0'
+          test -s "$ANDROID_SDK_ROOT/platforms/android-37.0/android.jar"
+          for attempt in 1 2 3 4; do
+            if sdkmanager --install 'system-images;android-36;google_apis;x86_64'; then break; fi
+            if [[ "$attempt" -eq 4 ]]; then exit 1; fi
+            rm -rf -- "$ANDROID_SDK_ROOT/.temp" "$ANDROID_SDK_ROOT/system-images/android-36/google_apis/x86_64" "$HOME/.android/cache"
+            sleep "$((attempt*10))"
+          done
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
+      - name: Compile app and instrumentation APK only on GitHub
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          chmod +x gradlew
+          ./gradlew --no-daemon --max-workers=2 --stacktrace \
+            :app:assembleVanillaDebug :app:assembleVanillaDebugAndroidTest
+      - name: Require disposable KVM emulator
+        shell: bash
+        run: |
+          test -c /dev/kvm
+          if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then sudo chmod a+rw /dev/kvm; fi
+          test -r /dev/kvm && test -w /dev/kvm
+      - name: Exercise actual offline Navigation3 routes on API36
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 2048M
+          disk-size: 3072M
+          force-avd-creation: true
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: bash scripts/ci/r4_p14_p01_emulator_acceptance.sh
+      - name: Publish screenshots, run identity and failure diagnostics
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: aurora-r4-p14-p01-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/aurora-r4-p14-p01/
+          if-no-files-found: error
+          retention-days: 14

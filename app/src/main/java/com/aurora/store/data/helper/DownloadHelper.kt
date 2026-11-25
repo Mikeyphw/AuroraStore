@@ -24,6 +24,9 @@ import com.aurora.store.AuroraApp
 import com.aurora.store.data.AccountRepository
 import com.aurora.store.data.event.InstallerEvent
 import com.aurora.store.data.installer.AppInstaller
+import com.aurora.store.data.installer.InstallRecoveryPolicy
+import com.aurora.store.data.installer.InstallResultPolicy
+import com.aurora.store.data.installer.base.InstallerBase
 import com.aurora.store.data.model.DownloadSortBy
 import com.aurora.store.data.model.DownloadStatus
 import com.aurora.store.data.room.download.Download
@@ -34,9 +37,13 @@ import com.aurora.store.data.work.DownloadWorker
 import com.aurora.store.util.NotificationUtil
 import com.aurora.store.util.PackageUtil
 import com.aurora.store.util.PathUtil
+import com.aurora.store.util.Preferences
+import com.aurora.store.util.Preferences.PREFERENCE_AUTO_DELETE
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.launchIn
@@ -60,7 +67,9 @@ class DownloadHelper @Inject constructor(
 
         private const val DOWNLOAD_APP = "DOWNLOAD_APP"
         private const val DOWNLOAD_UPDATE = "DOWNLOAD_UPDATE"
-        private const val VERSION_CODE = "VERSION_CODE"
+        const val VERSION_CODE = "VERSION_CODE"
+        const val ATTEMPT_KEY = "ATTEMPT_KEY"
+        private const val ORPHAN_CHECK_INTERVAL_MS = 120_000L
     }
 
     // Single stable StateFlow shared across consumers. Previously a `get()` accessor that
@@ -110,89 +119,147 @@ class DownloadHelper @Inject constructor(
         AuroraApp.scope.launch {
             val downloads = downloadDao.downloads().firstOrNull() ?: emptyList()
             cancelFailedDownloads(downloads)
-            finalizeStaleSelfUpdate(downloads)
-            recoverStalledInstalls(downloads)
+            reconcileInstallationRows(downloads, includeCompleted = true)
         }.invokeOnCompletion {
             observeDownloads()
             observeInstalls()
-        }
-    }
-
-    private suspend fun recoverStalledInstalls(downloads: List<Download>) {
-        downloads.filter {
-            it.packageName != context.packageName &&
-                it.status in setOf(DownloadStatus.COMPLETED, DownloadStatus.INSTALLING) &&
-                it.hasDownloadedFiles(context) &&
-                !PackageUtil.isInstalled(context, it.packageName, it.versionCode)
-        }.forEach {
-            Log.i(TAG, "Recovering stalled install for ${it.packageName}")
-            downloadDao.updateStatus(it.packageName, DownloadStatus.AWAITING_INSTALL)
-            WorkManager.getInstance(context)
-                .cancelAllWorkByTag("$PACKAGE_NAME:${it.packageName}")
+            monitorOrphanedDownloads()
         }
     }
 
     /**
-     * Finalizes a self-update download left dangling in [DownloadStatus.INSTALLING]. Replacing
-     * the app's own APK kills the process before the installer's "installed" event can advance
-     * the row, so on the next launch it would otherwise show as installing forever. Reaching
-     * INSTALLING means the install was already committed, so mark it installed; if it actually
-     * failed, the periodic update check re-offers and re-enqueues it.
+     * Reconcile the persisted install handoff against the OS rather than abandoning Android
+     * confirmation sessions on process restart. Do not recommit sessions here: that launches
+     * duplicate confirmation activities and can fail the install that was already pending.
      *
-     * The worker is cancelled too: it never got to return a result either, so WorkManager would
-     * keep re-running it on every launch, re-installing the app over itself each time.
+     * During periodic checks, COMPLETED is excluded because a live worker may be in the tiny
+     * gap between writing COMPLETED and handing control to the installer.
      */
-    private suspend fun finalizeStaleSelfUpdate(downloads: List<Download>) {
-        downloads.firstOrNull {
-            it.packageName == context.packageName && it.status == DownloadStatus.INSTALLING
-        }?.let {
-            Log.i(TAG, "Finalizing stale self-update install for ${it.packageName}")
-            downloadDao.updateStatus(it.packageName, DownloadStatus.INSTALLED)
-            WorkManager.getInstance(context)
-                .cancelAllWorkByTag("$PACKAGE_NAME:${it.packageName}")
+    private suspend fun reconcileInstallationRows(
+        downloads: List<Download>,
+        includeCompleted: Boolean = false
+    ) {
+        val packageInstaller = context.packageManager.packageInstaller
+        val livePackages = runCatching {
+            packageInstaller.mySessions.mapNotNull { it.appPackageName }.toSet()
+        }.getOrElse { error ->
+            // If platform session enumeration fails, never guess that a confirmation vanished.
+            Log.w(TAG, "Could not enumerate owned installation sessions", error)
+            return
+        }
+
+        downloads.filter { item ->
+            item.status in setOf(DownloadStatus.INSTALLING, DownloadStatus.AWAITING_INSTALL) ||
+                (includeCompleted && item.status == DownloadStatus.COMPLETED)
+        }.forEach { item ->
+            val next = InstallRecoveryPolicy.resolve(
+                status = item.status,
+                installedVersion = PackageUtil.getInstalledVersionCode(context, item.packageName),
+                targetVersion = item.versionCode,
+                hasLiveSession = item.packageName in livePackages,
+                hasCachedApks = item.hasDownloadedFiles(context)
+            ) ?: return@forEach
+            if (next == item.status) return@forEach
+
+            val changed = downloadDao.reconcileInstallStatus(
+                item.packageName,
+                item.versionCode,
+                item.downloadedAt,
+                next
+            )
+            if (changed > 0) {
+                Log.i(
+                    TAG,
+                    "Reconciled installation for ${item.packageName}: ${item.status} -> $next"
+                )
+                // Cancel only this generation, never a newer attempt for the same package.
+                cancelWorkFor(item)
+            }
         }
     }
 
     /**
-     * Advances a download row through the installer phase so its history reflects whether the
-     * app actually installed, not just that the bytes finished downloading:
-     * - [InstallerEvent.Installing] moves a [DownloadStatus.COMPLETED] row to
-     *   [DownloadStatus.INSTALLING];
-     * - [InstallerEvent.Installed] marks it [DownloadStatus.INSTALLED] (kept so the user can
-     *   still export the APK);
-     * - [InstallerEvent.Failed] reverts an in-progress install to
-     *   [DownloadStatus.AWAITING_INSTALL] so the downloaded files can be re-installed without
-     *   re-downloading.
+     * Apply installer events using optimistic Room compare-and-set transitions.
+     * Session callbacks carry both the version and the original durable download attempt.
+     * Unscoped package-added broadcasts can prove success only by querying Android's actual
+     * installed version; unscoped failures/progress are never allowed to mutate Room.
      */
     private fun observeInstalls() {
         AuroraApp.events.installerEvent.onEach { event ->
-            val existing = getDownload(event.packageName) ?: return@onEach
-            when (event) {
-                is InstallerEvent.Installing -> if (existing.status == DownloadStatus.COMPLETED) {
-                    downloadDao.updateStatus(event.packageName, DownloadStatus.INSTALLING)
+            val current = getDownload(event.packageName) ?: return@onEach
+            val attempt = event.attempt
+            val matchesAttempt = if (attempt == null) {
+                true
+            } else {
+                InstallResultPolicy.matches(
+                    current.versionCode,
+                    current.downloadedAt,
+                    attempt.versionCode,
+                    attempt.downloadedAt
+                )
+            }
+            if (!matchesAttempt) {
+                Log.i(TAG, "Ignoring stale install event for ${event.packageName}")
+                return@onEach
+            }
+
+            val outcome = when (event) {
+                is InstallerEvent.Installing -> InstallResultPolicy.Outcome.PROGRESS
+                is InstallerEvent.PendingUserAction -> {
+                    InstallResultPolicy.Outcome.PENDING_USER_ACTION
                 }
 
-                is InstallerEvent.Installed -> if (existing.status != DownloadStatus.INSTALLED) {
-                    downloadDao.updateStatus(event.packageName, DownloadStatus.INSTALLED)
-                }
+                is InstallerEvent.Installed -> InstallResultPolicy.Outcome.SUCCESS
+                is InstallerEvent.Failed -> InstallResultPolicy.Outcome.FAILURE
+                else -> return@onEach
+            }
+            if (attempt == null && outcome != InstallResultPolicy.Outcome.SUCCESS) {
+                // Unattributed progress/failure must never update a persisted install attempt.
+                return@onEach
+            }
+            if (outcome == InstallResultPolicy.Outcome.SUCCESS) {
+                // A privileged backend's success text is not proof of installation. Android's
+                // installed version is the authority for all backends, not just package broadcasts.
+                val installedVersion = PackageUtil.getInstalledVersionCode(
+                    context,
+                    event.packageName
+                )
+                if (installedVersion != current.versionCode) return@onEach
+            }
 
-                is InstallerEvent.Failed -> if (
-                    existing.status in setOf(
-                        DownloadStatus.INSTALLING,
-                        DownloadStatus.AWAITING_INSTALL
+            val replacement = InstallResultPolicy.next(
+                current.status,
+                outcome,
+                current.hasDownloadedFiles(context)
+            ) ?: return@onEach
+            val updated = downloadDao.transitionInstallAttempt(
+                current.packageName,
+                current.versionCode,
+                current.downloadedAt,
+                current.status,
+                replacement
+            )
+            if (updated > 0) {
+                Log.i(
+                    TAG,
+                    "Installer result for ${current.packageName}: ${current.status} -> $replacement"
+                )
+                // The system package-added broadcast can beat PackageInstaller.STATUS_SUCCESS.
+                // Whichever callback wins the Room CAS owns the one-time success side effects.
+                if (event is InstallerEvent.Installed) {
+                    InstallerBase.notifyInstallation(
+                        context,
+                        current.displayName,
+                        current.packageName
                     )
-                ) {
-                    downloadDao.updateStatus(
-                        event.packageName,
-                        if (existing.hasDownloadedFiles(context)) {
-                            DownloadStatus.AWAITING_INSTALL
-                        } else {
-                            DownloadStatus.COMPLETED
-                        }
-                    )
+                    if (Preferences.getBoolean(context, PREFERENCE_AUTO_DELETE)) {
+                        PathUtil.getAppDownloadDir(
+                            context,
+                            current.packageName,
+                            current.versionCode
+                        ).deleteRecursively()
+                    }
                 }
-
-                else -> {}
             }
         }.launchIn(AuroraApp.scope)
     }
@@ -274,6 +341,8 @@ class DownloadHelper @Inject constructor(
      */
     private suspend fun enqueue(download: Download) {
         val existing = getDownload(download.packageName)
+        // Never replace a record once its package installation has been committed.
+        if (existing?.status == DownloadStatus.INSTALLING) return
         if (existing != null && existing.versionCode == download.versionCode) {
             if (existing.canInstall(context)) {
                 Log.i(TAG, "${download.packageName} already downloaded, installing directly")
@@ -290,7 +359,17 @@ class DownloadHelper @Inject constructor(
                 return
             }
         }
-        downloadDao.insert(download)
+        // downloadedAt is already durable in Room. Use a monotonically increasing value
+        // as the attempt identity, so a new request for the SAME version cannot be confused
+        // with a cancelled WorkManager generation. This also handles ExternalApk (timestamp 0).
+        val nextAttempt = maxOf(
+            System.currentTimeMillis(),
+            (existing?.downloadedAt ?: 0L) + 1L
+        )
+        downloadDao.insert(download.copy(downloadedAt = nextAttempt))
+        if (existing != null) {
+            cancelWorkFor(existing)
+        }
     }
 
     suspend fun installPending(packageName: String): Boolean {
@@ -326,26 +405,42 @@ class DownloadHelper @Inject constructor(
      * re-installs without re-downloading. No-op if the download is already active.
      * @param packageName Name of the package to retry
      */
-    suspend fun retryDownload(packageName: String) {
+    suspend fun retryDownload(packageName: String, expectedAttempt: Long? = null) {
         val existing = getDownload(packageName) ?: return
-        if (existing.isActive) {
+        if (expectedAttempt != null && existing.downloadedAt != expectedAttempt) return
+        if (existing.isActive || existing.status == DownloadStatus.INSTALLING) {
             Log.i(TAG, "Skipping retry for $packageName; already ${existing.status}")
             return
         }
-        Log.i(TAG, "Retrying download for $packageName")
-        downloadDao.updateStatus(packageName, DownloadStatus.QUEUED)
+        val restarted = downloadDao.retryWithNewAttempt(
+            packageName,
+            existing.versionCode,
+            existing.downloadedAt,
+            System.currentTimeMillis()
+        )
+        if (restarted != 0) {
+            Log.i(TAG, "Retrying download for $packageName with a fresh attempt")
+            cancelWorkFor(existing)
+        }
     }
 
     /**
      * Cancels the download for the given package
      * @param packageName Name of the package to cancel download
      */
-    suspend fun cancelDownload(packageName: String) {
-        Log.i(TAG, "Cancelling download for $packageName")
-        WorkManager.getInstance(context).cancelAllWorkByTag("$PACKAGE_NAME:$packageName")
-        // Abandon any session already staged for install so we don't leak it.
-        runCatching { appInstaller.getPreferredInstaller().cancelInstall(packageName) }
-        downloadDao.updateStatus(packageName, DownloadStatus.CANCELLED)
+    suspend fun cancelDownload(packageName: String, expectedAttempt: Long? = null) {
+        val current = getDownload(packageName) ?: return
+        if (expectedAttempt != null && current.downloadedAt != expectedAttempt) return
+        val changed = downloadDao.cancelActiveDownload(
+            packageName,
+            current.versionCode,
+            current.downloadedAt
+        )
+        if (changed == 0) return // Installation already committed or attempt changed.
+
+        Log.i(TAG, "Cancelling download for $packageName at ${current.versionCode}")
+        cancelWorkFor(current)
+        NotificationUtil.clearAppNotification(context, packageName)
     }
 
     /**
@@ -361,9 +456,21 @@ class DownloadHelper @Inject constructor(
      * @param packageName Name of the package of the app
      * @param versionCode Version of the package
      */
-    suspend fun clearDownload(packageName: String, versionCode: Long) {
+    suspend fun clearDownload(
+        packageName: String,
+        versionCode: Long,
+        expectedAttempt: Long? = null
+    ) {
+        val current = getDownload(packageName) ?: return
+        if (expectedAttempt != null && current.downloadedAt != expectedAttempt) return
+        if (current.versionCode != versionCode || current.status == DownloadStatus.INSTALLING) {
+            return // Never delete a replacement download or APKs handed to the installer.
+        }
+        if (current.isActive) cancelDownload(packageName, current.downloadedAt)
         Log.i(TAG, "Clearing downloads for $packageName ($versionCode)")
-        downloadDao.delete(packageName)
+        if (downloadDao.deleteVersion(packageName, versionCode, current.downloadedAt) == 0) {
+            return
+        }
         PathUtil.getAppDownloadDir(context, packageName, versionCode)
             .deleteRecursively()
     }
@@ -373,6 +480,10 @@ class DownloadHelper @Inject constructor(
      */
     suspend fun clearAllDownloads() {
         Log.i(TAG, "Clearing all downloads!")
+        // Invalidate active states before deleting records and files; workers must not
+        // resurrect their database rows after force-clear.
+        cancelAll()
+        WorkManager.getInstance(context).cancelAllWorkByTag(DOWNLOAD_WORKER)
         downloadDao.deleteAll()
         PathUtil.getDownloadDirectory(context).deleteRecursively()
         PathUtil.getOldDownloadDirectories(context).forEach { it.deleteRecursively() }
@@ -392,36 +503,78 @@ class DownloadHelper @Inject constructor(
      * @param updatesOnly Whether to cancel only updates, defaults to false
      */
     suspend fun cancelAll(updatesOnly: Boolean = false) {
-        // Cancel queued/completed downloads first to avoid triggering re-download and to give
-        // the user immediate feedback for items that already finished downloading. The actual
-        // OS-level install for COMPLETED entries is wrapped in NonCancellable inside the
-        // worker and cannot be aborted — if it succeeds, the update row is removed via
-        // InstallerEvent.Installed; if it fails, the user can re-trigger an update.
-        val cancellableStatuses = setOf(DownloadStatus.QUEUED, DownloadStatus.COMPLETED)
+        // Cancel exactly the matching downloads, including purchases, transfers and verifying.
+        // Unlike tag-wide cancellation this covers BOTH apps and updates and cannot cancel
+        // a newer generation for a package that was just re-queued.
+        val cancellable = DownloadStatus.processing +
+            setOf(DownloadStatus.QUEUED, DownloadStatus.COMPLETED)
         downloadDao.downloads().firstOrNull()
-            ?.filter { it.status in cancellableStatuses }
-            ?.filter { if (updatesOnly) it.isInstalled else true }
-            ?.forEach {
-                downloadDao.updateStatus(it.packageName, DownloadStatus.CANCELLED)
-            }
-
-        WorkManager.getInstance(context)
-            .cancelAllWorkByTag(if (updatesOnly) DOWNLOAD_UPDATE else DOWNLOAD_APP)
+            ?.asSequence()
+            ?.filter { it.status in cancellable }
+            ?.filter { !updatesOnly || it.isInstalled }
+            ?.forEach { cancelDownload(it.packageName, it.downloadedAt) }
     }
 
     private suspend fun cancelFailedDownloads(downloadList: List<Download>) {
         val workManager = WorkManager.getInstance(context)
 
-        downloadList.filter { it.isRunning }.forEach {
-            workManager.getWorkInfosByTagFlow("$PACKAGE_NAME:${it.packageName}").firstOrNull()
-                ?.all { workInfo -> workInfo.state.isFinished }
-                ?.run { downloadDao.updateStatus(it.packageName, DownloadStatus.FAILED) }
+        downloadList.filter { it.status in DownloadStatus.processing }.forEach { item ->
+            val matchingWork = workManager
+                .getWorkInfosByTagFlow("$PACKAGE_NAME:${item.packageName}")
+                .firstOrNull().orEmpty()
+                .filter {
+                    "$VERSION_CODE:${item.versionCode}" in it.tags &&
+                        "$ATTEMPT_KEY:${item.downloadedAt}" in it.tags
+                }
+
+            // all() returning false is STILL non-null: the old ?.run incorrectly failed
+            // genuinely running downloads. Only release an orphaned processing slot.
+            if (matchingWork.none { !it.state.isFinished }) {
+                Log.w(TAG, "Recovering orphaned download for ${item.packageName}")
+                downloadDao.failOrphanedDownload(
+                    item.packageName,
+                    item.versionCode,
+                    item.downloadedAt
+                )
+            }
         }
+    }
+
+    /** Reconcile processing records while the app remains open, not only at startup. */
+    private fun monitorOrphanedDownloads() {
+        AuroraApp.scope.launch {
+            while (true) {
+                delay(ORPHAN_CHECK_INTERVAL_MS)
+                try {
+                    val snapshot = downloadDao.downloads().firstOrNull().orEmpty()
+                    cancelFailedDownloads(snapshot)
+                    reconcileInstallationRows(downloadDao.downloads().firstOrNull().orEmpty())
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    Log.w(TAG, "Unable to reconcile orphaned download workers", exception)
+                }
+            }
+        }
+    }
+
+    /** Stop both R1A (version-only) and R1B (attempt-scoped) workers on replacement. */
+    private fun cancelWorkFor(download: Download) {
+        val workManager = WorkManager.getInstance(context)
+        workManager.cancelUniqueWork(
+            "$DOWNLOAD_WORKER/${download.packageName}/${download.versionCode}"
+        )
+        workManager.cancelUniqueWork(
+            "$DOWNLOAD_WORKER/${download.packageName}/${download.versionCode}/" +
+                download.downloadedAt
+        )
     }
 
     private fun trigger(download: Download) {
         val inputData = Data.Builder()
             .putString(PACKAGE_NAME, download.packageName)
+            .putLong(VERSION_CODE, download.versionCode)
+            .putLong(ATTEMPT_KEY, download.downloadedAt)
             .build()
 
         // Require connectivity so the worker doesn't spin up (or keep running) without a
@@ -435,6 +588,7 @@ class DownloadHelper @Inject constructor(
             .addTag(DOWNLOAD_WORKER)
             .addTag("$PACKAGE_NAME:${download.packageName}")
             .addTag("$VERSION_CODE:${download.versionCode}")
+            .addTag("$ATTEMPT_KEY:${download.downloadedAt}")
             .addTag(if (download.isInstalled) DOWNLOAD_UPDATE else DOWNLOAD_APP)
             .setConstraints(constraints)
             .setBackoffCriteria(
@@ -449,7 +603,8 @@ class DownloadHelper @Inject constructor(
         // Ensure all app downloads are unique to preserve individual records
         WorkManager.getInstance(context)
             .enqueueUniqueWork(
-                "$DOWNLOAD_WORKER/${download.packageName}/${download.versionCode}",
+                "$DOWNLOAD_WORKER/${download.packageName}/${download.versionCode}/" +
+                    download.downloadedAt,
                 ExistingWorkPolicy.KEEP,
                 work
             )

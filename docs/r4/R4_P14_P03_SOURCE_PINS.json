@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "base_sha": "6e9418baaefadd4afcf4320b4a4b193546e66ec7",
+  "blobs": {
+    "app/src/androidTest/java/com/aurora/store/data/room/download/DownloadLifecycleDeviceTest.kt": "1a4077d29e5a8fcb7a345f5072a40ee44728e659",
+    "app/src/androidTest/java/com/aurora/store/data/work/DownloadWorkerOfflineDeviceTest.kt": "8a35e201e1ae61b81a2221224f0ee45d9c74304a",
+    "app/src/androidTest/java/com/aurora/store/compose/ui/downloads/DownloadUiDeviceTest.kt": "2da52c759e1e1db8f3a712dedb611f0c664b72c5",
+    "app/src/androidTest/java/com/aurora/store/compose/ui/downloads/DownloadFinalUiDeviceTest.kt": "8e3c916c0f5a2dd170a5202fcb15945ff366a48c",
+    "app/src/main/java/com/aurora/store/data/room/download/DownloadDao.kt": "07ac42ba01dcdcc942c89cba89e70ca643047484",
+    "app/src/main/java/com/aurora/store/data/model/DownloadStatus.kt": "3d8472c737818cb1ab0a5b9cfcd446cfed04cc17",
+    "app/src/main/java/com/aurora/store/data/installer/InstallResultPolicy.kt": "6c2efdd5e77ad9e25e319c3439376c27bf1dd220",
+    "app/src/main/java/com/aurora/store/data/installer/InstallRecoveryPolicy.kt": "4da367e5ec0ed1efc85a2ac33bf5566ae9888dfd",
+    "app/src/main/java/com/aurora/store/compose/ui/downloads/DownloadUiPolicy.kt": "38ab3d342d7a7c3bb93dae179615ad26bda21df6",
+    "app/src/main/java/com/aurora/store/viewmodel/downloads/DownloadsViewModel.kt": "0d3b6b045152c32706b80651e1ca8a8ceb3a055e",
+    "app/src/main/java/com/aurora/store/viewmodel/all/UpdatesViewModel.kt": "150092e7660e7f91c63671c79ad782fc5e2c8c9d",
+    "scripts/ci/r4_p14_p01_screenshot_audit.py": "424e764d61990c82ce2058481b5dec3a37de59a2",
+    "scripts/ci/r4_p14_p01_source_contract.py": "a1d4538e0b0c628fba2bfa861d9c2e240a825abb",
+    ".github/workflows/aurora-r4-p14-p01-journeys.yml": "7e5089dc48da7a377f94ae2376a6cdb55f3cf9b0",
+    "docs/r4/evidence/P13B02_LIMITED_SIGNOFF_43650748680.json": "edbe1ea75f7bd91da30c6343e433a96222497b4b"
+  }
+}

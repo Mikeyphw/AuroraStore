@@ -27,10 +27,13 @@ import com.aurora.extensions.isUAndAbove
 import com.aurora.extensions.runOnUiThread
 import com.aurora.store.AuroraApp
 import com.aurora.store.R
+import com.aurora.store.data.event.InstallAttempt
 import com.aurora.store.data.event.InstallerEvent
 import com.aurora.store.data.installer.AppInstaller.Companion.ACTION_INSTALL_STATUS
+import com.aurora.store.data.installer.AppInstaller.Companion.EXTRA_ATTEMPT_KEY
 import com.aurora.store.data.installer.AppInstaller.Companion.EXTRA_DISPLAY_NAME
 import com.aurora.store.data.installer.AppInstaller.Companion.EXTRA_PACKAGE_NAME
+import com.aurora.store.data.installer.AppInstaller.Companion.EXTRA_PARENT_PACKAGE_NAME
 import com.aurora.store.data.installer.AppInstaller.Companion.EXTRA_VERSION_CODE
 import com.aurora.store.data.installer.base.InstallerBase
 import com.aurora.store.data.model.BuildType
@@ -41,7 +44,6 @@ import com.aurora.store.data.receiver.InstallerStatusReceiver
 import com.aurora.store.data.room.download.Download
 import com.aurora.store.util.PackageUtil.isSharedLibraryInstalled
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.io.IOException
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -68,16 +70,21 @@ class SessionInstaller @Inject constructor(
         override fun onActiveChanged(sessionId: Int, active: Boolean) {}
 
         override fun onProgressChanged(sessionId: Int, progress: Float) {
-            val packageName = enqueuedSessions
-                .find { set -> set.any { it.sessionId == sessionId } }
-                ?.first()
-                ?.packageName
+            val activeSession = enqueuedSessions
+                .asSequence()
+                .flatMap { it.asSequence() }
+                .firstOrNull { it.sessionId == sessionId }
 
-            if (packageName != null && progress > 0.0) {
+            if (activeSession != null && progress > 0.0) {
                 AuroraApp.events.send(
                     InstallerEvent.Installing(
-                        packageName = packageName,
-                        progress = progress
+                        packageName = activeSession.packageName,
+                        progress = progress,
+                        attempt = InstallAttempt(
+                            activeSession.versionCode,
+                            activeSession.downloadedAt,
+                            sessionId
+                        )
                     )
                 )
             }
@@ -97,8 +104,15 @@ class SessionInstaller @Inject constructor(
             sessionSet.remove(sessionToRemove)
 
             if (success && sessionSet.isNotEmpty()) {
-                commitInstall(sessionSet.first()) // Proceed with next session (shared lib), if any
+                commitNextPending() // Proceed to the next shared library/app session.
                 return
+            }
+            if (!success) {
+                sessionSet.forEach { next ->
+                    runCatching { packageInstaller.abandonSession(next.sessionId) }
+                    committedSessions.remove(next.sessionId)
+                }
+                sessionSet.clear()
             }
 
             // Manually remove empty sets using iterator (for API 21 support)
@@ -131,44 +145,89 @@ class SessionInstaller @Inject constructor(
     }
 
     override fun install(download: Download) {
-        super.install(download)
-
         val sessionSet =
             enqueuedSessions.find { set -> set.any { it.packageName == download.packageName } }
         if (sessionSet != null) {
             Log.i(TAG, "${download.packageName} already queued")
-            commitInstall(sessionSet.first())
+            // Do not re-commit an in-flight session: Android would show a second prompt.
+            if (sessionSet.none { it.sessionId in committedSessions }) commitNextPending()
         } else {
             Log.i(TAG, "Received session install request for ${download.packageName}")
-            val sessionInfoSet = mutableSetOf<SessionInfo>()
-
-            download.sharedLibs.forEach {
-                // Shared library packages cannot be updated
-                if (!isSharedLibraryInstalled(context, it.packageName, it.versionCode)) {
-                    stageInstall(
-                        download.packageName,
-                        download.versionCode,
-                        it.packageName
-                    )?.let { sessionID ->
-                        sessionInfoSet.add(SessionInfo(sessionID, it.packageName, it.versionCode))
-                    }
+            // A process restart loses the in-memory queue, but Android may still own a
+            // committed session waiting for the user's approval. Never commit a duplicate.
+            val committedOwnedSession = runCatching {
+                packageInstaller.mySessions.any { session ->
+                    session.appPackageName == download.packageName &&
+                        (!isOAndAbove || session.isSealed)
                 }
+            }.getOrDefault(false)
+            if (committedOwnedSession) {
+                Log.i(TAG, "${download.packageName} already has an Android install session")
+                return
             }
 
-            stageInstall(download.packageName, download.versionCode)?.let { sessionID ->
-                sessionInfoSet.add(
+            // A duplicate/pending OS-owned session is not a new install attempt: avoid
+            // copying APKs or emitting a stale-file error when no new session is needed.
+            super.install(download)
+            val stagedSessions = mutableSetOf<SessionInfo>()
+            var stagingFailed = false
+
+            for (lib in download.sharedLibs) {
+                if (isSharedLibraryInstalled(context, lib.packageName, lib.versionCode)) continue
+                val sessionId = stageInstall(
+                    download.packageName,
+                    download.versionCode,
+                    lib.packageName
+                )
+                if (sessionId == null) {
+                    stagingFailed = true
+                    break
+                }
+                stagedSessions.add(
                     SessionInfo(
-                        sessionID,
-                        download.packageName,
-                        download.versionCode,
-                        download.displayName
+                        sessionId,
+                        lib.packageName,
+                        lib.versionCode,
+                        downloadedAt = download.downloadedAt,
+                        parentPackageName = download.packageName
                     )
                 )
             }
 
-            // Enqueue and trigger installation
-            enqueuedSessions.add(sessionInfoSet)
-            commitInstall(sessionInfoSet.first())
+            if (!stagingFailed) {
+                val sessionId = stageInstall(download.packageName, download.versionCode)
+                if (sessionId == null) {
+                    stagingFailed = true
+                } else {
+                    stagedSessions.add(
+                        SessionInfo(
+                            sessionId,
+                            download.packageName,
+                            download.versionCode,
+                            download.displayName,
+                            download.downloadedAt
+                        )
+                    )
+                }
+            }
+
+            if (stagingFailed || stagedSessions.isEmpty()) {
+                // Includes the case where the main APK could not be staged after shared libs.
+                stagedSessions.forEach { session ->
+                    runCatching { packageInstaller.abandonSession(session.sessionId) }
+                }
+                removeFromInstallQueue(download.packageName)
+                if (!stagingFailed) {
+                    postError(
+                        download.packageName,
+                        "No APK session was staged",
+                        null
+                    )
+                }
+                return
+            }
+            enqueuedSessions.add(stagedSessions)
+            commitNextPending()
         }
     }
 
@@ -207,35 +266,49 @@ class SessionInstaller @Inject constructor(
         sharedLibPkgName: String = ""
     ): Int? {
         val resolvedPackageName = sharedLibPkgName.ifBlank { packageName }
+        val files = try {
+            getFiles(packageName, versionCode, sharedLibPkgName)
+        } catch (error: Exception) {
+            postError(packageName, error.localizedMessage, error.stackTraceToString())
+            return null
+        }
+        if (files.isEmpty()) {
+            postError(packageName, "No APK files for $resolvedPackageName", null)
+            return null
+        }
 
-        // Size hint lets the system reserve space (and evict its cache) for the staged copy.
-        val totalSize = runCatching {
-            getFiles(packageName, versionCode, sharedLibPkgName).sumOf { it.length() }
-        }.getOrDefault(0L)
-
-        val sessionParams = buildSessionParams(resolvedPackageName, totalSize)
-        val sessionId = packageInstaller.createSession(sessionParams)
-        val session = packageInstaller.openSession(sessionId)
+        val sessionId = try {
+            packageInstaller.createSession(
+                buildSessionParams(
+                    resolvedPackageName,
+                    files.sumOf { it.length() }
+                )
+            )
+        } catch (error: Exception) {
+            postError(packageName, error.localizedMessage, error.stackTraceToString())
+            return null
+        }
 
         return try {
-            Log.i(TAG, "Writing splits to session for $packageName")
-            getFiles(packageName, versionCode, sharedLibPkgName).forEach { file ->
-                file.inputStream().use { input ->
-                    session.openWrite(
-                        "${resolvedPackageName}_${file.name}",
-                        0,
-                        file.length()
-                    ).use { output ->
-                        input.copyTo(output)
-                        session.fsync(output)
+            packageInstaller.openSession(sessionId).use { session ->
+                Log.i(TAG, "Writing splits to session for $resolvedPackageName")
+                files.forEach { file ->
+                    file.inputStream().use { input ->
+                        session.openWrite(
+                            "${resolvedPackageName}_${file.name}",
+                            0,
+                            file.length()
+                        ).use { output ->
+                            input.copyTo(output)
+                            session.fsync(output)
+                        }
                     }
                 }
             }
             sessionId
-        } catch (exception: IOException) {
-            session.abandon()
-            removeFromInstallQueue(packageName)
-            postError(packageName, exception.localizedMessage, exception.stackTraceToString())
+        } catch (error: Exception) {
+            runCatching { packageInstaller.abandonSession(sessionId) }
+            postError(packageName, error.localizedMessage, error.stackTraceToString())
             null
         }
     }
@@ -303,6 +376,8 @@ class SessionInstaller @Inject constructor(
             putExtra(EXTRA_SESSION_ID, sessionInfo.sessionId)
             putExtra(EXTRA_PACKAGE_NAME, sessionInfo.packageName)
             putExtra(EXTRA_VERSION_CODE, sessionInfo.versionCode)
+            putExtra(EXTRA_ATTEMPT_KEY, sessionInfo.downloadedAt)
+            putExtra(EXTRA_PARENT_PACKAGE_NAME, sessionInfo.parentPackageName)
             putExtra(EXTRA_DISPLAY_NAME, sessionInfo.displayName)
             addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
         }

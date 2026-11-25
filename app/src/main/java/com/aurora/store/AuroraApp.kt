@@ -25,7 +25,6 @@ import com.aurora.store.data.event.EventFlow
 import com.aurora.store.data.helper.DownloadHelper
 import com.aurora.store.data.helper.UpdateHelper
 import com.aurora.store.data.receiver.PackageManagerReceiver
-import com.aurora.store.util.CommonUtil
 import com.aurora.store.util.NotificationUtil
 import com.aurora.store.util.PackageUtil
 import com.aurora.store.util.Preferences
@@ -71,11 +70,11 @@ class AuroraApp : Application(), Configuration.Provider, SingletonImageLoader.Fa
     override fun onCreate() {
         ComposeMaterial3Flags.isCheckboxStylingFixEnabled = true
         super.onCreate()
-        // Set the app theme
+        // Restore Aurora's original system/light/dark mode selection.
         val themeStyle = Preferences.getInteger(this, Preferences.PREFERENCE_THEME_STYLE)
         setAppTheme(themeStyle)
 
-        // Apply dynamic colors to activities, unless disabled (opt-out, off by default on One UI)
+        // Preserve Aurora's original dynamic Material color overlay behavior.
         val dynamicColors = Preferences.getBoolean(
             this,
             Preferences.PREFERENCE_DYNAMIC_COLORS,
@@ -100,7 +99,7 @@ class AuroraApp : Application(), Configuration.Provider, SingletonImageLoader.Fa
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
 
-        CommonUtil.cleanupInstallationSessions(applicationContext)
+        // DownloadHelper reconciles interrupted installs without abandoning confirmations.
     }
 
     private val foregroundTracker = object : ActivityLifecycleCallbacks {

@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "source_sha": "47c360e9cb553f73fb6858cd364ea19835bada6e",
+  "run_id": "43650748680",
+  "reviewer": "Mikeyphw",
+  "acknowledgement": "I_REVIEWED_P13B_PNGS_AGAINST_AUTHOR_PR113",
+  "release_approval": false,
+  "request_final_upstream_signoff": false,
+  "comparisons": {
+    "for_you": {
+      "source_blob": "51b4fc2f4ef02ca59f1251bdace98c7b96c2c902",
+      "decision": "intentional_deviation",
+      "notes": "The source-pinned P13-B offline Home uses three synthetic apps and card clusters rather than changing live Play catalog data; the reviewed Expressive card surfaces and action affordances are accepted within this fixture scope."
+    },
+    "home_actions": {
+      "source_blob": "df19e579a302e381088fab1d826387e14a9d1b5d",
+      "decision": "intentional_deviation",
+      "notes": "Home card Install buttons are visible in the deterministic mock data and callbacks were exercised in Android instrumentation. This visual approval does not validate the real package installer or live app-card behavior."
+    },
+    "top_charts": {
+      "source_blob": "ecd6928e469495ba680d0356505bce79e4d03852",
+      "decision": "intentional_deviation",
+      "notes": "The production TopChartsBody renders a ranked segmented list with synthetic fixtures, not the live chart from the upstream screenshot. The reproduced layout treatment is accepted for P13-B at both sizes and themes."
+    },
+    "categories": {
+      "source_blob": "61c54268a50a2b04bbae285dd6b132e9358afab1",
+      "decision": "intentional_deviation",
+      "notes": "The production CategoriesBody shows a stable synthetic Art, Business, Education, Games list; upstream has many live categories and icons. The reviewer accepts the general card/list treatment within offline-fixture coverage."
+    },
+    "details": {
+      "source_blob": "197cc27b07552b47c1fefa49486d64f83923ad95",
+      "decision": "intentional_deviation",
+      "notes": "The named details_top frame appears to retain the offline Search results surface immediately after selection; a separate details_reviews capture visibly shows review content and portal cards. This incomplete full-Details screenshot is accepted only as a P13-B fixture limitation, not as full page parity."
+    },
+    "search": {
+      "source_blob": "c2d0c0f66bc60c819382557b8123926b5b1bf3e5",
+      "decision": "intentional_deviation",
+      "notes": "The P13-B Search fixture has typed Atlas query, local suggestion/filter chips and a result row, but differs from upstream full-screen live search layout and data. Approved only as an offline component journey."
+    },
+    "settings": {
+      "source_blob": "9adb0938e893dd494f7cbb205c4a22d55e8620ec",
+      "decision": "intentional_deviation",
+      "notes": "The production Navigation3 Settings page matches the Expressive grouped-preference treatment while retaining the additional protected R3D Import and verify APKs item. This addition is intentional and accepted."
+    },
+    "customization": {
+      "source_blob": "5093b1f6866e106c9762b9be6ddbad6d2609160e",
+      "decision": "intentional_deviation",
+      "notes": "The real UI Preferences route visibly retains theme selection, dynamic colors and layout controls; device locale, spacing and colors differ from the author phone. The reviewer accepts the layout within the captured P13-B configurations."
+    }
+  }
+}

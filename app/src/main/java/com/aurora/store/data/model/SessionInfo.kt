@@ -9,5 +9,7 @@ data class SessionInfo(
     val sessionId: Int,
     val packageName: String,
     val versionCode: Long,
-    val displayName: String = String()
+    val displayName: String = String(),
+    val downloadedAt: Long = 0L,
+    val parentPackageName: String = packageName
 )

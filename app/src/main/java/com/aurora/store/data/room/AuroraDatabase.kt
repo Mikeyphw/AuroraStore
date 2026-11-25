@@ -20,6 +20,8 @@ import com.aurora.store.data.room.favourite.Favourite
 import com.aurora.store.data.room.favourite.FavouriteDao
 import com.aurora.store.data.room.notification.AppNotification
 import com.aurora.store.data.room.notification.NotificationDao
+import com.aurora.store.data.room.play.PlayDeliveryEvidence
+import com.aurora.store.data.room.play.PlayDeliveryEvidenceDao
 import com.aurora.store.data.room.review.LocalReview
 import com.aurora.store.data.room.review.ReviewDao
 import com.aurora.store.data.room.update.IgnoredUpdate
@@ -36,14 +38,16 @@ import com.aurora.store.data.room.update.UpdateDao
         LocalReview::class,
         Account::class,
         AppAccountBinding::class,
-        AppNotification::class
+        AppNotification::class,
+        PlayDeliveryEvidence::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = true
 )
 @TypeConverters(DownloadConverter::class, AccountConverter::class)
 abstract class AuroraDatabase : RoomDatabase() {
     abstract fun downloadDao(): DownloadDao
+    abstract fun playDeliveryEvidenceDao(): PlayDeliveryEvidenceDao
     abstract fun favouriteDao(): FavouriteDao
     abstract fun updateDao(): UpdateDao
     abstract fun ignoredUpdateDao(): IgnoredUpdateDao

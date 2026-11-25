@@ -4,6 +4,7 @@
  */
 package com.aurora.store.compose.ui.sheets
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +29,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +39,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aurora.store.R
+import com.aurora.store.data.model.HistoricalAvailabilityPolicy
+import com.aurora.store.data.model.HistoricalVersionPolicy
 import com.aurora.store.data.model.VersionEntry
 import com.aurora.store.data.model.formatExodusDate
 
@@ -48,11 +52,24 @@ import com.aurora.store.data.model.formatExodusDate
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VersionPickerSheet(
-    versions: List<VersionEntry>,
+    reports: List<VersionEntry>,
     loading: Boolean,
+    installedVersionCode: Long = 0L,
+    currentListingVersionCode: Long = 0L,
     onSelect: (VersionEntry) -> Unit,
     onDismiss: () -> Unit
 ) {
+    // Exodus is history metadata, not a guarantee that Play still serves an APK.
+    val availableReports = remember(reports) {
+        reports.mapNotNull { report ->
+            HistoricalVersionPolicy.parseVersionCode(report.versionCode.toString())?.let {
+                it to
+                    report
+            }
+        }.distinctBy { it.first }
+            .sortedByDescending { it.first }
+            .map { it.second }
+    }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
@@ -73,6 +90,13 @@ fun VersionPickerSheet(
             )
 
             Spacer(Modifier.height(dimensionResource(R.dimen.spacing_xsmall)))
+            Text(
+                text = stringResource(R.string.r3_history_source_warning),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = dimensionResource(R.dimen.spacing_medium))
+            )
+            Spacer(Modifier.height(dimensionResource(R.dimen.spacing_xsmall)))
 
             when {
                 loading -> Box(
@@ -84,7 +108,7 @@ fun VersionPickerSheet(
                     ContainedLoadingIndicator()
                 }
 
-                versions.isEmpty() -> Text(
+                availableReports.isEmpty() -> Text(
                     text = stringResource(R.string.manual_download_no_versions),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -102,10 +126,17 @@ fun VersionPickerSheet(
                         .clip(RoundedCornerShape(dimensionResource(R.dimen.radius_medium)))
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 ) {
-                    // Positional keys: Exodus can hold more than one report per version code
-                    itemsIndexed(items = versions) { index, entry ->
+                    itemsIndexed(
+                        items = availableReports,
+                        key = { _, report -> "version-${report.versionCode.toLong()}" }
+                    ) { index, report ->
                         if (index > 0) HorizontalDivider()
-                        VersionRow(entry = entry, onClick = { onSelect(entry) })
+                        VersionRow(
+                            report = report,
+                            installedVersionCode = installedVersionCode,
+                            currentListingVersionCode = currentListingVersionCode,
+                            onClick = { onSelect(report) }
+                        )
                     }
                 }
             }
@@ -142,12 +173,28 @@ private fun AvailabilityWarning(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun VersionRow(entry: VersionEntry, onClick: () -> Unit) {
-    val title = if (entry.version.isBlank()) {
-        entry.versionCode.toString()
+private fun VersionRow(
+    report: VersionEntry,
+    installedVersionCode: Long,
+    currentListingVersionCode: Long,
+    onClick: () -> Unit
+) {
+    val version = HistoricalVersionPolicy.parseVersionCode(report.versionCode.toString()) ?: return
+    val assessment = HistoricalAvailabilityPolicy.assess(
+        HistoricalAvailabilityPolicy.Evidence(
+            requestedVersion = version,
+            currentListingVersion = currentListingVersionCode,
+            installedVersion = installedVersionCode,
+            historicalReportVersion = version,
+            deviceSdk = Build.VERSION.SDK_INT
+        )
+    )
+    val title = if (report.version.isBlank()) {
+        report.versionCode.toString()
     } else {
-        "${entry.version} (${entry.versionCode})"
+        "${report.version} (${report.versionCode})"
     }
+    val date = report.date
 
     Column(
         modifier = Modifier
@@ -165,10 +212,26 @@ private fun VersionRow(entry: VersionEntry, onClick: () -> Unit) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        if (entry.date.isNotBlank()) {
+        if (assessment.isDowngrade) {
             Text(
-                text = formatExodusDate(entry.date),
+                text = stringResource(R.string.r3_history_older),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+        if (date.isNotBlank()) {
+            Text(
+                text = formatExodusDate(date),
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (assessment.delivery == HistoricalAvailabilityPolicy.Delivery.UNKNOWN &&
+            assessment.compatibility == HistoricalAvailabilityPolicy.Compatibility.UNKNOWN
+        ) {
+            Text(
+                text = stringResource(R.string.r3c_picker_unverified),
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

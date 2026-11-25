@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<resources>
+    <string name="r3_invalid_version_code">Enter a version code greater than zero that fits in a 64-bit number.</string>
+    <string name="r3_downgrade_title">Older version requested</string>
+    <string name="r3_downgrade_warning">Version %1$d is installed, but you selected %2$d. Android usually blocks downgrading installed apps, and older releases might not read newer app data. Back up important data first. Aurora will not uninstall the app or erase its data automatically. Continue only if you understand the risks.</string>
+    <string name="r3_downgrade_try">Try older version</string>
+    <string name="r3_history_source_warning">Version history comes from Exodus reports, not an APK archive. A listed version may no longer be available from Play.</string>
+    <string name="r3_history_older">Older than installed version</string>
+</resources>

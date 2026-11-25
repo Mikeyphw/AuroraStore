@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""R3A fail-closed source acceptance: historical selections are not Play APK archives."""
+from pathlib import Path
+import subprocess
+
+from r3a_downgrade_guard import assert_downgrade_guard
+
+ROOT = Path(__file__).resolve().parents[2]
+def source(p):
+    return (ROOT / p).read_text(encoding="utf-8")
+
+def require(path, markers):
+    s = source(path)
+    for marker in markers:
+        if marker not in s:
+            raise SystemExit(f"R3A_REFUSED: {path} missing {marker}")
+    print("R3A_SOURCE_PASS", path)
+    return s
+
+policy = require("app/src/main/java/com/aurora/store/data/model/HistoricalVersionPolicy.kt", (
+    'value.toLongOrNull()', 'it > 0L', 'distinct().sortedDescending()',
+    'installedVersion > requestedVersion', 'canonicalVersionCode',
+    'mayConfirmDowngrade', 'currentInstalledVersion',
+))
+unit = require("app/src/test/java/com/aurora/store/data/model/HistoricalVersionPolicyTest.kt", (
+    'rejectsInvalidAndOverflowedVersionCodes', 'versionHistoryIsNumericDeduplicatedAndSorted',
+    'onlyAnOlderVersionOfAnInstalledAppIsADowngrade',
+    'historySelectionUsesCanonicalPositiveCodes',
+    'downgradeConsentRejectsChangedSelectionOrInstalledVersion',
+))
+manual = require("app/src/main/java/com/aurora/store/compose/ui/details/ManualDownloadScreen.kt", (
+    'HistoricalVersionPolicy.parseVersionCode(versionCode.text)',
+    'HistoricalVersionPolicy.mayConfirmDowngrade(',
+    'metadataReady && !state.inProgress()',
+    'remember(currentVersionCode)',
+    'canonicalVersionCode(\n                    report.versionCode.toString()\n                )',
+    'pendingDowngrade', 'r3_downgrade_warning', 'r3_downgrade_try',
+    'fileList = emptyList()', 'dependentLibraries = emptyList()',
+    'PackageUtil.getInstalledVersionCode(context, packageName)',
+))
+try:
+    assert_downgrade_guard(manual)
+except ValueError as error:
+    raise SystemExit(str(error))
+print('R3A_DOWNGRADE_GUARD_PASS: consent and exact-version revalidation')
+if 'versionCode.text.toLong()' in manual or 'lib.copy(versionCode = versionCode)' in manual:
+    raise SystemExit('R3A_REFUSED: unsafe unparsed code or fabricated library version')
+picker = require("app/src/main/java/com/aurora/store/compose/ui/sheets/VersionPickerSheet.kt", (
+    'HistoricalVersionPolicy.parseVersionCode(report.versionCode.toString())',
+    '.distinctBy { it.first }', '.sortedByDescending { it.first }',
+    'r3_history_source_warning', 'r3_history_older',
+))
+require("app/src/main/java/com/aurora/store/data/installer/InstallRecoveryPolicy.kt", (
+    'installedVersion == targetVersion',
+))
+require("app/src/main/java/com/aurora/store/data/installer/InstallerBackendPolicy.kt", (
+    'installedVersion == expectedVersion',
+))
+require("app/src/main/java/com/aurora/store/data/helper/DownloadHelper.kt", (
+    'if (installedVersion != current.versionCode) return@onEach',
+))
+vm = require("app/src/main/java/com/aurora/store/viewmodel/details/AppDetailsViewModel.kt", (
+    'Version history lookup failed for $packageName',
+    '_versionLookupInProgress.value = false',
+    'lookupVersions()',
+    'exodusRepository.fetchVersions(packageName)',
+    '_exodusVersions.value = versions',
+    'if (app.value?.packageName == packageName)',
+    'catch (cancelled: CancellationException)',
+))
+if vm.count('exodusRepository.fetchVersions(packageName)') != 1:
+    raise SystemExit('R3A_REFUSED: duplicate version history fetch path')
+if vm.count('exodusRepository.fetchReports(packageName)') != 1:
+    raise SystemExit('R3A_REFUSED: duplicate privacy report fetch path')
+if 'app!!' in manual:
+    raise SystemExit('R3A_REFUSED: nullable app metadata force-unwrapped')
+require("app/src/main/res/values/strings_r3.xml", (
+    'name="r3_downgrade_warning"', 'Aurora will not uninstall',
+    'name="r3_history_source_warning"',
+))
+require(".github/workflows/aurora-foundation.yml", (
+    'python3 -B scripts/ci/check_r3.py', 'testVanillaDebugUnitTest',
+))
+require("docs/R3_HISTORICAL_VERSIONS_AND_DOWNGRADES.md", (
+    'Exodus', 'Play', 'no automatic uninstall', 'API 36',
+))
+from xml.etree import ElementTree
+ElementTree.parse(ROOT / 'app/src/main/res/values/strings_r3.xml')
+subprocess.run(['git','diff','--check'], cwd=ROOT,check=True)
+print('R3A_SOURCE_CONTRACT_PASS')

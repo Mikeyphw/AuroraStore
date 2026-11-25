@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="r3c03_c02_verified_sdk_incompatible">The verified APK requires a newer Android version than this device supports.</string>
+</resources>

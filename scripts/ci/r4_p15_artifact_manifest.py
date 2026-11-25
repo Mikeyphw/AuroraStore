@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""P15 — attest *actual* GitHub-built vanilla debug + instrumentation APKs."""
+from __future__ import annotations
+import argparse,hashlib,json,os,re,shutil,subprocess,sys
+from pathlib import Path
+REPO='Mikeyphw/AuroraStore'
+APP='com.aurora.store.debug';TEST=APP+'.test'
+class Refused(ValueError):pass
+def need(ok,reason):
+ if not ok:raise Refused('P15_ARTIFACT_REFUSED_'+reason)
+def tool(name):
+ p=shutil.which(name)
+ if p:return p
+ base=Path(os.environ.get('ANDROID_HOME',os.environ.get('ANDROID_SDK_ROOT','/nonexistent')))/'build-tools'
+ options=sorted(base.glob('*/'+name),reverse=True)
+ need(bool(options),'MISSING_ANDROID_TOOL_'+name)
+ return str(options[0])
+def output(args):
+ p=subprocess.run(args,capture_output=True,text=True,timeout=110)
+ need(p.returncode==0,'PROCESS_FAILED_'+str(args[:2])+'_'+p.stderr[-250:])
+ return p.stdout
+# Android Build Tools 37 labels signing-certificate identities by APK scheme:
+# V2 Signer: ... / V3.0 Signer: ... rather than older Signer #1 ... .
+# apksigner verification must succeed first; certificates are never guessed
+# from public-key digests, unverifiable output, or local signing.properties.
+_CERT_DIGEST = re.compile(
+    r'(?im)^\s*(?:Signer\s+#\d+|'
+    r'Signer\s+\(minSdkVersion=\d+,\s*maxSdkVersion=\d+\)|'
+    r'V\d+(?:\.\d+)?\s+Signer(?:\s+#\d+)?)\s*:?\s+'
+    r'certificate\s+SHA-256\s+digest:\s*([0-9a-f]{64})\s*$'
+)
+
+def extract_signer_sha256(text: str, apk_name: str) -> str:
+    """Decode verified apksigner output across Build Tools 36 and 37.
+
+    Repeated V2/V3 scheme records for the same cert are legitimate; differing
+    SHA256 cert identities are refused rather than choosing an arbitrary signer.
+    """
+    need(not re.search(r'(?im)^\s*(?:DOES NOT VERIFY|ERROR)\b', text),
+         'APK_SIGNATURE_FAILURE_' + apk_name)
+    digests = [m.group(1).lower() for m in _CERT_DIGEST.finditer(text)]
+    # Only label names appear in failure diagnostics, never signing material.
+    labels = [x.split('certificate SHA-256 digest:', 1)[0].strip()[:80]
+              for x in text.splitlines() if 'certificate SHA-256 digest:' in x]
+    need(bool(digests), 'UNSIGNED_OR_UNRECOGNIZED_SIGNER_' + apk_name
+         + '_labels=' + repr(labels[:5]))
+    need(len(set(digests)) == 1, 'SIGNER_CERT_CONFLICT_' + apk_name)
+    return digests[0]
+
+def signer(apk):
+    # Exit status is checked by output() before considering certificate labels.
+    verified = output([tool('apksigner'), 'verify', '--verbose', '--print-certs', str(apk)])
+    cert = extract_signer_sha256(verified, apk.name)
+    print('P15_APK_SIGNING_CERT_VERIFIED', apk.name, cert, flush=True)
+    return cert
+def extract_package_name(aapt2_output: str, apk_name: str) -> str:
+    """AAPT2's dedicated packagename output has no optional version fields.
+
+    AndroidTest APKs may omit versionCode or emit an empty versionCode, so
+    parsing the versionCode field to establish the package identity is wrong.
+    Treat empty, malformed or multiple package identities as a refusal.
+    """
+    values = [line.strip() for line in aapt2_output.splitlines() if line.strip()]
+    need(len(values) == 1 and re.fullmatch(
+        r'[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)+', values[0]
+    ) is not None, 'AAPT2_PACKAGE_UNRECOGNIZED_' + apk_name)
+    return values[0]
+
+
+def package(apk):
+    # AAPT2 dump packagename is the documented, version-independent command.
+    name = extract_package_name(output([tool('aapt2'), 'dump', 'packagename', str(apk)]), apk.name)
+    # Independently cross-check the package field when legacy aapt can parse it.
+    # Its badging format is NOT authoritative for versionCode on AndroidTest APKs.
+    legacy = subprocess.run([tool('aapt'), 'dump', 'badging', str(apk)],
+                            capture_output=True, text=True, timeout=110)
+    if legacy.returncode == 0:
+        match = re.search(r"(?m)^package:\s+name='([^']+)'(?=\s|$)", legacy.stdout)
+        if match is not None:
+            need(match.group(1) == name, 'PACKAGE_TOOL_DISAGREEMENT_' + apk.name)
+        else:
+            print('P15_INFO_LEGACY_BADGING_NO_PACKAGE ' + apk.name, flush=True)
+    else:
+        print('P15_INFO_LEGACY_BADGING_UNAVAILABLE ' + apk.name, flush=True)
+    print('P15_APK_PACKAGE_VERIFIED', apk.name, name, flush=True)
+    return name
+def make(app,test,out,sha,run,attempt):
+ need(re.fullmatch('[0-9a-f]{40}',sha) is not None,'SOURCE_SHA')
+ need(run.isdigit() and attempt.isdigit(),'GH_RUN_ID')
+ need(app.is_file() and test.is_file() and app.resolve()!=test.resolve(),'APK_PAIR')
+ need(package(app)==APP and package(test)==TEST,'PACKAGE_NAME_MISMATCH')
+ # Test target/runner matching is later checked again from real Android pm registry.
+ out.mkdir(parents=True,exist_ok=True)
+ entries={}
+ for role,src,name in (('app',app,'aurora-p15-app.apk'),
+                       ('instrumentation',test,'aurora-p15-androidTest.apk')):
+  cert=signer(src)
+  data=src.read_bytes();need(len(data)>10_000,'APK_TOO_SMALL_'+role)
+  dest=out/name;dest.write_bytes(data)
+  entries[role]={'file':name,'sha256':hashlib.sha256(data).hexdigest(),
+                 'bytes':len(data),'signer_sha256':cert}
+ manifest={'schema':1,'repo':REPO,'source_sha':sha,'run_id':run,'run_attempt':int(attempt),
+           'app_package':APP,'test_package':TEST,'apks':entries,
+           'android_tests':32,'expected_screenshots':15,
+           'purpose':'P15 physical, explicit authorisation only',
+           'physical_qualified':False,'installer_prompt_decline_qualified':False,
+           'release_qualified':False}
+ (out/'p15-apk-manifest.json').write_text(json.dumps(manifest,indent=2,sort_keys=True)+'\n')
+ print('P15_HOSTED_APK_SHA256_AND_SIGNING_CERT_IDENTITY_PASS',sha,run)
+ print('P15_DEVICE_INSTALLS_NOT_EXECUTED')
+ return manifest
+
+def main():
+ p=argparse.ArgumentParser();p.add_argument('--app',type=Path,required=True)
+ p.add_argument('--test',type=Path,required=True);p.add_argument('--out',type=Path,required=True)
+ p.add_argument('--source',required=True);p.add_argument('--run',required=True)
+ p.add_argument('--attempt',default='1');a=p.parse_args()
+ try:make(a.app,a.test,a.out,a.source,a.run,a.attempt)
+ except (Refused,OSError,subprocess.SubprocessError) as e:
+  print(str(e),file=sys.stderr);raise SystemExit(2)
+if __name__=='__main__':main()

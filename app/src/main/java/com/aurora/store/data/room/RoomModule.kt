@@ -13,6 +13,7 @@ import com.aurora.store.data.room.MigrationHelper.MIGRATION_12_13
 import com.aurora.store.data.room.MigrationHelper.MIGRATION_13_14
 import com.aurora.store.data.room.MigrationHelper.MIGRATION_14_15
 import com.aurora.store.data.room.MigrationHelper.MIGRATION_15_16
+import com.aurora.store.data.room.MigrationHelper.MIGRATION_16_17
 import com.aurora.store.data.room.MigrationHelper.MIGRATION_1_2
 import com.aurora.store.data.room.MigrationHelper.MIGRATION_2_3
 import com.aurora.store.data.room.MigrationHelper.MIGRATION_3_4
@@ -29,6 +30,7 @@ import com.aurora.store.data.room.download.DownloadConverter
 import com.aurora.store.data.room.download.DownloadDao
 import com.aurora.store.data.room.favourite.FavouriteDao
 import com.aurora.store.data.room.notification.NotificationDao
+import com.aurora.store.data.room.play.PlayDeliveryEvidenceDao
 import com.aurora.store.data.room.review.ReviewDao
 import com.aurora.store.data.room.update.IgnoredUpdateDao
 import com.aurora.store.data.room.update.UpdateDao
@@ -67,7 +69,8 @@ object RoomModule {
             MIGRATION_12_13,
             MIGRATION_13_14,
             MIGRATION_14_15,
-            MIGRATION_15_16
+            MIGRATION_15_16,
+            MIGRATION_16_17
         )
         .addTypeConverter(downloadConverter)
         .addTypeConverter(accountConverter)
@@ -76,6 +79,10 @@ object RoomModule {
     @Provides
     fun providesDownloadDao(auroraDatabase: AuroraDatabase): DownloadDao =
         auroraDatabase.downloadDao()
+
+    @Provides
+    fun providesPlayDeliveryEvidenceDao(auroraDatabase: AuroraDatabase): PlayDeliveryEvidenceDao =
+        auroraDatabase.playDeliveryEvidenceDao()
 
     @Provides
     fun providesFavouriteDao(auroraDatabase: AuroraDatabase): FavouriteDao =

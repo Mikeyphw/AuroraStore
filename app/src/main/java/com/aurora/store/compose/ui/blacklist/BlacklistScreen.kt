@@ -59,6 +59,7 @@ import com.aurora.extensions.toast
 import com.aurora.store.R
 import com.aurora.store.compose.composable.BlackListItem
 import com.aurora.store.compose.composable.ContainedLoadingIndicator
+import com.aurora.store.compose.composable.RoundedIconButton
 import com.aurora.store.compose.composable.ScrollHint
 import com.aurora.store.compose.composable.TextDividerComposable
 import com.aurora.store.compose.preview.ThemePreviewProvider
@@ -224,12 +225,11 @@ private fun ScreenContent(
             state = searchBarState,
             inputField = inputField,
             navigationIcon = {
-                IconButton(onClick = { activity?.onBackPressedDispatcher?.onBackPressed() }) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_arrow_back),
-                        contentDescription = stringResource(R.string.action_back)
-                    )
-                }
+                RoundedIconButton(
+                    onClick = { activity?.onBackPressedDispatcher?.onBackPressed() },
+                    painter = painterResource(R.drawable.ic_arrow_back),
+                    contentDescription = stringResource(R.string.action_back)
+                )
             },
             actions = {
                 IconButton(onClick = { sheetVisible = true }) {

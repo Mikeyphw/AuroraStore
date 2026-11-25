@@ -1,0 +1,377 @@
+{
+  "api_level": 36,
+  "architecture": "x86_64",
+  "expressive_popup_theme_canvas_validated": true,
+  "external_google_play_update_verified": false,
+  "full_app_navigation_qualified": true,
+  "hosted_emulator_only": true,
+  "main_more_to_settings_navigation_tested": true,
+  "offline_fixtures_only": true,
+  "offline_synthetic_account_preference_tests": 9,
+  "physical_and_live_play_qualification_deferred": true,
+  "physical_arm64_qualified": false,
+  "real_device_tests": 52,
+  "real_google_account_login_qualified": false,
+  "real_installer_update_verified": false,
+  "real_production_compose_activity_routes_tested": [
+    "settings",
+    "ui_preferences",
+    "more_sheet",
+    "main",
+    "search",
+    "downloads",
+    "updates"
+  ],
+  "release_qualified": false,
+  "result": "PASS_DEVICE_TESTS_AND_NONBLANK_UNIQUE_CAPTURE",
+  "run_id": "43498499144",
+  "screenshots": {
+    "dark/r4_activity_downloads.png": {
+      "bytes": 33853,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 2400,
+      "non_background_samples": 271,
+      "sampled_colors": 51,
+      "sha256": "f3934fa70b01536186a54826137886d3256b4a27185db782336b0a3c56e3dc8b",
+      "width": 1080
+    },
+    "dark/r4_activity_main.png": {
+      "bytes": 178490,
+      "canvas_center_rgb": [
+        40,
+        41,
+        47
+      ],
+      "height": 2400,
+      "non_background_samples": 25843,
+      "sampled_colors": 210,
+      "sha256": "cd5917b9d1a7f04bc216f364409467d10bd3a4d3dab193bad3a2c4414e4d243a",
+      "width": 1080
+    },
+    "dark/r4_activity_more_sheet.png": {
+      "bytes": 137243,
+      "canvas_center_rgb": [
+        26,
+        27,
+        32
+      ],
+      "height": 2400,
+      "non_background_samples": 1643,
+      "sampled_colors": 281,
+      "sha256": "4dd39bd9c7ebbdf24c12c23c7b4e0640a4a101d40a50e0edd24aa0916cd88270",
+      "width": 1080
+    },
+    "dark/r4_activity_search.png": {
+      "bytes": 29907,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 2400,
+      "non_background_samples": 2171,
+      "sampled_colors": 41,
+      "sha256": "50f292f78e2a3d6c04ea5c47be4e1aace1a3422e62a0c13e5884534f7aa6b7bc",
+      "width": 1080
+    },
+    "dark/r4_activity_settings.png": {
+      "bytes": 114437,
+      "canvas_center_rgb": [
+        26,
+        27,
+        32
+      ],
+      "height": 2400,
+      "non_background_samples": 844,
+      "sampled_colors": 208,
+      "sha256": "91894b37e3c066d1c4e71e0b1ce9cea2d3e28cdb7ed7af008e54b1f99280156a",
+      "width": 1080
+    },
+    "dark/r4_activity_ui_preferences.png": {
+      "bytes": 108230,
+      "canvas_center_rgb": [
+        26,
+        27,
+        32
+      ],
+      "height": 2400,
+      "non_background_samples": 1098,
+      "sampled_colors": 207,
+      "sha256": "d92397bde7826c5adc9205312f1073f401616f94a3f72de79a56f6ceb004efff",
+      "width": 1080
+    },
+    "dark/r4_activity_updates.png": {
+      "bytes": 72520,
+      "canvas_center_rgb": [
+        176,
+        198,
+        255
+      ],
+      "height": 2400,
+      "non_background_samples": 33083,
+      "sampled_colors": 93,
+      "sha256": "f0e0f041a2c74488cbd076684b3ea48cdad6a61417e6a9bb4eb6e8034081e323",
+      "width": 1080
+    },
+    "dark/r4_expressive_menu.png": {
+      "bytes": 32225,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 2400,
+      "non_background_samples": 1723,
+      "sampled_colors": 44,
+      "sha256": "8926017ed4617256c20b6ff4ef59f51719b4980b505b0f1e75defd55fbc336d7",
+      "width": 1080
+    },
+    "dark/r4_update_downloading.png": {
+      "bytes": 38544,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 2400,
+      "non_background_samples": 197,
+      "sampled_colors": 59,
+      "sha256": "42cd92024628215b2a621651eaf59380a8e6fb64182b3328e27f8a149988117c",
+      "width": 1080
+    },
+    "dark/r4_update_idle.png": {
+      "bytes": 35924,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 2400,
+      "non_background_samples": 442,
+      "sampled_colors": 60,
+      "sha256": "80702d762a1d6f55213a98a4a1b270e7ba3dacadb3964a4f0d9d571445a82458",
+      "width": 1080
+    },
+    "dark/r4_update_installing.png": {
+      "bytes": 36578,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 2400,
+      "non_background_samples": 172,
+      "sampled_colors": 59,
+      "sha256": "dfebe69a07514c8aee51ce54a05aacac3d2f30e193e56f40207767d7c624e3ff",
+      "width": 1080
+    },
+    "dark/r4_update_verifying.png": {
+      "bytes": 38500,
+      "canvas_center_rgb": [
+        18,
+        19,
+        24
+      ],
+      "height": 2400,
+      "non_background_samples": 195,
+      "sampled_colors": 59,
+      "sha256": "1f6a79987f23a8f3c851abc37ab8b6d63a44873d14800d6898a1821ba70bfde5",
+      "width": 1080
+    },
+    "light/r4_activity_downloads.png": {
+      "bytes": 32851,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 2400,
+      "non_background_samples": 265,
+      "sampled_colors": 51,
+      "sha256": "724da94180c80110f25efa15daf43d2f1d39e86f12df443de377002fc61dc94a",
+      "width": 1080
+    },
+    "light/r4_activity_main.png": {
+      "bytes": 233542,
+      "canvas_center_rgb": [
+        225,
+        223,
+        230
+      ],
+      "height": 2400,
+      "non_background_samples": 25341,
+      "sampled_colors": 207,
+      "sha256": "0513593bfae78343e4fe3f97bdb040bbbc1d0126128c774b29b21ff859a13d9f",
+      "width": 1080
+    },
+    "light/r4_activity_more_sheet.png": {
+      "bytes": 141006,
+      "canvas_center_rgb": [
+        244,
+        243,
+        250
+      ],
+      "height": 2400,
+      "non_background_samples": 15396,
+      "sampled_colors": 307,
+      "sha256": "c5358cc29d2ff75b69b431b4e3f52c84642591f4834f0d9418e4970e3444d735",
+      "width": 1080
+    },
+    "light/r4_activity_search.png": {
+      "bytes": 28857,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 2400,
+      "non_background_samples": 108,
+      "sampled_colors": 38,
+      "sha256": "565d6528b54e6cd2fd1a8b6a7ba5cad28193a1d3ac3715223814f375e026df78",
+      "width": 1080
+    },
+    "light/r4_activity_settings.png": {
+      "bytes": 111802,
+      "canvas_center_rgb": [
+        244,
+        243,
+        250
+      ],
+      "height": 2400,
+      "non_background_samples": 702,
+      "sampled_colors": 210,
+      "sha256": "64c463f6868060b39f49ad8172c2e43bc953b3e1da9c9583929924c17b9b4f14",
+      "width": 1080
+    },
+    "light/r4_activity_ui_preferences.png": {
+      "bytes": 107359,
+      "canvas_center_rgb": [
+        244,
+        243,
+        250
+      ],
+      "height": 2400,
+      "non_background_samples": 868,
+      "sampled_colors": 206,
+      "sha256": "539fc6b32affb77feb1b23160bdb6acd04b7605391264ca6a8d432282427a856",
+      "width": 1080
+    },
+    "light/r4_activity_updates.png": {
+      "bytes": 85630,
+      "canvas_center_rgb": [
+        71,
+        93,
+        146
+      ],
+      "height": 2400,
+      "non_background_samples": 33082,
+      "sampled_colors": 100,
+      "sha256": "d9fe82e54ebc3436dc93b652eba9437520fb5a577eb45babe46b65e9e6c3cc0a",
+      "width": 1080
+    },
+    "light/r4_expressive_menu.png": {
+      "bytes": 32774,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 2400,
+      "non_background_samples": 1779,
+      "sampled_colors": 64,
+      "sha256": "815a9a43dc9d714cadc85e26451b6f0d8be2727b4ae039aa3e5db4ad0d83f19d",
+      "width": 1080
+    },
+    "light/r4_real_app_launch.png": {
+      "bytes": 124551,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 2400,
+      "non_background_samples": 837,
+      "sampled_colors": 184,
+      "sha256": "85ffa6b088129d6a59ba7a5b9d40a818d3bccf90ab504843feb755d507b26e0c",
+      "width": 1080
+    },
+    "light/r4_update_downloading.png": {
+      "bytes": 37940,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 2400,
+      "non_background_samples": 191,
+      "sampled_colors": 59,
+      "sha256": "8e39a0b6acf29870f909612f6813c1ccb2cf843b1e6a7621cd884d0320f2f109",
+      "width": 1080
+    },
+    "light/r4_update_idle.png": {
+      "bytes": 35426,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 2400,
+      "non_background_samples": 423,
+      "sampled_colors": 61,
+      "sha256": "236b29954d6b28399b06de8f42ae2fbc56edc8c2e2e830cb5540449b365b8622",
+      "width": 1080
+    },
+    "light/r4_update_installing.png": {
+      "bytes": 36050,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 2400,
+      "non_background_samples": 167,
+      "sampled_colors": 57,
+      "sha256": "b7bcb2448ef54d5b47a7e1b7795e1f50d181eed092c64a60d149ded3caf3224a",
+      "width": 1080
+    },
+    "light/r4_update_verifying.png": {
+      "bytes": 37893,
+      "canvas_center_rgb": [
+        250,
+        248,
+        255
+      ],
+      "height": 2400,
+      "non_background_samples": 189,
+      "sampled_colors": 59,
+      "sha256": "c76e591e8bcd73ea5947e4eccf2f9143d7749f4295b31a2c6f61e38e1c162742",
+      "width": 1080
+    }
+  },
+  "screenshots_nonblank_validated": true,
+  "screenshots_unique_validated": true,
+  "source_sha": "ecb9c4db5d347f5073ceacc4ef0555f9d6e52608",
+  "spoof_restart_ui_behavior_qualified": false,
+  "suite_counts": {
+    "download-dao-cancellation": 9,
+    "download-ui-cancellation": 4,
+    "r4-activity-dark": 6,
+    "r4-activity-light": 6,
+    "r4-expressive-dark": 5,
+    "r4-expressive-light": 5,
+    "r4-offline-account-session": 9,
+    "real-offline-worker": 8
+  },
+  "visual_manual_approved": false,
+  "visual_review_tasks": [
+    "Compare all real activity screenshots to the original upstream PR113 Material3 Expressive design",
+    "Review status/navigation bar insets and clipping in Main, Settings, Search, Downloads, Updates",
+    "Inspect bottom floating toolbar and touch target spacing in both themes",
+    "Compare update, cancel, install-state buttons against real update screen and expected semantics",
+    "Check screenshots visually for blank/duplicated content even after automatic nonblank guard"
+  ]
+}

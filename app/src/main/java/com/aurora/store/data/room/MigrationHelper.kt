@@ -71,8 +71,31 @@ object MigrationHelper {
         override fun migrate(db: SupportSQLiteDatabase) = migrateFrom14To15(db)
     }
 
+    /** Do not drop downloads, accounts, or old evidence when upgrading from v15. */
     val MIGRATION_15_16 = object : Migration(15, 16) {
-        override fun migrate(db: SupportSQLiteDatabase) = migrateFrom15To16(db)
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `play_delivery_evidence` (" +
+                    "`packageName` TEXT NOT NULL, " +
+                    "`versionCode` INTEGER NOT NULL, " +
+                    "`attemptGeneration` INTEGER NOT NULL, " +
+                    "`accountBinding` TEXT NOT NULL, " +
+                    "`variant` TEXT NOT NULL, " +
+                    "`state` TEXT NOT NULL, " +
+                    "`verifiedApkVersion` INTEGER, " +
+                    "`unavailableVersion` INTEGER, " +
+                    "`resolvedFileCount` INTEGER NOT NULL, " +
+                    "PRIMARY KEY(`packageName`))"
+            )
+        }
+    }
+
+    /** Both upstream and fork v16 converge; only obsolete tracker cache is discarded. */
+    val MIGRATION_16_17 = object : Migration(16, 17) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            MIGRATION_15_16.migrate(db)
+            db.execSQL("DROP TABLE IF EXISTS `exodus_tracker`")
+        }
     }
 
     private const val TAG = "MigrationHelper"
@@ -372,18 +395,6 @@ object MigrationHelper {
             database.setTransactionSuccessful()
         } catch (exception: Exception) {
             Log.e(TAG, "Failed while migrating from database version 14 to 15", exception)
-        } finally {
-            database.endTransaction()
-        }
-    }
-
-    private fun migrateFrom15To16(database: SupportSQLiteDatabase) {
-        database.beginTransaction()
-        try {
-            database.execSQL("DROP TABLE IF EXISTS `exodus_tracker`")
-            database.setTransactionSuccessful()
-        } catch (exception: Exception) {
-            Log.e(TAG, "Failed while migrating from database version 15 to 16", exception)
         } finally {
             database.endTransaction()
         }

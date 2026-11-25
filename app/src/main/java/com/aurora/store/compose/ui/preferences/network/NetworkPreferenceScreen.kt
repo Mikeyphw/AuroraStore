@@ -18,8 +18,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -48,6 +46,9 @@ import com.aurora.store.compose.composable.TopAppBar
 import com.aurora.store.compose.navigation.Destination
 import com.aurora.store.compose.preview.ThemePreviewProvider
 import com.aurora.store.compose.ui.commons.ForceRestartDialog
+import com.aurora.store.compose.ui.preferences.PreferenceListItem
+import com.aurora.store.compose.ui.preferences.PreferenceRowPosition
+import com.aurora.store.compose.ui.preferences.PreferenceSectionHeader
 import com.aurora.store.util.CommonUtil
 import com.aurora.store.util.PackageUtil
 import com.aurora.store.util.Preferences
@@ -162,26 +163,26 @@ private fun ScreenContent(
                 .fillMaxSize()
         ) {
             item {
-                ListItem(
+                PreferenceListItem(
+                    position = PreferenceRowPosition.First,
                     modifier = Modifier.clickable { onNavigateTo(Destination.Dispenser) },
                     headlineContent = { Text(stringResource(R.string.pref_dispenser_title)) },
                     supportingContent = { Text(stringResource(R.string.pref_dispenser_summary)) }
                 )
             }
             item {
-                ListItem(
+                PreferenceListItem(
+                    position = PreferenceRowPosition.Last,
                     modifier = Modifier.clickable { showProxyDialog = true },
                     headlineContent = { Text(stringResource(R.string.pref_network_proxy_url)) },
                     supportingContent = { Text(stringResource(R.string.pref_network_proxy_desc)) }
                 )
             }
-            item { HorizontalDivider() }
-            item {
-                ListItem(headlineContent = { Text(stringResource(R.string.pref_common_extra)) })
-            }
+            item { PreferenceSectionHeader(stringResource(R.string.pref_common_extra)) }
             if (hasMicroG) {
                 item {
-                    ListItem(
+                    PreferenceListItem(
+                        position = PreferenceRowPosition.First,
                         modifier = Modifier.clickable {
                             microGAuth = !microGAuth
                             context.save(PREFERENCE_MICROG_AUTH, microGAuth)
@@ -205,7 +206,12 @@ private fun ScreenContent(
                 }
             }
             item {
-                ListItem(
+                PreferenceListItem(
+                    position = if (hasMicroG) {
+                        PreferenceRowPosition.Last
+                    } else {
+                        PreferenceRowPosition.Single
+                    },
                     modifier = Modifier.clickable { showVendingDialog = true },
                     headlineContent = { Text(stringResource(R.string.pref_vending_version_title)) },
                     supportingContent = { Text(vendingEntries.getOrElse(vendingVersion) { "" }) }

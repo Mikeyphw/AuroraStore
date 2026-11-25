@@ -10,12 +10,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -38,6 +36,10 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.aurora.store.R
 import com.aurora.store.compose.composable.TopAppBar
 import com.aurora.store.compose.preview.ThemePreviewProvider
+import com.aurora.store.compose.ui.preferences.PreferenceListItem
+import com.aurora.store.compose.ui.preferences.PreferenceRowPosition
+import com.aurora.store.compose.ui.preferences.PreferenceSectionHeader
+import com.aurora.store.compose.ui.preferences.preferenceRowPosition
 import com.aurora.store.util.Preferences
 import com.aurora.store.util.Preferences.PREFERENCE_FILTER_AURORA_ONLY
 import com.aurora.store.util.Preferences.PREFERENCE_FILTER_INSTALLERS
@@ -88,7 +90,8 @@ private fun ScreenContent(onCheckUpdatesNow: () -> Unit = {}) {
                 .fillMaxSize()
         ) {
             item {
-                ListItem(
+                PreferenceListItem(
+                    position = PreferenceRowPosition.Single,
                     modifier = Modifier.clickable {
                         auroraOnly = !auroraOnly
                         context.save(PREFERENCE_FILTER_AURORA_ONLY, auroraOnly)
@@ -108,17 +111,13 @@ private fun ScreenContent(onCheckUpdatesNow: () -> Unit = {}) {
                     }
                 )
             }
-            item { HorizontalDivider() }
             item {
-                ListItem(
-                    headlineContent = {
-                        Text(stringResource(R.string.source_filters_installers_header))
-                    }
-                )
+                PreferenceSectionHeader(stringResource(R.string.source_filters_installers_header))
             }
             if (installers.isEmpty()) {
                 item {
-                    ListItem(
+                    PreferenceListItem(
+                        position = PreferenceRowPosition.First,
                         headlineContent = {
                             Text(
                                 text = stringResource(R.string.source_filters_installers_empty),
@@ -129,8 +128,11 @@ private fun ScreenContent(onCheckUpdatesNow: () -> Unit = {}) {
                     )
                 }
             } else {
-                items(items = installers.toList(), key = { it }) { name ->
-                    ListItem(
+                itemsIndexed(items = installers.toList(), key = { _, name ->
+                    name
+                }) { index, name ->
+                    PreferenceListItem(
+                        position = preferenceRowPosition(index, installers.size + 1),
                         headlineContent = { Text(name) },
                         trailingContent = {
                             IconButton(
@@ -151,7 +153,8 @@ private fun ScreenContent(onCheckUpdatesNow: () -> Unit = {}) {
                 }
             }
             item {
-                ListItem(
+                PreferenceListItem(
+                    position = PreferenceRowPosition.Last,
                     modifier = Modifier.clickable { showAddDialog = true },
                     leadingContent = {
                         Icon(

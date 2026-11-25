@@ -8,6 +8,7 @@ package com.aurora.store.compose.composable
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
 import android.provider.Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS
 import android.util.Log
@@ -65,18 +66,26 @@ fun PermissionList(
     var linkOwner by rememberSaveable { mutableStateOf<String?>(null) }
 
     @SuppressLint("InlinedApi", "BatteryLife")
-    val intentMap = mapOf(
-        PermissionType.STORAGE_MANAGER to PackageUtil.getStorageManagerIntent(context),
-        PermissionType.INSTALL_UNKNOWN_APPS to PackageUtil.getInstallUnknownAppsIntent(),
-        PermissionType.DOZE_WHITELIST to Intent(
-            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-            "package:${BuildConfig.APPLICATION_ID}".toUri()
-        ),
-        PermissionType.APP_LINKS to Intent(
-            ACTION_APP_OPEN_BY_DEFAULT_SETTINGS,
-            "package:${BuildConfig.APPLICATION_ID}".toUri()
+    val intentMap = buildMap {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            put(PermissionType.STORAGE_MANAGER, PackageUtil.getStorageManagerIntent(context))
+        }
+        put(PermissionType.INSTALL_UNKNOWN_APPS, PackageUtil.getInstallUnknownAppsIntent())
+        put(
+            PermissionType.DOZE_WHITELIST,
+            Intent(
+                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                "package:${BuildConfig.APPLICATION_ID}".toUri()
+            )
         )
-    )
+        put(
+            PermissionType.APP_LINKS,
+            Intent(
+                ACTION_APP_OPEN_BY_DEFAULT_SETTINGS,
+                "package:${BuildConfig.APPLICATION_ID}".toUri()
+            )
+        )
+    }
 
     fun onResult() {
         permissionRequested?.let {

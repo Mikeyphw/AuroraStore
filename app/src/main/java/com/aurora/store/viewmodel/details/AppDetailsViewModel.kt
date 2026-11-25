@@ -32,6 +32,7 @@ import com.aurora.store.AuroraApp
 import com.aurora.store.R
 import com.aurora.store.data.AccountRepository
 import com.aurora.store.data.ExodusRepository
+import com.aurora.store.data.catalog.CatalogJourneyGateway
 import com.aurora.store.data.event.AuthEvent
 import com.aurora.store.data.event.InstallerEvent
 import com.aurora.store.data.helper.DownloadHelper
@@ -60,6 +61,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -95,7 +97,8 @@ class AppDetailsViewModel @Inject constructor(
     private val okHttpClient: OkHttpClient,
     private val json: Json,
     private val accountRepository: AccountRepository,
-    private val exodusRepository: ExodusRepository
+    private val exodusRepository: ExodusRepository,
+    private val catalogJourneyGateway: CatalogJourneyGateway
 ) : ViewModel() {
 
     private val _app = MutableStateFlow<App?>(null)
@@ -228,13 +231,24 @@ class AppDetailsViewModel @Inject constructor(
 
     init {
         observeAppState()
-        viewModelScope.launch { _canDownload.value = playClient.supports(Capability.DOWNLOAD) }
+        if (!catalogJourneyGateway.isHermetic) {
+            viewModelScope.launch { _canDownload.value = playClient.supports(Capability.DOWNLOAD) }
+        }
     }
 
     fun fetchAppDetails(packageName: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 _testingProgramSubscribed.value = null
+                val offline = catalogJourneyGateway.appDetails(packageName)
+                if (offline != null) {
+                    _app.value = offline.copy(isInstalled = false)
+                    _state.value = AppState.Unavailable
+                    _featuredReviews.value = catalogJourneyGateway.featuredReviews(packageName)
+                        ?: emptyList()
+                    _suggestionsBundle.value = StreamBundle.EMPTY
+                    return@launch
+                }
                 _app.value = playClient.apps.details(packageName).copy(
                     isInstalled = PackageUtil.isInstalled(context, packageName)
                 )
@@ -268,6 +282,8 @@ class AppDetailsViewModel @Inject constructor(
         }.invokeOnCompletion { throwable ->
             // Only proceed if there was no error while fetching the app details
             if (throwable != null || app.value == null) return@invokeOnCompletion
+            // Offline instrumentation response is complete: do not launch remote extras.
+            if (catalogJourneyGateway.appDetails(packageName) != null) return@invokeOnCompletion
 
             fetchFavourite(packageName)
             fetchFeaturedReviews(packageName)
@@ -280,6 +296,7 @@ class AppDetailsViewModel @Inject constructor(
             fetchCategoryIcon(app.value!!.categoryStreamUrl.orEmpty())
             fetchSuggestions()
             fetchExodusPrivacyReport(packageName)
+            lookupVersions()
             if (app.value!!.requiresGMS()) fetchPlexusReport(packageName)
         }
     }
@@ -571,22 +588,34 @@ class AppDetailsViewModel @Inject constructor(
 
     private fun fetchExodusPrivacyReport(packageName: String) {
         viewModelScope.launch {
-            // NotFound and Failed both leave a null report: the "failed to fetch report" state
             val result = exodusRepository.fetchReports(packageName) as? ReportsResult.Reports
-            _exodusReport.value = result?.reports?.firstOrNull()
-            _exodusReports.value = result?.reports.orEmpty()
-            _exodusTrackers.value = result?.trackers.orEmpty()
+            if (app.value?.packageName == packageName) {
+                _exodusReport.value = result?.reports?.firstOrNull()
+                _exodusReports.value = result?.reports.orEmpty()
+                _exodusTrackers.value = result?.trackers.orEmpty()
+            }
         }
     }
 
+    // Version metadata is distinct from privacy reports and does not prove APK availability.
     fun lookupVersions() {
         val packageName = app.value?.packageName ?: return
         if (_exodusVersions.value.isNotEmpty() || _versionLookupInProgress.value) return
-
+        _versionLookupInProgress.value = true
         viewModelScope.launch {
-            _versionLookupInProgress.value = true
             try {
-                _exodusVersions.value = exodusRepository.fetchVersions(packageName)
+                val versions = exodusRepository.fetchVersions(packageName)
+                    .filter { it.versionCode > 0L }
+                    .distinctBy { it.versionCode }
+                    .sortedByDescending { it.versionCode }
+                if (app.value?.packageName == packageName) {
+                    _exodusVersions.value = versions
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.w(TAG, "Version history lookup failed for $packageName", error)
+                if (app.value?.packageName == packageName) _exodusVersions.value = emptyList()
             } finally {
                 _versionLookupInProgress.value = false
             }

@@ -24,21 +24,40 @@ sealed class AuthEvent : Event() {
     data class SessionExpired(val packageName: String? = null) : AuthEvent()
 }
 
-open class InstallerEvent(open val packageName: String) : Event() {
-    data class Installed(override val packageName: String) : InstallerEvent(packageName)
+/** Immutable identity of the download attempt that produced a platform installation callback. */
+data class InstallAttempt(
+    val versionCode: Long,
+    val downloadedAt: Long,
+    val sessionId: Int = -1
+)
+
+open class InstallerEvent(
+    open val packageName: String,
+    open val attempt: InstallAttempt? = null
+) : Event() {
+    data class Installed(
+        override val packageName: String,
+        override val attempt: InstallAttempt? = null
+    ) : InstallerEvent(packageName, attempt)
+
     data class Uninstalled(override val packageName: String) : InstallerEvent(packageName)
 
     data class Installing(
         override val packageName: String,
-        val progress: Float = 0.0F
-    ) : InstallerEvent(packageName)
+        val progress: Float = 0.0F,
+        override val attempt: InstallAttempt? = null
+    ) : InstallerEvent(packageName, attempt)
 
-    data class PendingUserAction(override val packageName: String) : InstallerEvent(packageName)
+    data class PendingUserAction(
+        override val packageName: String,
+        override val attempt: InstallAttempt? = null
+    ) : InstallerEvent(packageName, attempt)
 
     data class Failed(
         override val packageName: String,
         val error: String? = null,
         val extra: String? = null,
-        val cancelled: Boolean = false
-    ) : InstallerEvent(packageName)
+        val cancelled: Boolean = false,
+        override val attempt: InstallAttempt? = null
+    ) : InstallerEvent(packageName, attempt)
 }

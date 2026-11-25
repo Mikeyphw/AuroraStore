@@ -14,12 +14,12 @@ import com.aurora.extensions.TAG
 import com.aurora.store.AuroraApp
 import com.aurora.store.BuildConfig
 import com.aurora.store.R
+import com.aurora.store.data.event.InstallAttempt
 import com.aurora.store.data.event.InstallerEvent
+import com.aurora.store.data.installer.verification.ApkSetVerifier
+import com.aurora.store.data.installer.verification.ApkVerificationException
 import com.aurora.store.data.room.download.Download
 import com.aurora.store.util.NotificationUtil
-import com.aurora.store.util.PathUtil
-import com.aurora.store.util.Preferences
-import com.aurora.store.util.Preferences.PREFERENCE_AUTO_DELETE
 import java.io.File
 
 abstract class InstallerBase(private val context: Context) : IInstaller {
@@ -61,8 +61,30 @@ abstract class InstallerBase(private val context: Context) : IInstaller {
     var download: Download? = null
         private set
 
+    private var verified: ApkSetVerifier.Prepared? = null
+
     override fun install(download: Download) {
+        verified = null
         this.download = download
+        try {
+            verified = ApkSetVerifier.prepare(context, download)
+        } catch (error: ApkVerificationException) {
+            postError(download.packageName, error.message, null, download)
+            throw error
+        }
+    }
+
+    /** Reject installer backends that cannot install unresolved prerequisite libraries. */
+    fun verifiedBundleOutput(): File =
+        (verified ?: throw ApkVerificationException("APK set is not verified")).bundleFile()
+
+    fun requireNoPendingLibraries() {
+        val prepared = verified ?: throw ApkVerificationException("APK set is not verified")
+        if (prepared.libraryPackages.isNotEmpty()) {
+            val failure = "Selected installer cannot install required shared libraries"
+            download?.let { postError(it.packageName, failure, null, it) }
+            throw ApkVerificationException(failure)
+        }
     }
 
     override fun clearQueue() {
@@ -76,23 +98,32 @@ abstract class InstallerBase(private val context: Context) : IInstaller {
         AuroraApp.enqueuedInstalls.remove(packageName)
     }
 
-    fun onInstallationSuccess() {
-        download?.let {
-            notifyInstallation(context, it.displayName, it.packageName)
-            if (Preferences.getBoolean(context, PREFERENCE_AUTO_DELETE)) {
-                PathUtil.getAppDownloadDir(context, it.packageName, it.versionCode)
-                    .deleteRecursively()
-            }
+    /** A backend receipt is only a candidate; Room CAS authorizes final side effects. */
+    fun onInstallationSuccess(accepted: Download? = download) {
+        accepted?.let {
+            AuroraApp.events.send(
+                InstallerEvent.Installed(
+                    it.packageName,
+                    InstallAttempt(it.versionCode, it.downloadedAt)
+                )
+            )
         }
     }
 
-    open fun postError(packageName: String, error: String?, extra: String?) {
+    open fun postError(
+        packageName: String,
+        error: String?,
+        extra: String?,
+        failed: Download? = download
+    ) {
         Log.e(TAG, "Installer Error :$error")
+        val identified = failed?.takeIf { it.packageName == packageName }
         AuroraApp.events.send(
             InstallerEvent.Failed(
                 packageName = packageName,
                 error = error,
-                extra = extra
+                extra = extra,
+                attempt = identified?.let { InstallAttempt(it.versionCode, it.downloadedAt) }
             )
         )
     }
@@ -102,12 +133,17 @@ abstract class InstallerBase(private val context: Context) : IInstaller {
         versionCode: Long,
         sharedLibPackageName: String = ""
     ): List<File> {
-        val downloadDir = if (sharedLibPackageName.isNotBlank()) {
-            PathUtil.getLibDownloadDir(context, packageName, versionCode, sharedLibPackageName)
-        } else {
-            PathUtil.getAppDownloadDir(context, packageName, versionCode)
+        val attempt = download ?: throw ApkVerificationException("Install attempt is missing")
+        val snapshot = verified ?: throw ApkVerificationException("APK set is not verified")
+        if (packageName != attempt.packageName ||
+            versionCode != attempt.versionCode ||
+            attempt.downloadedAt != snapshot.attempt ||
+            snapshot.packageName != packageName ||
+            snapshot.versionCode != versionCode
+        ) {
+            throw ApkVerificationException("Stale or mismatched APK installation attempt")
         }
-        return downloadDir.listFiles()!!.filter { it.path.endsWith(".apk") }
+        return snapshot.filesFor(sharedLibPackageName)
     }
 
     fun getUri(file: File): Uri = FileProvider.getUriForFile(

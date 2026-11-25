@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "repository": "Mikeyphw/AuroraStore",
+  "base_branch": "master",
+  "event": "pull_request",
+  "required_workflows": [
+    {
+      "name": "Aurora — Targeted CI",
+      "workflow_id": 420279514
+    }
+  ],
+  "release_qualification": "separate"
+}
